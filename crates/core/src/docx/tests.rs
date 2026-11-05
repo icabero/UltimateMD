@@ -314,3 +314,30 @@ fn a_template_cannot_ask_word_to_update_fields() {
     let settings = r#"<w:settings><w:updateFields w:val="true"/><w:compat/></w:settings>"#;
     assert_eq!(without_field_update(settings), "<w:settings><w:compat/></w:settings>");
 }
+
+#[test]
+fn tables_fill_the_page_and_fit_their_columns() {
+    let parts = render_with(None);
+    let doc = text(&parts, DOCUMENT);
+    assert!(doc.contains(r#"<w:tblW w:w="5000" w:type="pct"/>"#));
+    assert!(doc.contains(r#"<w:tcW w:w="0" w:type="auto"/>"#));
+    assert!(doc.contains(r#"w:firstRow="1""#), "a table style can format the first row");
+    assert!(!doc.contains(r#"w:type="dxa""#));
+}
+
+#[test]
+fn the_header_is_bold_only_when_the_table_style_does_not_format_it() {
+    let with = r#"<w:style w:type="table" w:styleId="Grid"><w:tblStylePr w:type="firstRow"/></w:style><w:style w:styleId="Otro"/>"#;
+    assert!(formats_first_row(with, "Grid"));
+    assert!(!formats_first_row(with, "Otro"), "the search stops at the end of the style");
+    assert!(!formats_first_row(with, "Falta"));
+}
+
+#[test]
+fn the_contents_follow_both_switches_of_the_field() {
+    assert_eq!(toc_levels(r#" TOC \o "1-2" \h "#), vec![1, 2]);
+    assert_eq!(toc_levels(r#" TOC \o "2-3" \t "Título 1;1;Mi-titulo;1" "#), vec![2, 3, 1, 1]);
+    assert_eq!(toc_levels(r#" TOC \o &quot;2-3&quot; \t &quot;Título 1;1&quot; "#), vec![2, 3, 1], "escaped quotes");
+    assert_eq!(toc_levels(r#" TOC \t "Mi estilo,2" "#), vec![2], "another list separator");
+    assert_eq!(toc_levels(" TOC "), vec![1, 2, 3]);
+}

@@ -53,6 +53,7 @@ re!(FOOTNOTE_ID, r#"<w:footnote [^>]*w:id="(-?\d+)""#);
 re!(UPDATE_FIELDS, r"<w:updateFields\b[^>]*/>");
 re!(TOC_INSTR, r"(?s)<w:instrText[^>]*>\s*TOC\b(.*?)</w:instrText>");
 re!(TOC_LEVELS, r#"\\o\s+(?:&quot;|")(\d)-(\d)(?:&quot;|")"#);
+re!(TOC_STYLES, r#"\\t\s+(?:&quot;|")(.*?)(?:&quot;|")"#);
 re!(WIKI_EMBED, r"!\[\[([^\]|#]+)[^\]]*\]\]");
 re!(WIKI_LINK, r"\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]");
 re!(FRONTMATTER, r"(?s)\A---\r?\n(.*?)\r?\n---(?:\r?\n|\z)");
@@ -254,6 +255,8 @@ struct Writer<'a> {
     note_index: usize,
     shift: usize,
     table: Option<Table>,
+    /// The table style formats its first row, so the header needs no bold of its own.
+    styled_header: bool,
 }
 
 impl Writer<'_> {
@@ -482,15 +485,17 @@ impl Writer<'_> {
     fn end_table(&mut self) {
         let Some(table) = self.table.take() else { return };
         self.out = table.body;
-        let width = self.text_width_emu / EMU_PER_TWIP;
-        let cell = width / table.columns.max(1) as u64;
+        let cell = self.text_width_emu / EMU_PER_TWIP / table.columns.max(1) as u64;
         let grid = format!(r#"<w:gridCol w:w="{cell}"/>"#).repeat(table.columns);
         const BORDERS: &str = r#"<w:tblBorders><w:top w:val="single" w:sz="4" w:color="auto"/><w:left w:val="single" w:sz="4" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:color="auto"/><w:right w:val="single" w:sz="4" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:color="auto"/></w:tblBorders>"#;
-        // Schema order: the style goes before the width, borders after it.
-        let table_width = format!(r#"<w:tblW w:w="{width}" w:type="dxa"/>"#);
+        // Full width, with Word fitting each column to its content. The look is
+        // what lets a table style format the first row.
+        const FULL_WIDTH: &str = r#"<w:tblW w:w="5000" w:type="pct"/>"#;
+        const LOOK: &str = r#"<w:tblLook w:val="0020" w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="0"/>"#;
+        // Schema order: style, width, borders, look.
         let properties = match self.styles.get("table grid") {
-            Some(id) => format!(r#"<w:tblStyle w:val="{id}"/>{table_width}"#),
-            None => format!("{table_width}{BORDERS}"),
+            Some(id) => format!(r#"<w:tblStyle w:val="{id}"/>{FULL_WIDTH}{LOOK}"#),
+            None => format!("{FULL_WIDTH}{BORDERS}{LOOK}"),
         };
         self.out.push_str(&format!("<w:tbl><w:tblPr>{properties}</w:tblPr><w:tblGrid>{grid}</w:tblGrid>{}</w:tbl>", table.rows));
         // Word needs a paragraph after a table that ends the body or a cell.
@@ -504,10 +509,8 @@ impl Writer<'_> {
         }
         self.flush();
         let cell = std::mem::take(&mut self.out);
-        let width = self.text_width_emu / EMU_PER_TWIP;
         let Some(table) = &mut self.table else { return };
-        let width = width / table.columns.max(1) as u64;
-        table.row.push_str(&format!(r#"<w:tc><w:tcPr><w:tcW w:w="{width}" w:type="dxa"/></w:tcPr>{cell}</w:tc>"#));
+        table.row.push_str(&format!(r#"<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>{cell}</w:tc>"#));
     }
 
     fn end_row(&mut self) {
@@ -591,7 +594,7 @@ impl Writer<'_> {
                 if let Some(t) = &mut self.table {
                     t.head = true;
                 }
-                self.format.bold = true;
+                self.format.bold = !self.styled_header;
             }
             Tag::TableCell => self.open(String::new()),
             Tag::Emphasis => self.format.italic = true,
@@ -787,15 +790,36 @@ fn insert_body(document: &str, body: &str, styles_xml: &str) -> String {
     format!("{}{body}{}", &document[..end], &document[end..])
 }
 
+/// The heading levels a TOC field lists: the range of `\o`, plus those that `\t`
+/// names as pairs of style and level, as in `\t "Título 1;1;Mi-titulo;2"`.
+fn toc_levels(instruction: &str) -> Vec<usize> {
+    let mut levels: Vec<usize> = TOC_LEVELS.captures(instruction).map_or(Vec::new(), |c| {
+        (c[1].parse().unwrap_or(1)..=c[2].parse().unwrap_or(3)).collect()
+    });
+    if let Some(styles) = TOC_STYLES.captures(instruction) {
+        let pairs: Vec<&str> = styles[1].split([';', ',']).collect();
+        levels.extend(pairs.chunks_exact(2).filter_map(|pair| pair[1].trim().parse::<usize>().ok()));
+    }
+    if levels.is_empty() { (1..=3).collect() } else { levels }
+}
+
+/// Whether a table style has its own format for the first row.
+fn formats_first_row(styles_xml: &str, id: &str) -> bool {
+    let start = format!(r#"w:styleId="{id}""#);
+    styles_xml.find(&start).is_some_and(|at| {
+        let style = &styles_xml[at..];
+        let end = style.find("</w:style>").unwrap_or(style.len());
+        style[..end].contains(r#"w:type="firstRow""#)
+    })
+}
+
 /// Refills the entries of a TOC field with the note's headings, so the contents
 /// are right even before Word recalculates the page numbers. The field itself
 /// stays real. Returns None when the template has no contents.
 fn rebuild_toc(document: &str, headings: &[Heading], styles: &Styles) -> Option<String> {
     let instr = TOC_INSTR.captures(document)?;
     let position = instr.get(0)?.end();
-    let (min, max) = TOC_LEVELS
-        .captures(&instr[1])
-        .map_or((1, 3), |c| (c[1].parse().unwrap_or(1), c[2].parse().unwrap_or(3)));
+    let levels = toc_levels(&instr[1]);
 
     let separate = position + document[position..].find(r#"w:fldCharType="separate""#)?;
     let result_start = separate + document[separate..].find("</w:r>")? + "</w:r>".len();
@@ -823,7 +847,7 @@ fn rebuild_toc(document: &str, headings: &[Heading], styles: &Styles) -> Option<
     };
     let result_end = document[..end].rfind("<w:r>").max(document[..end].rfind("<w:r "))?;
 
-    let entries: Vec<&Heading> = headings.iter().filter(|h| (min..=max).contains(&h.level)).collect();
+    let entries: Vec<&Heading> = headings.iter().filter(|h| levels.contains(&h.level)).collect();
     let mut generated = String::new();
     for (i, heading) in entries.iter().enumerate() {
         if i > 0 {
@@ -989,6 +1013,7 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
         note_index: 0,
         shift: 0,
         table: None,
+        styled_header: styles.get("table grid").is_some_and(|id| formats_first_row(&styles_xml, id)),
     };
     let mut saved = Vec::new();
     let mut values: HashMap<String, String> = HashMap::new();
