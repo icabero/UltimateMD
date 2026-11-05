@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UltimateMD: notas en Markdown que se convierten en documentos</title>
+  <meta name="description" content="Editor de Markdown libre para Windows, macOS y Linux. Varios vaults a la vez, diagramas, exportación a PDF y Word con tus plantillas, y conexión con tu IA por MCP.">
+  <meta property="og:title" content="UltimateMD">
+  <meta property="og:description" content="Notas en Markdown, diagramas, documentos de verdad y tu IA, sobre archivos normales.">
+  <meta property="og:image" content="https://icabero.github.io/UltimateMD/img/claro.png">
+  <link rel="icon" href="img/icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#contenido">Saltar al contenido</a>
+  <header class="top">
+    <a class="brand" href="#"><img src="img/icon.png" alt="" width="26" height="26">Ultimate<b>MD</b></a>
+    <nav aria-label="Principal">
+      <a href="#funciones">Funciones</a>
+      <a href="#ia">IA</a>
+      <a href="#descargar">Descargar</a>
+      <a href="https://github.com/icabero/UltimateMD">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="contenido">
+    <section class="hero">
+      <h1>Tus notas en Markdown, convertidas en documentos de verdad.</h1>
+      <p class="lead">Un editor libre para Windows, macOS y Linux. Trabaja con varios vaults a la vez, dibuja diagramas, exporta a PDF y Word con tus plantillas y conecta tu IA por MCP. Todo sobre archivos normales.</p>
+      <div class="actions">
+        <a class="button primary" href="#descargar">Descargar</a>
+        <a class="button" href="https://github.com/icabero/UltimateMD">Ver el código</a>
+      </div>
+      <img class="shot" src="img/claro.png" width="1282" height="821" alt="UltimateMD con el editor a la izquierda y la vista previa a la derecha, mostrando una nota con dos diagramas.">
+    </section>
+
+    <section id="funciones" class="feature">
+      <div>
+        <h2>Una carpeta es un vault</h2>
+        <p>Tus notas son archivos <code>.md</code> en carpetas normales, sin base de datos ni formato propio. Puedes abrir un vault de Obsidian tal cual, sincronizarlo como quieras y seguir usándolo con cualquier otro programa.</p>
+        <ul>
+          <li>Varios vaults abiertos a la vez, con pestañas de cualquiera de ellos.</li>
+          <li><code>[[Wikilinks]]</code>, búsqueda global y selector rápido.</li>
+          <li>Abre también archivos <code>.md</code> sueltos, sin vault.</li>
+        </ul>
+      </div>
+      <img class="shot" loading="lazy" src="img/oscuro.png" width="1282" height="821" alt="Vista previa de una nota en el tema oscuro, con dos vaults en la barra lateral.">
+    </section>
+
+    <section class="feature flip">
+      <div>
+        <h2>Documentos que parecen documentos</h2>
+        <p>Exporta una nota, una carpeta o el vault completo. El PDF se compone con un motor tipográfico real, sobre fondo blanco, con portada, índice y páginas numeradas.</p>
+        <ul>
+          <li><strong>Word con tus plantillas:</strong> se conservan portada, cabeceras, fuentes, estilos e índice.</li>
+          <li><strong>Carpetas a tu medida:</strong> cada nivel puede ser un título, un estilo de la plantilla o desaparecer.</li>
+          <li><strong>Vista previa</strong> página a página antes de guardar.</li>
+        </ul>
+      </div>
+      <img class="shot" loading="lazy" src="img/export.png" width="1282" height="821" alt="Diálogo de exportación con opciones por nivel de carpeta y la vista previa del documento.">
+    </section>
+
+    <section class="feature">
+      <div>
+        <h2>Diagramas dentro de la nota</h2>
+        <p>Escribe un bloque <code>mermaid</code> o <code>d2</code> y aparece dibujado con los colores de tu tema. También funcionan sin conexión, y se exportan a SVG y PNG.</p>
+        <p>¿Prefieres otro aspecto? Con <code>tema-diagramas: boceto</code> una nota los dibuja a mano.</p>
+      </div>
+      <img class="shot" loading="lazy" src="img/bosque.png" width="1282" height="821" alt="Editor y vista previa en el tema Bosque, con diagramas en tonos verdes.">
+    </section>
+
+    <section id="ia" class="band">
+      <div class="narrow">
+        <h2>Tu IA trabaja sobre tus notas</h2>
+        <p>UltimateMD incluye un servidor <a href="https://modelcontextprotocol.io">MCP</a>. Claude, Cursor y otros clientes pueden buscar, leer y escribir en tus vaults, aunque la app esté cerrada. Si está abierta, ves los cambios al momento.</p>
+        <pre><code>claude mcp add --scope user ultimatemd -- "/ruta/a/ultimatemd-mcp"</code></pre>
+        <p class="hint">La app te da este comando con la ruta correcta, en Ajustes.</p>
+        <div class="levels">
+          <div><h3>Desactivado</h3><p>La IA ni siquiera ve que el vault existe.</p></div>
+          <div><h3>Lectura</h3><p>Listar, leer y buscar. Es el nivel por defecto.</p></div>
+          <div><h3>Lectura y escritura</h3><p>También crear y modificar. Borrar siempre va a la papelera.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="themes">
+      <h2>Siete temas, y los tuyos</h2>
+      <p>Cada tema cubre la interfaz, el editor, la vista previa y los diagramas. Además, cada vault puede tener temas propios, y una nota puede elegir el suyo.</p>
+      <img class="swatches" loading="lazy" src="img/temas.png" width="718" height="265" alt="Selector de temas: Claro, Oscuro, Sepia, Medianoche, Bosque, Grafito y Alto contraste.">
+      <div class="gallery">
+        <img class="shot" loading="lazy" src="img/sepia.png" width="1282" height="821" alt="Tema Sepia.">
+        <img class="shot" loading="lazy" src="img/medianoche.png" width="1282" height="821" alt="Tema Medianoche.">
+      </div>
+    </section>
+
+    <section id="descargar" class="download">
+      <h2>Descargar</h2>
+      <p>Libre y gratuito, con licencia MIT.</p>
+      <div class="platforms">
+        <a href="https://github.com/icabero/UltimateMD/releases/latest"><strong>Windows</strong><span>Instalador .exe o .msi</span></a>
+        <a href="https://github.com/icabero/UltimateMD/releases/latest"><strong>macOS</strong><span>Apple Silicon e Intel, .dmg</span></a>
+        <a href="https://github.com/icabero/UltimateMD/releases/latest"><strong>Linux</strong><span>AppImage, .deb o .rpm</span></a>
+      </div>
+      <p class="hint">Los instaladores aún no están firmados, así que Windows y macOS mostrarán un aviso la primera vez. Las instrucciones están en el <a href="https://github.com/icabero/UltimateMD#instalación">README</a>.</p>
+    </section>
+  </main>
+
+  <footer class="bottom">
+    <span>UltimateMD · Licencia MIT</span>
+    <a href="https://github.com/icabero/UltimateMD">Código</a>
+    <a href="https://github.com/icabero/UltimateMD/issues">Issues</a>
+    <a href="https://github.com/icabero/UltimateMD/releases">Versiones</a>
+  </footer>
+</body>
+</html>
