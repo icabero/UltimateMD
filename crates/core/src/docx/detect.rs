@@ -17,6 +17,10 @@ pub struct Detected {
     /// Style id for each heading level, from level 1.
     pub headings: [Option<String>; HEADING_LEVELS],
     pub body: Option<String>,
+    /// The list that numbers those headings.
+    pub heading_list: Option<String>,
+    /// Background of the first filled cell of the template, as `RRGGBB`.
+    pub header_fill: Option<String>,
 }
 
 struct Style {
@@ -72,20 +76,47 @@ fn derives_from(styles: &HashMap<String, Style>, id: &str, ancestor: &str) -> bo
     false
 }
 
-/// For each list, the style tied to each of its levels.
-fn linked_styles(xml: &str) -> Vec<HashMap<usize, String>> {
+/// A list definition: its id, and the style tied to each of its levels.
+type List = (String, HashMap<usize, String>);
+
+fn linked_styles(xml: &str) -> Vec<List> {
     let Ok(document) = Document::parse(xml) else { return Vec::new() };
     document
         .root_element()
         .children()
         .filter(|n| n.tag_name().name() == "abstractNum")
         .map(|list| {
-            list.children()
+            let levels = list
+                .children()
                 .filter(|n| n.tag_name().name() == "lvl")
                 .filter_map(|level| Some((attr(level, "ilvl")?.parse().ok()?, value(level, "pStyle")?.to_string())))
-                .collect()
+                .collect();
+            (attr(list, "abstractNumId").unwrap_or_default().to_string(), levels)
         })
         .collect()
+}
+
+/// The number paragraphs use to join a list definition.
+fn list_number(xml: &str, definition: &str) -> Option<String> {
+    let document = Document::parse(xml).ok()?;
+    document
+        .root_element()
+        .children()
+        .filter(|n| n.tag_name().name() == "num")
+        .find(|n| value(*n, "abstractNumId") == Some(definition))
+        .and_then(|n| attr(n, "numId"))
+        .map(String::from)
+}
+
+/// The colour a template gives its tables, from the first filled cell it has.
+fn table_fill(document: &str) -> Option<String> {
+    let parsed = Document::parse(document).ok()?;
+    parsed
+        .descendants()
+        .filter(|n| n.tag_name().name() == "tcPr")
+        .filter_map(|cell| attr(child(cell, "shd")?, "fill"))
+        .find(|fill| fill.len() == 6 && !fill.eq_ignore_ascii_case("FFFFFF") && fill.bytes().all(|b| b.is_ascii_hexdigit()))
+        .map(str::to_uppercase)
 }
 
 /// The styles of one list that continue the standard headings, level by level.
@@ -153,13 +184,18 @@ fn body_style(styles: &HashMap<String, Style>, document: &str) -> Option<String>
 
 pub fn detect(styles_xml: &str, numbering_xml: &str, document_xml: &str) -> Detected {
     let styles = load_styles(styles_xml);
-    let chain = linked_styles(numbering_xml)
+    let (definition, chain) = linked_styles(numbering_xml)
         .iter()
-        .map(|list| heading_chain(&styles, list))
-        .max_by_key(Vec::len)
+        .map(|(id, list)| (id.clone(), heading_chain(&styles, list)))
+        .max_by_key(|(_, chain)| chain.len())
         .unwrap_or_default();
     let listed = contents_styles(document_xml);
-    let mut detected = Detected { body: body_style(&styles, document_xml), ..Detected::default() };
+    let mut detected = Detected {
+        body: body_style(&styles, document_xml),
+        heading_list: if chain.is_empty() { None } else { list_number(numbering_xml, &definition) },
+        header_fill: table_fill(document_xml),
+        ..Detected::default()
+    };
     for (slot, id) in detected.headings.iter_mut().zip(chain) {
         *slot = Some(listed_variant(&styles, &id, &listed).unwrap_or(id));
     }
@@ -281,6 +317,19 @@ mod tests {
     fn a_template_without_these_parts_changes_nothing() {
         assert_eq!(detect("", "", ""), Detected::default());
         assert_eq!(detect("not xml", "<", ">"), Detected::default());
+    }
+
+    #[test]
+    fn the_header_colour_comes_from_the_first_filled_cell() {
+        let cell = |fill: &str| format!(r#"<w:tc><w:tcPr><w:shd w:val="clear" w:fill="{fill}"/></w:tcPr></w:tc>"#);
+        let tables = format!("<w:document {NS}><w:body><w:tbl>{}{}{}</w:tbl></w:body></w:document>", cell("auto"), cell("FFFFFF"), cell("a1b2c3"));
+        assert_eq!(detect("", "", &tables).header_fill.as_deref(), Some("A1B2C3"));
+    }
+
+    #[test]
+    fn the_list_of_the_headings_is_found_by_its_number() {
+        let list = numbering(&[&["Propio1", "Propio2"]]).replace("<w:abstractNum>", r#"<w:abstractNum w:abstractNumId="5">"#).replace("</w:numbering>", r#"<w:num w:numId="9"><w:abstractNumId w:val="5"/></w:num></w:numbering>"#);
+        assert_eq!(detect(&styles(), &list, &document(&[])).heading_list.as_deref(), Some("9"));
     }
 
     #[test]

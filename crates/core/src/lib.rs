@@ -13,6 +13,7 @@ pub mod registry;
 pub mod search;
 pub mod templates;
 pub mod vault_themes;
+pub mod word_settings;
 
 pub use error::{Error, Result};
 pub use files::{Note, TreeNode, Vault as VaultFs, WriteMode};

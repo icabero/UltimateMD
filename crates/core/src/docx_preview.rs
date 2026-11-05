@@ -478,7 +478,7 @@ mod tests {
         let sections = vec![Section::Note { path: "n.md".into(), markdown: markdown.into(), shift: 0, page_break: false }];
         let template = example_template();
         let image = |_: &str, _: &str| None;
-        let input = Input { sections: &sections, title: "t", fixed_title: false, date: "5/11", contents: "Índice", diagrams: &[], image: &image, template: Some(&template) };
+        let input = Input { sections: &sections, title: "t", fixed_title: false, date: "5/11", contents: "Índice", diagrams: &[], image: &image, template: Some(&template), settings: &Default::default(), inline_numbering: false };
         render(&crate::docx::render(&input).unwrap()).unwrap()
     }
 

@@ -5,6 +5,7 @@
 
 mod detect;
 
+use crate::word_settings::WordSettings;
 use crate::{Error, Result};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use regex::{Captures, Regex};
@@ -26,6 +27,7 @@ const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/rela
 /// EMU per twip and per CSS pixel, Word's and the web's units.
 const EMU_PER_TWIP: u64 = 635;
 const EMU_PER_PX: u64 = 9525;
+const EMU_PER_POINT: u64 = 12700;
 /// A4 with 2.5 cm margins, for templates that state no section size.
 const DEFAULT_TEXT_WIDTH: u64 = 9026;
 /// Diagrams are rasterised at twice their size so they print sharply.
@@ -96,6 +98,10 @@ pub struct Input<'a> {
     /// Loads an image: note path, then the reference written in it.
     pub image: &'a dyn Fn(&str, &str) -> Option<Vec<u8>>,
     pub template: Option<&'a [u8]>,
+    pub settings: &'a WordSettings,
+    /// Writes each heading's numbering on the paragraph, for viewers that do not
+    /// follow it through the style chain. Word does not need it.
+    pub inline_numbering: bool,
 }
 
 fn invalid(what: &str) -> Error {
@@ -268,13 +274,16 @@ struct Writer<'a> {
 impl Writer<'_> {
     /// The style id for a heading level: the template's own, or the standard one.
     fn heading_style(&self, level: usize) -> Option<String> {
-        let own = self.detected.headings.get(level.wrapping_sub(1)).cloned().flatten();
+        let slot = level.wrapping_sub(1);
+        let chosen = self.input.settings.headings.get(slot).cloned().flatten();
+        let own = chosen.or_else(|| self.detected.headings.get(slot).cloned().flatten());
         own.or_else(|| self.styles.get(&format!("heading {level}")).map(String::from))
     }
 
     /// The paragraph properties of the template's body text, if it has its own.
     fn body_style(&self) -> String {
-        self.detected.body.as_ref().map_or(String::new(), |id| format!(r#"<w:pStyle w:val="{id}"/>"#))
+        let id = self.input.settings.body.as_ref().or(self.detected.body.as_ref());
+        id.map_or(String::new(), |id| format!(r#"<w:pStyle w:val="{id}"/>"#))
     }
 
     fn open(&mut self, properties: String) {
@@ -357,6 +366,12 @@ impl Writer<'_> {
         if self.link.is_some() && self.styles.get("hyperlink").is_none() {
             p.push_str(r#"<w:color w:val="0563C1"/><w:u w:val="single"/>"#);
         }
+        let settings = self.input.settings;
+        let size = if code { settings.code_text_size } else { None };
+        if let Some(size) = size.or(if self.table.is_some() { settings.table_text_size } else { None }) {
+            let half_points = (size * 2.0).round() as u32;
+            p.push_str(&format!(r#"<w:sz w:val="{half_points}"/><w:szCs w:val="{half_points}"/>"#));
+        }
         if p.is_empty() { p } else { format!("<w:rPr>{p}</w:rPr>") }
     }
 
@@ -400,9 +415,10 @@ impl Writer<'_> {
 
         let mut cx = size.width as u64 * EMU_PER_PX / scale;
         let mut cy = size.height as u64 * EMU_PER_PX / scale;
-        if cx > self.text_width_emu {
-            cy = cy * self.text_width_emu / cx;
-            cx = self.text_width_emu;
+        let limit = self.input.settings.image_max_width.map_or(self.text_width_emu, |pt| (u64::from(pt) * EMU_PER_POINT).min(self.text_width_emu));
+        if cx > limit {
+            cy = cy * limit / cx;
+            cx = limit;
         }
         self.drawing_id += 1;
         let id = self.drawing_id;
@@ -439,7 +455,9 @@ impl Writer<'_> {
             self.flush();
             return;
         }
-        self.open(r#"<w:shd w:val="clear" w:color="auto" w:fill="F3F1EA"/>"#.to_string());
+        let background = if self.input.settings.plain_code { "" } else { r#"<w:shd w:val="clear" w:color="auto" w:fill="F3F1EA"/>"# };
+        let body = self.body_style();
+        self.open(format!("{body}{background}"));
         for (i, line) in code.trim_end_matches('\n').split('\n').enumerate() {
             if i > 0 {
                 self.push_raw("<w:r><w:br/></w:r>");
@@ -531,8 +549,10 @@ impl Writer<'_> {
         }
         self.flush();
         let cell = std::mem::take(&mut self.out);
+        let fill = self.input.settings.header_fill.as_ref().or(self.detected.header_fill.as_ref());
         let Some(table) = &mut self.table else { return };
-        table.row.push_str(&format!(r#"<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>{cell}</w:tc>"#));
+        let shade = fill.filter(|_| table.head).map_or(String::new(), |fill| format!(r#"<w:shd w:val="clear" w:color="auto" w:fill="{fill}"/>"#));
+        table.row.push_str(&format!(r#"<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/>{shade}</w:tcPr>{cell}</w:tc>"#));
     }
 
     fn end_row(&mut self) {
@@ -592,7 +612,11 @@ impl Writer<'_> {
                 let level = (heading_number(level) + self.shift).min(MAX_LEVELS);
                 let style = self.heading_style(level);
                 // Without the style, the outline level keeps it in the contents.
-                let properties = style.as_ref().map_or(format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1), |id| format!(r#"<w:pStyle w:val="{id}"/>"#));
+                // Only levels that are in the list: others are not numbered in Word.
+                let listed = self.detected.headings.get(level - 1).is_some_and(Option::is_some);
+                let numbering = (self.input.inline_numbering && listed).then_some(self.detected.heading_list.as_ref()).flatten();
+                let numbering = numbering.map_or(String::new(), |list| format!(r#"<w:numPr><w:ilvl w:val="{}"/><w:numId w:val="{list}"/></w:numPr>"#, level - 1));
+                let properties = style.as_ref().map_or(format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1), |id| format!(r#"<w:pStyle w:val="{id}"/>{numbering}"#));
                 self.open(properties);
                 self.format.bold = style.is_none();
                 self.heading = Some(Heading { level, text: String::new() });
@@ -1127,6 +1151,30 @@ pub fn paragraph_styles(template: Option<&[u8]>) -> Result<Vec<StyleInfo>> {
         .collect();
     styles.sort_by_key(|s| s.name.to_lowercase());
     Ok(styles)
+}
+
+/// What a template offers a vault: what could be detected, and its styles to pick from.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplateInfo {
+    pub headings: Vec<Option<String>>,
+    pub body: Option<String>,
+    pub header_fill: Option<String>,
+    pub styles: Vec<StyleInfo>,
+}
+
+pub fn template_info(template: Option<&[u8]>) -> Result<TemplateInfo> {
+    let parts = template.map_or_else(|| Ok(blank_package()), read_package)?;
+    let part = |name| text_of(&parts, name).unwrap_or_default();
+    let found = detect::detect(&part(STYLES), &part(NUMBERING), &part(DOCUMENT));
+    Ok(TemplateInfo { headings: found.headings.to_vec(), body: found.body, header_fill: found.header_fill, styles: paragraph_styles(template)? })
+}
+
+/// A short document with one example of everything, written like a real export.
+pub fn sample(template: Option<&[u8]>, settings: &WordSettings, markdown: &str, picture: &[u8]) -> Result<Vec<u8>> {
+    let sections = [Section::Note { path: "muestra.md".into(), markdown: markdown.to_string(), shift: 0, page_break: false }];
+    let image = |_: &str, _: &str| Some(picture.to_vec());
+    render(&Input { sections: &sections, title: "", fixed_title: false, date: "", contents: "", diagrams: &[], image: &image, template, settings, inline_numbering: true })
 }
 
 /// A complete template to try exports with: cover, contents, header, numbered

@@ -1092,3 +1092,46 @@ test('the pastel pink theme can be chosen for the whole app', async ({ page }) =
   await page.getByLabel('Modo claro').selectOption('rosa');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'rosa');
 });
+
+const wordScreen = async (page: Page) => {
+  await openSettings(page);
+  await settingsSection(page, 'Vaults');
+  await page.getByRole('button', { name: 'Word', exact: true }).first().click();
+  return page.getByRole('dialog', { name: 'Word en Trabajo' });
+};
+
+test('the Word screen shows what the template suggests and saves changes', async ({ page }) => {
+  const screen = await wordScreen(page);
+  await expect(screen.getByLabel('Título 1')).toHaveValue('');
+  await expect(screen.getByLabel('Título 1').locator('option').first()).toHaveText('Automático: Propio 1');
+  await expect(screen.getByLabel('Título 3').locator('option').first()).toHaveText('Estándar');
+  await screen.getByLabel('Título 3').selectOption('Propio2');
+  await screen.getByLabel('Ancho máximo (pt)').fill('420');
+  await screen.getByLabel('Sin fondo').check();
+  await expect.poll(() => page.evaluate(() => (window as any).__word)).toMatchObject({ imageMaxWidth: 420, plainCode: true, headings: [null, null, 'Propio2', null, null, null] });
+  await expect.poll(() => page.evaluate(() => (window as any).__wordSample)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => (window as any).__wordMarkdown)).toContain('###### Nivel 6');
+});
+
+test('the Word screen warns about levels the template does not number', async ({ page }) => {
+  const screen = await wordScreen(page);
+  await expect(screen.getByRole('status')).toHaveCount(0);
+  await screen.getByRole('button', { name: 'Elegir plantilla' }).click();
+  await expect(screen.getByRole('status')).toContainText('3, 4, 5, 6');
+  await expect(screen.getByRole('button', { name: 'Cambiar plantilla' })).toBeVisible();
+});
+
+test('the header colour can be set and given back to the template', async ({ page }) => {
+  const screen = await wordScreen(page);
+  await screen.getByLabel('Color de cabecera').fill('#112233');
+  await expect.poll(() => page.evaluate(() => (window as any).__word.headerFill)).toBe('112233');
+  await screen.getByRole('button', { name: 'El de la plantilla' }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__word.headerFill)).toBeNull();
+});
+
+test('a vault with its own template offers it first when exporting', async ({ page }) => {
+  await page.evaluate(() => ((window as any).__wordTemplate = true));
+  await open(page, 'Inicio');
+  await exportAs(page, 'Word');
+  await expect(page.getByLabel('Plantilla')).toHaveValue(':vault');
+});

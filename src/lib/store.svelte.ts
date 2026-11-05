@@ -110,6 +110,8 @@ class Store {
   dialog = $state<Dialog | null>(null);
   vaultThemes = $state<Record<string, VaultThemes>>({});
   themeEditor = $state<string | null>(null);
+  /** The vault whose Word settings are open. */
+  wordScreen = $state<string | null>(null);
 
   #timers = new Map<string, ReturnType<typeof setTimeout>>();
   #toastTimer: ReturnType<typeof setTimeout> | undefined;

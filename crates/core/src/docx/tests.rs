@@ -16,7 +16,7 @@ fn render_with(template: Option<&[u8]>) -> Package {
     let diagrams = [PNG.to_vec()];
     let image = |_: &str, path: &str| (path == "img.png").then(|| PNG.to_vec());
     let sections = note(SAMPLE);
-    let input = Input { sections: &sections, title: "archivo", fixed_title: false, date: "5/11/2026", contents: "Índice", diagrams: &diagrams, image: &image, template };
+    let input = Input { sections: &sections, title: "archivo", fixed_title: false, date: "5/11/2026", contents: "Índice", diagrams: &diagrams, image: &image, template, settings: &Default::default(), inline_numbering: false };
     read_package(&render(&input).unwrap()).unwrap()
 }
 
@@ -186,7 +186,7 @@ fn images_fit_the_text_width() {
 fn missing_assets_leave_a_note_rather_than_fail() {
     let image = |_: &str, _: &str| None;
     let sections = note("![x](no.png)\n\n```d2\na\n```\n");
-    let input = Input { sections: &sections, title: "t", fixed_title: false, date: "", contents: "Índice", diagrams: &[], image: &image, template: None };
+    let input = Input { sections: &sections, title: "t", fixed_title: false, date: "", contents: "Índice", diagrams: &[], image: &image, template: None, settings: &Default::default(), inline_numbering: false };
     let doc = text(&read_package(&render(&input).unwrap()).unwrap(), DOCUMENT);
     assert!(doc.contains("[Imagen: no.png]") && doc.contains("[Diagrama no disponible]"));
 }
@@ -196,7 +196,7 @@ fn bad_templates_are_rejected() {
     assert!(check_template(b"esto no es un zip").is_err());
     let image = |_: &str, _: &str| None;
     let sections = note("x");
-    let input = Input { sections: &sections, title: "t", fixed_title: false, date: "", contents: "Índice", diagrams: &[], image: &image, template: Some(b"nope") };
+    let input = Input { sections: &sections, title: "t", fixed_title: false, date: "", contents: "Índice", diagrams: &[], image: &image, template: Some(b"nope"), settings: &Default::default(), inline_numbering: false };
     assert!(render(&input).is_err());
     assert!(check_template(&template()).is_ok());
 }
@@ -206,7 +206,7 @@ fn title_prefers_frontmatter() {
     let image = |_: &str, _: &str| None;
     let source = template();
     let sections = note("---\ntitulo: Elegido\n---\n# Otro\n");
-    let input = Input { sections: &sections, title: "t", fixed_title: false, date: "", contents: "Índice", diagrams: &[], image: &image, template: Some(&source) };
+    let input = Input { sections: &sections, title: "t", fixed_title: false, date: "", contents: "Índice", diagrams: &[], image: &image, template: Some(&source), settings: &Default::default(), inline_numbering: false };
     let doc = text(&read_package(&render(&input).unwrap()).unwrap(), DOCUMENT);
     assert!(doc.contains("<w:t xml:space=\"preserve\">Elegido"));
 }
@@ -252,7 +252,7 @@ fn folder_document() -> Package {
     ];
     let image = |_: &str, _: &str| None;
     let source = template();
-    let input = Input { sections: &sections, title: "Vault", fixed_title: true, date: "", contents: "Índice", diagrams: &[], image: &image, template: Some(&source) };
+    let input = Input { sections: &sections, title: "Vault", fixed_title: true, date: "", contents: "Índice", diagrams: &[], image: &image, template: Some(&source), settings: &Default::default(), inline_numbering: false };
     read_package(&render(&input).unwrap()).unwrap()
 }
 

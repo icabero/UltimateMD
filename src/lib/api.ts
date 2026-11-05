@@ -69,6 +69,27 @@ export interface ExportPlan {
   diagrams: number[][];
 }
 
+export interface WordSettings {
+  headings: (string | null)[];
+  body: string | null;
+  headerFill: string | null;
+  tableTextSize: number | null;
+  codeTextSize: number | null;
+  imageMaxWidth: number | null;
+  plainCode: boolean;
+}
+
+export interface WordConfig {
+  settings: WordSettings;
+  hasTemplate: boolean;
+  info: {
+    headings: (string | null)[];
+    body: string | null;
+    headerFill: string | null;
+    styles: TemplateStyle[];
+  };
+}
+
 export interface TemplateStyle {
   id: string;
   name: string;
@@ -139,6 +160,11 @@ export const api = {
   previewPdf: (plan: ExportPlan) => invoke<string[]>('preview_pdf', { plan }),
   templateStyles: (template: string | null) => invoke<TemplateStyle[]>('template_styles', { template }),
   saveTemplateCopy: (name: string) => invoke<boolean>('save_template_copy', { name }),
+  wordConfig: (id: string) => invoke<WordConfig>('word_config', { id }),
+  saveWordSettings: (id: string, settings: WordSettings) => invoke<void>('save_word_settings', { id, settings }),
+  chooseVaultTemplate: (id: string) => invoke<boolean>('choose_vault_template', { id }),
+  removeVaultTemplate: (id: string) => invoke<void>('remove_vault_template', { id }),
+  wordSample: (id: string, settings: WordSettings, markdown: string, picture: number[]) => invoke<number[]>('word_sample', { id, settings, markdown, picture }),
   installerLanguage: () => invoke<string | null>('installer_language'),
   exportFile: (name: string, data: Uint8Array) => invoke<boolean>('export_file', { name, data: Array.from(data) }),
 };

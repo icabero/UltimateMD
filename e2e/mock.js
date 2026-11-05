@@ -134,10 +134,32 @@
     'plugin:opener|open_url': ({ url }) => {
       window.__opened = url;
     },
+    word_config: () => ({
+      settings: window.__word,
+      hasTemplate: window.__wordTemplate ?? false,
+      info: { headings: ['Propio1', 'Propio2', null, null, null, null], body: 'Cuerpo', headerFill: 'A1B2C3', styles: [{ id: 'Propio1', name: 'Propio 1' }, { id: 'Propio2', name: 'Propio 2' }, { id: 'Cuerpo', name: 'Cuerpo' }] },
+    }),
+    save_word_settings: ({ settings }) => {
+      window.__word = settings;
+    },
+    choose_vault_template: () => {
+      window.__wordTemplate = true;
+      return true;
+    },
+    remove_vault_template: () => {
+      window.__wordTemplate = false;
+    },
+    word_sample: ({ markdown }) => {
+      window.__wordSample = (window.__wordSample ?? 0) + 1;
+      window.__wordMarkdown = markdown;
+      return [];
+    },
     take_pending_files: () => window.__pending ?? [],
     installer_language: () => window.__installerLanguage ?? null,
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),
   };
+
+  window.__word = { headings: [null, null, null, null, null, null], body: null, headerFill: null, tableTextSize: null, codeTextSize: null, imageMaxWidth: null, plainCode: false };
 
   window.__TAURI_INTERNALS__ = {
     invoke: async (cmd, args) => {
