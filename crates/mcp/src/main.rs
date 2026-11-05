@@ -1,0 +1,317 @@
+//! MCP server for UltimateMD, spoken over stdio. It works on the same files as
+//! the app and does not need it running; an open app picks changes up live.
+//!
+//! This is a separate binary because a Windows GUI executable has no usable
+//! stdin/stdout, so the app itself cannot act as a stdio server.
+
+use rmcp::{
+    ErrorData, ServerHandler, ServiceExt,
+    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
+    model::{CallToolResult, ContentBlock, Implementation, ServerCapabilities, ServerInfo},
+    schemars::{self, JsonSchema},
+    tool, tool_handler, tool_router,
+    transport::stdio,
+};
+use serde::Deserialize;
+use serde_json::{Value, json};
+use ultimatemd_core::{Error, McpAccess, Registry, VaultFs, WriteMode, links, paths, search};
+
+const INSTRUCTIONS: &str = "UltimateMD exposes the user's vaults: folders of Markdown and HTML notes. \
+Call list_vaults first. Paths are relative to the vault and use '/'. \
+Link notes with [[wikilinks]]. For diagrams use fenced code blocks with the language 'mermaid' \
+(flowcharts, sequence, gantt...) or 'd2' (architecture and polished diagrams); the app renders both. \
+Before overwriting a note, read it and pass its version to update_note so that edits made by the user are not lost.";
+
+const DEFAULT_LIMIT: usize = 50;
+
+#[derive(Deserialize, JsonSchema)]
+struct VaultArg {
+    /// Vault name or id, from list_vaults
+    vault: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct NoteArg {
+    /// Vault name or id, from list_vaults
+    vault: String,
+    /// Note path relative to the vault, for example 'projects/ideas.md'
+    path: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct SearchArg {
+    /// Vault name or id. Omit it to search every vault
+    vault: Option<String>,
+    /// Words to find, in any order and ignoring case
+    query: String,
+    /// Maximum results per vault (default 50)
+    limit: Option<usize>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct WriteArg {
+    /// Vault name or id, from list_vaults
+    vault: String,
+    /// Note path relative to the vault. '.md' is added if it has no note extension
+    path: String,
+    /// Full text of the note
+    content: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct UpdateArg {
+    /// Vault name or id, from list_vaults
+    vault: String,
+    /// Note path relative to the vault
+    path: String,
+    /// New full text of the note
+    content: String,
+    /// Version from read_note. The update fails if the note changed since then
+    expected_version: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct AppendArg {
+    /// Vault name or id, from list_vaults
+    vault: String,
+    /// Note path relative to the vault
+    path: String,
+    /// Text to add at the end of the note
+    content: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct MoveArg {
+    /// Vault name or id, from list_vaults
+    vault: String,
+    /// Current note path
+    from: String,
+    /// New note path. It must not exist
+    to: String,
+}
+
+/// Loads a vault, enforcing the access level the user set for it. Vaults with
+/// MCP off are reported as unknown so their existence is not revealed.
+fn open(key: &str, need_write: bool) -> ultimatemd_core::Result<VaultFs> {
+    let registry = Registry::load()?;
+    let vault = registry.find(key)?;
+    match (vault.mcp, need_write) {
+        (McpAccess::Off, _) => Err(Error::UnknownVault(key.to_string())),
+        (McpAccess::Read, true) => Err(Error::AccessDenied(vault.name.clone())),
+        _ => Ok(VaultFs::new(&vault.path)),
+    }
+}
+
+/// Refuses non-note files, so images and other files stay out of reach.
+fn note_path(path: &str) -> ultimatemd_core::Result<String> {
+    let path = paths::normalize(path)?;
+    if paths::is_note(&path) {
+        Ok(path)
+    } else {
+        Err(Error::PathNotAllowed(format!("{path} is not a note")))
+    }
+}
+
+fn with_extension(path: &str) -> String {
+    if paths::is_note(path) { path.to_string() } else { format!("{path}.md") }
+}
+
+/// Failures go back as tool errors, which the model can read and act on.
+fn reply(result: ultimatemd_core::Result<Value>) -> Result<CallToolResult, ErrorData> {
+    Ok(match result {
+        Ok(value) => CallToolResult::success(vec![ContentBlock::text(value.to_string())]),
+        Err(e) => CallToolResult::error(vec![ContentBlock::text(e.to_string())]),
+    })
+}
+
+#[derive(Clone)]
+struct Server {
+    #[expect(dead_code, reason = "read by the tool_handler macro")]
+    tool_router: ToolRouter<Self>,
+}
+
+#[tool_router]
+impl Server {
+    fn new() -> Self {
+        Self { tool_router: Self::tool_router() }
+    }
+
+    #[tool(
+        description = "List the vaults this client can use, with their access level.",
+        annotations(read_only_hint = true)
+    )]
+    async fn list_vaults(&self) -> Result<CallToolResult, ErrorData> {
+        reply(Registry::load().map(|r| {
+            let vaults: Vec<Value> = r
+                .vaults
+                .iter()
+                .filter(|v| v.mcp != McpAccess::Off)
+                .map(|v| json!({ "name": v.name, "id": v.id, "access": v.mcp }))
+                .collect();
+            json!({ "vaults": vaults })
+        }))
+    }
+
+    #[tool(description = "List all notes in a vault.", annotations(read_only_hint = true))]
+    async fn list_notes(
+        &self,
+        Parameters(a): Parameters<VaultArg>,
+    ) -> Result<CallToolResult, ErrorData> {
+        reply((|| Ok(json!({ "notes": open(&a.vault, false)?.notes()? })))())
+    }
+
+    #[tool(
+        description = "Read a note. Returns its content and its version.",
+        annotations(read_only_hint = true)
+    )]
+    async fn read_note(
+        &self,
+        Parameters(a): Parameters<NoteArg>,
+    ) -> Result<CallToolResult, ErrorData> {
+        reply((|| {
+            let path = note_path(&a.path)?;
+            Ok(serde_json::to_value(open(&a.vault, false)?.read(&path)?)?)
+        })())
+    }
+
+    #[tool(
+        description = "Search note names and contents. Returns matching lines; line 0 means the file name matched.",
+        annotations(read_only_hint = true)
+    )]
+    async fn search_notes(
+        &self,
+        Parameters(a): Parameters<SearchArg>,
+    ) -> Result<CallToolResult, ErrorData> {
+        reply((|| {
+            let limit = a.limit.unwrap_or(DEFAULT_LIMIT);
+            let names: Vec<String> = match a.vault {
+                Some(v) => vec![v],
+                None => Registry::load()?
+                    .vaults
+                    .iter()
+                    .filter(|v| v.mcp != McpAccess::Off)
+                    .map(|v| v.name.clone())
+                    .collect(),
+            };
+            let mut results = Vec::new();
+            for name in names {
+                let hits = search::search(&open(&name, false)?, &a.query, limit)?;
+                results.extend(hits.into_iter().map(|h| json!({ "vault": name, "hit": h })));
+            }
+            Ok(json!({ "results": results }))
+        })())
+    }
+
+    #[tool(
+        description = "Get the notes a note links to, its broken links, and the notes linking to it.",
+        annotations(read_only_hint = true)
+    )]
+    async fn get_backlinks(
+        &self,
+        Parameters(a): Parameters<NoteArg>,
+    ) -> Result<CallToolResult, ErrorData> {
+        reply((|| {
+            let path = note_path(&a.path)?;
+            Ok(serde_json::to_value(links::info(&open(&a.vault, false)?, &path)?)?)
+        })())
+    }
+
+    #[tool(
+        description = "Create a new note. Folders are created as needed. Fails if the note exists. Needs write access.",
+        annotations(read_only_hint = false, destructive_hint = false)
+    )]
+    async fn create_note(
+        &self,
+        Parameters(a): Parameters<WriteArg>,
+    ) -> Result<CallToolResult, ErrorData> {
+        reply((|| {
+            let path = note_path(&with_extension(&a.path))?;
+            let version = open(&a.vault, true)?.write(&path, &a.content, WriteMode::Create)?;
+            Ok(json!({ "path": path, "version": version }))
+        })())
+    }
+
+    #[tool(
+        description = "Replace the full text of a note. Pass expected_version from read_note to avoid losing changes. Needs write access.",
+        annotations(read_only_hint = false, destructive_hint = true)
+    )]
+    async fn update_note(
+        &self,
+        Parameters(a): Parameters<UpdateArg>,
+    ) -> Result<CallToolResult, ErrorData> {
+        reply((|| {
+            let path = note_path(&a.path)?;
+            let mode = WriteMode::Replace(a.expected_version.as_deref());
+            let version = open(&a.vault, true)?.write(&path, &a.content, mode)?;
+            Ok(json!({ "path": path, "version": version }))
+        })())
+    }
+
+    #[tool(
+        description = "Add text at the end of a note. Needs write access.",
+        annotations(read_only_hint = false, destructive_hint = false)
+    )]
+    async fn append_note(
+        &self,
+        Parameters(a): Parameters<AppendArg>,
+    ) -> Result<CallToolResult, ErrorData> {
+        reply((|| {
+            let path = note_path(&a.path)?;
+            let vault = open(&a.vault, true)?;
+            let note = vault.read(&path)?;
+            let separator = if note.content.is_empty() || note.content.ends_with('\n') { "" } else { "\n" };
+            let text = format!("{}{separator}{}", note.content, a.content);
+            let version = vault.write(&path, &text, WriteMode::Replace(Some(&note.version)))?;
+            Ok(json!({ "path": path, "version": version }))
+        })())
+    }
+
+    #[tool(
+        description = "Move or rename a note. Never overwrites. Links pointing to it are not updated. Needs write access.",
+        annotations(read_only_hint = false, destructive_hint = false)
+    )]
+    async fn move_note(
+        &self,
+        Parameters(a): Parameters<MoveArg>,
+    ) -> Result<CallToolResult, ErrorData> {
+        reply((|| {
+            let (from, to) = (note_path(&a.from)?, note_path(&with_extension(&a.to))?);
+            open(&a.vault, true)?.rename(&from, &to)?;
+            Ok(json!({ "path": to }))
+        })())
+    }
+
+    #[tool(
+        description = "Send a note to the system trash, where the user can restore it. Needs write access.",
+        annotations(read_only_hint = false, destructive_hint = true)
+    )]
+    async fn delete_note(
+        &self,
+        Parameters(a): Parameters<NoteArg>,
+    ) -> Result<CallToolResult, ErrorData> {
+        reply((|| {
+            let path = note_path(&a.path)?;
+            open(&a.vault, true)?.trash(&path)?;
+            Ok(json!({ "trashed": path }))
+        })())
+    }
+}
+
+#[tool_handler]
+impl ServerHandler for Server {
+    fn get_info(&self) -> ServerInfo {
+        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(Implementation::new("ultimatemd", env!("CARGO_PKG_VERSION")))
+            .with_instructions(INSTRUCTIONS)
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::args().any(|a| a == "--version") {
+        println!("ultimatemd-mcp {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+    Server::new().serve(stdio()).await?.waiting().await?;
+    Ok(())
+}

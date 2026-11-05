@@ -1,0 +1,9 @@
+node_modules/
+dist/
+target/
+src-tauri/binaries/
+src-tauri/gen/
+test-results/
+playwright-report/
+*.log
+.DS_Store
