@@ -109,7 +109,7 @@ test('the quick switcher finds notes in every vault', async ({ page }) => {
 test('global search covers every vault', async ({ page }) => {
   await page.keyboard.press('Control+Shift+f');
   await page.getByPlaceholder('Buscar en los vaults abiertos').fill('#');
-  await expect(page.locator('.results button')).toHaveCount(5);
+  await expect(page.locator('.results button')).toHaveCount(6);
 });
 
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
@@ -249,19 +249,98 @@ test('export to Word sends the template and rendered diagrams', async ({ page })
   expect(args.diagrams[0].slice(1, 4)).toEqual([0x50, 0x4e, 0x47]);
 });
 
-test('export to PDF prints only the note', async ({ page }) => {
+test('export to PDF writes the file directly, with no print dialog', async ({ page }) => {
   await page.evaluate(() => {
     window.print = () => {
-      (window as any).__printed = document.getElementById('print-root')?.shadowRoot?.textContent;
+      (window as any).__printed = true;
     };
   });
   await open(page, 'Inicio');
   await exportAs(page, 'PDF');
+  await expect(page.getByAltText('Página 1')).toBeVisible();
   await page.getByRole('button', { name: 'Exportar', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => (window as any).__printed)).toContain('Inicio');
-  await page.emulateMedia({ media: 'print' });
-  await expect(page.locator('#app')).toBeHidden();
-  await expect(page.locator('#print-root')).toBeVisible();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+  const plan = await page.evaluate(() => (window as any).__pdf);
+  expect(plan.sections).toEqual([{ kind: 'note', path: 'Inicio.md', shift: 0, pageBreak: false }]);
+  expect(await page.evaluate(() => (window as any).__printed)).toBeUndefined();
+});
+
+const scope = (page: Page, name: string) => page.getByRole('group', { name: 'Alcance' }).getByRole('button', { name }).click();
+
+async function pdfPlan(page: Page) {
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+  return page.evaluate(() => (window as any).__pdf);
+}
+
+test('exporting a vault orders notes and titles folders by level', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'PDF');
+  await scope(page, 'Vault');
+  const plan = await pdfPlan(page);
+  expect(plan.title).toBe('Trabajo');
+  expect(plan.fixedTitle).toBe(true);
+  expect(plan.cover).toBe(true);
+  expect(plan.sections.map((s: any) => [s.kind, s.text ?? s.path, s.kind === 'note' ? s.shift : s.level])).toEqual([
+    ['note', 'D2.md', 0],
+    ['note', 'Inicio.md', 0],
+    ['heading', 'dir', 1],
+    ['note', 'dir/Destino.md', 1],
+    ['heading', 'sub', 2],
+    ['note', 'dir/sub/Hondo.md', 2],
+  ]);
+  expect(plan.sections.map((s: any) => s.text)).not.toContain('vacia');
+});
+
+test('each folder level can be configured on its own', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'PDF');
+  await scope(page, 'Vault');
+  await page.getByLabel('Nivel 1', { exact: true }).selectOption('');
+  await page.getByLabel('Nivel 2', { exact: true }).selectOption('heading:3');
+  await page.getByRole('checkbox', { name: 'Empezar en página nueva' }).check();
+  await page.getByRole('checkbox', { name: 'Usar el nombre de cada nota como título' }).check();
+  const { sections } = await pdfPlan(page);
+  expect(sections.some((s: any) => s.text === 'dir')).toBe(false);
+  expect(sections.find((s: any) => s.text === 'sub')).toMatchObject({ level: 3, pageBreak: true });
+  expect(sections.find((s: any) => s.text === 'Hondo')).toMatchObject({ kind: 'heading', level: 4 });
+  expect(sections.find((s: any) => s.path === 'dir/sub/Hondo.md').shift).toBe(4);
+});
+
+test('a folder can be exported on its own', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'PDF');
+  await scope(page, 'Carpeta');
+  await page.getByLabel('Nivel 0', { exact: true }).selectOption('heading:1');
+  const plan = await pdfPlan(page);
+  expect(plan.title).toBe('dir');
+  expect(plan.sections[0]).toMatchObject({ kind: 'heading', text: 'dir', level: 1 });
+  expect(plan.sections[1]).toMatchObject({ path: 'dir/Destino.md', shift: 1 });
+});
+
+test('word offers the example template, its styles and a paged preview', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'Word');
+  await expect(page.getByLabel('Plantilla')).toHaveValue('Ejemplo');
+  await expect(page.getByRole('button', { name: 'Eliminar' })).toHaveCount(0);
+  await scope(page, 'Vault');
+  await expect(page.getByLabel('Nivel 1', { exact: true }).locator('option', { hasText: 'Destacado' })).toHaveCount(1);
+  await page.getByLabel('Nivel 1', { exact: true }).selectOption('style:Destacado');
+  await expect(page.locator('.paged .page')).toHaveCount(2);
+  await expect(page.locator('.paged .page').nth(1)).toContainText('Bloque dos');
+  await expect(page.locator('.paged .page').nth(1)).toContainText('Cabecera');
+  await expect(page.locator('.paged .page').nth(1)).toContainText('2');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+  const plan = await page.evaluate(() => (window as any).__docx);
+  expect(plan.sections.find((s: any) => s.text === 'dir')).toMatchObject({ style: 'Destacado' });
+});
+
+test('a loose file can only be exported on its own', async ({ page }) => {
+  await openFiles(page, '/fuera/nota.md');
+  await expect(page.locator('main footer')).toContainText('nota.md');
+  await page.keyboard.press('Control+e');
+  await expect(page.getByRole('group', { name: 'Alcance' }).getByRole('button', { name: 'Vault' })).toBeDisabled();
 });
 
 const noteBackground = (page: Page) => page.locator('.scroll').evaluate((el) => getComputedStyle(el).backgroundColor);

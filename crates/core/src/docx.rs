@@ -56,15 +56,37 @@ re!(WIKI_EMBED, r"!\[\[([^\]|#]+)[^\]]*\]\]");
 re!(WIKI_LINK, r"\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]");
 re!(FRONTMATTER, r"(?s)\A---\r?\n(.*?)\r?\n---(?:\r?\n|\z)");
 
+/// One piece of an exported document, shared by the Word and PDF writers.
+#[derive(Debug, Clone)]
+pub enum Section {
+    /// A folder or note name turned into a title.
+    Heading {
+        text: String,
+        /// Word style id. None uses the template's heading for `level`.
+        style: Option<String>,
+        level: usize,
+        page_break: bool,
+    },
+    Note {
+        path: String,
+        markdown: String,
+        /// Levels to push the note's own headings down.
+        shift: usize,
+        page_break: bool,
+    },
+}
+
 pub struct Input<'a> {
-    pub markdown: &'a str,
-    /// Used for `{{titulo}}` when the note has neither frontmatter title nor heading.
+    pub sections: &'a [Section],
+    /// Used for `{{titulo}}` when no note gives a better one.
     pub title: &'a str,
+    /// Use `title` over anything in the notes, as for a folder or vault.
+    pub fixed_title: bool,
     pub date: &'a str,
     /// Rendered diagrams as PNG, in the order they appear. Empty if rendering failed.
     pub diagrams: &'a [Vec<u8>],
-    /// Loads an image referenced by the note.
-    pub image: &'a dyn Fn(&str) -> Option<Vec<u8>>,
+    /// Loads an image: note path, then the reference written in it.
+    pub image: &'a dyn Fn(&str, &str) -> Option<Vec<u8>>,
     pub template: Option<&'a [u8]>,
 }
 
@@ -72,9 +94,9 @@ fn invalid(what: &str) -> Error {
     Error::Vault(format!("not a usable Word document: {what}"))
 }
 
-type Package = BTreeMap<String, Vec<u8>>;
+pub(crate) type Package = BTreeMap<String, Vec<u8>>;
 
-fn read_package(bytes: &[u8]) -> Result<Package> {
+pub(crate) fn read_package(bytes: &[u8]) -> Result<Package> {
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|_| invalid("not a .docx"))?;
     let mut parts = Package::new();
     for i in 0..archive.len() {
@@ -150,7 +172,7 @@ impl Styles {
     }
 }
 
-fn split_frontmatter(markdown: &str) -> (HashMap<String, String>, &str) {
+pub fn split_frontmatter(markdown: &str) -> (HashMap<String, String>, &str) {
     let Some(found) = FRONTMATTER.captures(markdown) else {
         return (HashMap::new(), markdown);
     };
@@ -163,7 +185,7 @@ fn split_frontmatter(markdown: &str) -> (HashMap<String, String>, &str) {
 }
 
 /// Turns Obsidian-style links, which CommonMark does not know, into standard ones.
-fn normalize_wikilinks(markdown: &str) -> String {
+pub fn normalize_wikilinks(markdown: &str) -> String {
     let embeds = WIKI_EMBED.replace_all(markdown, |c: &Captures| format!("![]({})", c[1].trim().replace(' ', "%20")));
     WIKI_LINK
         .replace_all(&embeds, |c: &Captures| c.get(2).map_or(&c[1], |m| m.as_str()).trim().to_string())
@@ -223,12 +245,24 @@ struct Writer<'a> {
     footnotes: String,
     /// The next paragraph opens a footnote and carries its reference mark.
     footnote_start: bool,
+    /// The next paragraph starts a new page.
+    page_break: bool,
+    note: String,
+    note_index: usize,
+    shift: usize,
     table: Option<Table>,
 }
 
 impl Writer<'_> {
     fn open(&mut self, properties: String) {
         self.flush();
+        let properties = if std::mem::take(&mut self.page_break) {
+            // Schema order: the style first, then the break, then the rest.
+            let end = if properties.starts_with("<w:pStyle") { properties.find("/>").map_or(0, |i| i + 2) } else { 0 };
+            format!("{}<w:pageBreakBefore/>{}", &properties[..end], &properties[end..])
+        } else {
+            properties
+        };
         self.para = Some((properties, String::new()));
         if self.footnote_start {
             self.footnote_start = false;
@@ -387,6 +421,27 @@ impl Writer<'_> {
         self.flush();
     }
 
+    /// A title that comes from the export plan rather than from a note.
+    fn section_heading(&mut self, text: &str, style: Option<&str>, level: usize, page_break: bool) {
+        self.flush();
+        self.page_break = page_break;
+        let level = level.clamp(1, MAX_LEVELS);
+        let standard = self.styles.get(&format!("heading {level}")).map(String::from);
+        let id = style.map(String::from).or(standard);
+        let is_heading = id.as_deref().is_some_and(|id| self.styles.0.iter().any(|(name, v)| v == id && name.starts_with("heading ")));
+        let outline = if is_heading { String::new() } else { format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1) };
+        let style = id.as_ref().map_or(String::new(), |id| format!(r#"<w:pStyle w:val="{id}"/>"#));
+        self.open(format!("{style}{outline}"));
+        self.format.bold = id.is_none();
+        self.heading = Some(Heading { level, text: String::new() });
+        self.push_text(text, false);
+        self.flush();
+        self.format.bold = false;
+        if let Some(h) = self.heading.take() {
+            self.headings.push(h);
+        }
+    }
+
     fn start_list(&mut self, first: Option<u64>) {
         self.flush();
         if first.is_some() {
@@ -460,12 +515,14 @@ impl Writer<'_> {
     }
 
     fn footnote_id(&mut self, label: &str) -> i64 {
-        if let Some(id) = self.footnote_ids.get(label) {
+        // Notes may reuse a label: each note has its own footnotes.
+        let key = format!("{}:{label}", self.note_index);
+        if let Some(id) = self.footnote_ids.get(&key) {
             return *id;
         }
         let id = self.next_footnote;
         self.next_footnote += 1;
-        self.footnote_ids.insert(label.to_string(), id);
+        self.footnote_ids.insert(key, id);
         id
     }
 
@@ -504,7 +561,7 @@ impl Writer<'_> {
                 self.open(properties);
             }
             Tag::Heading { level, .. } => {
-                let level = heading_number(level);
+                let level = (heading_number(level) + self.shift).min(MAX_LEVELS);
                 let name = format!("heading {level}");
                 let style = self.styles.paragraph(&name);
                 // Without the style, the outline level keeps it in the contents.
@@ -545,7 +602,7 @@ impl Writer<'_> {
             }
             Tag::Image { dest_url, title, .. } => {
                 let path = dest_url.replace("%20", " ");
-                let placed = (self.input.image)(&path).is_some_and(|b| self.push_picture(b, &title, 1));
+                let placed = (self.input.image)(&self.note, &path).is_some_and(|b| self.push_picture(b, &title, 1));
                 if !placed {
                     self.push_text(&format!("[Imagen: {path}]"), false);
                 }
@@ -679,6 +736,23 @@ fn breaks_page(paragraph: &str, styles_xml: &str) -> bool {
     })
 }
 
+/// Starts the body on a new page through its first paragraph, which avoids both
+/// an empty line above it and, if it already breaks, a blank page. None if the
+/// body does not start with a paragraph.
+fn with_page_break(body: &str) -> Option<String> {
+    const BREAK: &str = "<w:pageBreakBefore/>";
+    let rest = body.strip_prefix("<w:p>")?;
+    let first = &rest[..rest.find("</w:p>")?];
+    if first.contains(BREAK) {
+        return Some(body.to_string());
+    }
+    let Some(properties) = rest.strip_prefix("<w:pPr>") else {
+        return Some(format!("<w:p><w:pPr>{BREAK}</w:pPr>{rest}"));
+    };
+    let style_end = if properties.starts_with("<w:pStyle") { properties.find("/>")? + 2 } else { 0 };
+    Some(format!("<w:p><w:pPr>{}{BREAK}{}", &properties[..style_end], &properties[style_end..]))
+}
+
 /// The marker's paragraph without its text, keeping what it does to the layout.
 fn emptied(paragraph: &str) -> String {
     TEXT.replace_all(paragraph, "<w:t></w:t>").into_owned()
@@ -699,7 +773,10 @@ fn insert_body(document: &str, body: &str, styles_xml: &str) -> String {
             return format!("{head}{body}{}{tail}", emptied(paragraph));
         }
         if breaks_page(paragraph, styles_xml) {
-            return format!("{head}{}{body}{tail}", emptied(paragraph));
+            return match with_page_break(body) {
+                Some(body) => format!("{head}{body}{tail}"),
+                None => format!("{head}{}{body}{tail}", emptied(paragraph)),
+            };
         }
         return format!("{head}{body}{tail}");
     }
@@ -889,8 +966,6 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
     let numbering = text_of(&parts, NUMBERING).unwrap_or_default();
     let notes = text_of(&parts, FOOTNOTES).unwrap_or_default();
 
-    let (meta, body) = split_frontmatter(input.markdown);
-    let body = normalize_wikilinks(body);
     let options = Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
 
     let mut writer = Writer {
@@ -919,17 +994,39 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
         next_footnote: max_of(&FOOTNOTE_ID, &notes).max(0) + 1,
         footnotes: String::new(),
         footnote_start: false,
+        page_break: false,
+        note: String::new(),
+        note_index: 0,
+        shift: 0,
         table: None,
     };
     let mut saved = Vec::new();
-    for event in Parser::new_ext(&body, options) {
-        writer.event(event, &mut saved);
+    let mut values: HashMap<String, String> = HashMap::new();
+    for (index, section) in input.sections.iter().enumerate() {
+        match section {
+            Section::Heading { text, style, level, page_break } => writer.section_heading(text, style.as_deref(), *level, *page_break),
+            Section::Note { path, markdown, shift, page_break } => {
+                let (meta, body) = split_frontmatter(markdown);
+                // The first note to state a value provides it.
+                for (key, value) in meta {
+                    values.entry(key).or_insert(value);
+                }
+                writer.flush();
+                writer.note = path.clone();
+                writer.note_index = index;
+                writer.shift = *shift;
+                writer.page_break = *page_break;
+                for event in Parser::new_ext(&normalize_wikilinks(body), options) {
+                    writer.event(event, &mut saved);
+                }
+                writer.flush();
+            }
+        }
     }
-    writer.flush();
 
-    let mut values = meta;
     let first_heading = writer.headings.first().map(|h| h.text.clone());
-    let title = values.get("titulo").or(values.get("title")).cloned().or(first_heading).unwrap_or_else(|| input.title.to_string());
+    let stated = values.get("titulo").or(values.get("title")).cloned().or(first_heading);
+    let title = if input.fixed_title { input.title.to_string() } else { stated.unwrap_or_else(|| input.title.to_string()) };
     let author = values.get("autor").or(values.get("author")).cloned().unwrap_or_default();
     let date = values.get("fecha").or(values.get("date")).cloned().unwrap_or_else(|| input.date.to_string());
     for (key, value) in [("titulo", &title), ("title", &title), ("autor", &author), ("author", &author), ("fecha", &date), ("date", &date)] {
@@ -970,6 +1067,90 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
     parts.insert(CONTENT_TYPES.to_string(), types.into_bytes());
     parts.insert(DOC_RELS.to_string(), rels.into_bytes());
     write_package(&parts)
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct StyleInfo {
+    pub id: String,
+    pub name: String,
+}
+
+/// The paragraph styles a document offers.
+pub fn paragraph_styles(template: Option<&[u8]>) -> Result<Vec<StyleInfo>> {
+    let parts = template.map_or_else(|| Ok(blank_package()), read_package)?;
+    let xml = text_of(&parts, STYLES).unwrap_or_default();
+    let mut styles: Vec<StyleInfo> = STYLE
+        .find_iter(&xml)
+        .map(|m| m.as_str())
+        .filter(|s| s.contains(r#"w:type="paragraph""#))
+        .filter_map(|s| Some(StyleInfo { id: STYLE_ID.captures(s)?[1].to_string(), name: STYLE_NAME.captures(s)?[1].to_string() }))
+        .collect();
+    styles.sort_by_key(|s| s.name.to_lowercase());
+    Ok(styles)
+}
+
+/// A complete template to try exports with: cover, contents, header, numbered
+/// footer and its own styles.
+pub fn example_template() -> Vec<u8> {
+    const INK: &str = "1F3A5F";
+    let style = |id: &str, name: &str, ppr: &str, rpr: &str| {
+        format!(r#"<w:style w:type="paragraph" w:styleId="{id}"><w:name w:val="{name}"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr>{ppr}</w:pPr><w:rPr>{rpr}</w:rPr></w:style>"#)
+    };
+    let heading = |n: usize, size: usize, before: usize| {
+        style(&format!("Heading{n}"), &format!("heading {n}"), &format!(r#"<w:keepNext/><w:spacing w:before="{before}" w:after="100"/><w:outlineLvl w:val="{}"/>"#, n - 1), &format!(r#"<w:b/><w:color w:val="{INK}"/><w:sz w:val="{size}"/>"#))
+    };
+    let toc = |n: usize| style(&format!("TOC{n}"), &format!("toc {n}"), &format!(r#"<w:spacing w:after="60"/><w:ind w:left="{}"/>"#, (n - 1) * 240), "");
+    let styles: String = [
+        style("Title", "Title", r#"<w:spacing w:before="3600" w:after="240"/><w:jc w:val="center"/>"#, &format!(r#"<w:b/><w:color w:val="{INK}"/><w:sz w:val="64"/>"#)),
+        style("Subtitle", "Subtitle", r#"<w:jc w:val="center"/>"#, r#"<w:color w:val="595959"/><w:sz w:val="26"/>"#),
+        heading(1, 34, 360), heading(2, 28, 280), heading(3, 24, 200), heading(4, 22, 160), heading(5, 22, 120), heading(6, 22, 120),
+        toc(1), toc(2), toc(3),
+        style("TOCHeading", "TOC Heading", r#"<w:pageBreakBefore/><w:spacing w:after="240"/>"#, &format!(r#"<w:b/><w:color w:val="{INK}"/><w:sz w:val="34"/>"#)),
+        style("ListParagraph", "List Paragraph", "", ""),
+        style("Quote", "Quote", r#"<w:ind w:left="567"/>"#, r#"<w:i/><w:color w:val="595959"/>"#),
+        style("Header", "header", r#"<w:jc w:val="right"/>"#, r#"<w:color w:val="7F7F7F"/><w:sz w:val="18"/>"#),
+        style("Footer", "footer", r#"<w:jc w:val="center"/>"#, r#"<w:color w:val="7F7F7F"/><w:sz w:val="18"/>"#),
+        style("FootnoteText", "footnote text", "", r#"<w:sz w:val="18"/>"#),
+    ]
+    .concat();
+    let table = r#"<w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:color="BFBFBF"/><w:left w:val="single" w:sz="4" w:color="BFBFBF"/><w:bottom w:val="single" w:sz="4" w:color="BFBFBF"/><w:right w:val="single" w:sz="4" w:color="BFBFBF"/><w:insideH w:val="single" w:sz="4" w:color="BFBFBF"/><w:insideV w:val="single" w:sz="4" w:color="BFBFBF"/></w:tblBorders></w:tblPr></w:style>"#;
+    let link = r#"<w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/><w:rPr><w:color w:val="1A4F8A"/><w:u w:val="single"/></w:rPr></w:style>"#;
+    let styles_xml = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="{W_NS}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:cs="Georgia"/><w:sz w:val="22"/><w:lang w:val="es-ES"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="140" w:line="288" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>{styles}{table}{link}</w:styles>"#
+    );
+    let para = |style: &str, text: &str| format!(r#"<w:p><w:pPr><w:pStyle w:val="{style}"/></w:pPr><w:r><w:t>{text}</w:t></w:r></w:p>"#);
+    let toc_field = r#"<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> TOC \o "1-3" \h \z \u </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Índice</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>"#;
+    let body = [
+        para("Title", "{{titulo}}"),
+        para("Subtitle", "{{autor}}"),
+        para("Subtitle", "{{fecha}}"),
+        para("TOCHeading", "Índice"),
+        toc_field.to_string(),
+        r#"<w:p><w:pPr><w:pageBreakBefore/></w:pPr><w:r><w:t>{{contenido}}</w:t></w:r></w:p>"#.to_string(),
+        r#"<w:sectPr><w:headerReference w:type="default" r:id="rIdHeader"/><w:footerReference w:type="default" r:id="rIdFooter"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1701" w:right="1417" w:bottom="1417" w:left="1417" w:header="708" w:footer="708" w:gutter="0"/><w:titlePg/></w:sectPr>"#.to_string(),
+    ]
+    .concat();
+    let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#;
+    let page_field = r#"<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>"#;
+    let main_type = "application/vnd.openxmlformats-officedocument.wordprocessingml";
+    let mut types = BLANK_TYPES.to_string();
+    add_override(&mut types, "word/settings.xml", &format!("{main_type}.settings+xml"));
+    add_override(&mut types, "word/header1.xml", &format!("{main_type}.header+xml"));
+    add_override(&mut types, "word/footer1.xml", &format!("{main_type}.footer+xml"));
+    let parts: Package = [
+        (CONTENT_TYPES.to_string(), types),
+        ("_rels/.rels".to_string(), format!(r#"{xml}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{REL_NS}/officeDocument" Target="word/document.xml"/></Relationships>"#)),
+        (DOC_RELS.to_string(), format!(r#"{xml}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{REL_NS}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="{REL_NS}/settings" Target="settings.xml"/><Relationship Id="rIdHeader" Type="{REL_NS}/header" Target="header1.xml"/><Relationship Id="rIdFooter" Type="{REL_NS}/footer" Target="footer1.xml"/></Relationships>"#)),
+        (STYLES.to_string(), styles_xml),
+        (SETTINGS.to_string(), format!(r#"{xml}<w:settings xmlns:w="{W_NS}"><w:compat/></w:settings>"#)),
+        ("word/header1.xml".to_string(), format!(r#"{xml}<w:hdr xmlns:w="{W_NS}"><w:p><w:pPr><w:pStyle w:val="Header"/></w:pPr><w:r><w:t>{{{{titulo}}}}</w:t></w:r></w:p></w:hdr>"#)),
+        ("word/footer1.xml".to_string(), format!(r#"{xml}<w:ftr xmlns:w="{W_NS}"><w:p><w:pPr><w:pStyle w:val="Footer"/></w:pPr>{page_field}</w:p></w:ftr>"#)),
+        (DOCUMENT.to_string(), format!(r#"{xml}<w:document xmlns:w="{W_NS}" xmlns:r="{REL_NS}"><w:body>{body}</w:body></w:document>"#)),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k, v.into_bytes()))
+    .collect();
+    write_package(&parts).expect("a package held in memory can always be written")
 }
 
 #[cfg(test)]

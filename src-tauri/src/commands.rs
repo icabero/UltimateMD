@@ -2,7 +2,9 @@
 //! a slow disk or a large search cannot freeze the window.
 
 use crate::{loose, startup, watcher};
-use serde::Serialize;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, State};
@@ -11,10 +13,12 @@ use tauri_plugin_opener::OpenerExt;
 use ultimatemd_core::links::{self, LinkInfo};
 use ultimatemd_core::paths::{is_image, join_relative};
 use ultimatemd_core::vault_themes::{self, ThemeFile, VaultThemes};
-use ultimatemd_core::{docx, templates};
+use ultimatemd_core::docx::Section;
+use ultimatemd_core::{docx, docx_preview, templates};
 use ultimatemd_core::{Error, McpAccess, Note, Registry, Result, SearchHit, TreeNode, Vault, VaultFs, WriteMode, search};
 
 const SEARCH_LIMIT: usize = 200;
+const PREVIEW_PIXELS_PER_POINT: f64 = 1.1;
 
 /// Serialises read-modify-write cycles on the registry file.
 #[derive(Default)]
@@ -240,32 +244,121 @@ fn note_image(id: &str, note: &str, reference: &str) -> Option<Vec<u8>> {
     read_image(id.to_string(), find(&vault.tree().ok()?, name)?).ok()
 }
 
-/// Writes a note as `.docx` where the user picks. False if the dialog is cancelled.
-#[tauri::command(async)]
-pub fn export_docx(
-    app: AppHandle,
-    id: String,
-    path: String,
-    template: Option<String>,
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum PlanSection {
+    Heading { text: String, style: Option<String>, level: usize, page_break: bool },
+    Note { path: String, shift: usize, page_break: bool },
+}
+
+/// What to export, as decided in the export dialog.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportPlan {
+    vault_id: String,
+    title: String,
+    /// A folder or vault is named by its title, not by its first note.
+    fixed_title: bool,
     date: String,
+    cover: bool,
+    template: Option<String>,
+    sections: Vec<PlanSection>,
     diagrams: Vec<Vec<u8>>,
-) -> Result<bool> {
-    let note = file_fs(&id, &path)?.read(&path)?;
-    let template = template.map(|name| templates::read(&name)).transpose()?;
-    let stem = path.rsplit('/').next().unwrap_or(&path);
-    let stem = stem.rsplit_once('.').map_or(stem, |(s, _)| s);
-    let bytes = docx::render(&docx::Input {
-        markdown: &note.content,
-        title: stem,
-        date: &date,
-        diagrams: &diagrams,
-        image: &|reference| note_image(&id, &path, reference),
-        template: template.as_deref(),
-    })?;
-    let picked = app.dialog().file().set_file_name(format!("{stem}.docx")).add_filter("Word", &["docx"]).blocking_save_file();
+}
+
+impl ExportPlan {
+    fn sections(&self) -> Result<Vec<Section>> {
+        self.sections
+            .iter()
+            .map(|section| {
+                Ok(match section {
+                    PlanSection::Heading { text, style, level, page_break } => Section::Heading {
+                        text: text.clone(),
+                        style: style.clone(),
+                        level: *level,
+                        page_break: *page_break,
+                    },
+                    PlanSection::Note { path, shift, page_break } => Section::Note {
+                        path: path.clone(),
+                        markdown: file_fs(&self.vault_id, path)?.read(path)?.content,
+                        shift: *shift,
+                        page_break: *page_break,
+                    },
+                })
+            })
+            .collect()
+    }
+
+    fn docx(&self) -> Result<Vec<u8>> {
+        let sections = self.sections()?;
+        let template = self.template.as_deref().map(templates::read).transpose()?;
+        docx::render(&docx::Input {
+            sections: &sections,
+            title: &self.title,
+            fixed_title: self.fixed_title,
+            date: &self.date,
+            diagrams: &self.diagrams,
+            image: &|note, reference| note_image(&self.vault_id, note, reference),
+            template: template.as_deref(),
+        })
+    }
+
+    fn with_pdf<T>(&self, run: impl FnOnce(&ultimatemd_pdf::Input) -> Result<T>) -> Result<T> {
+        let sections = self.sections()?;
+        run(&ultimatemd_pdf::Input {
+            sections: &sections,
+            title: &self.title,
+            date: &self.date,
+            cover: self.cover,
+            diagrams: &self.diagrams,
+            image: &|note, reference| note_image(&self.vault_id, note, reference),
+        })
+    }
+}
+
+fn save_as(app: &AppHandle, name: String, kind: &str, ext: &str, bytes: Vec<u8>) -> Result<bool> {
+    let picked = app.dialog().file().set_file_name(name).add_filter(kind, &[ext]).blocking_save_file();
     let Some(target) = picked else { return Ok(false) };
     std::fs::write(target.into_path().map_err(|e| Error::Vault(e.to_string()))?, bytes)?;
     Ok(true)
+}
+
+/// Writes a `.docx` where the user picks. False if the dialog is cancelled.
+#[tauri::command(async)]
+pub fn export_docx(app: AppHandle, plan: ExportPlan) -> Result<bool> {
+    save_as(&app, format!("{}.docx", plan.title), "Word", "docx", plan.docx()?)
+}
+
+/// Writes a PDF where the user picks. False if the dialog is cancelled.
+#[tauri::command(async)]
+pub fn export_pdf(app: AppHandle, plan: ExportPlan) -> Result<bool> {
+    let bytes = plan.with_pdf(ultimatemd_pdf::render)?;
+    save_as(&app, format!("{}.pdf", plan.title), "PDF", "pdf", bytes)
+}
+
+/// The generated `.docx`, read back for display.
+#[tauri::command(async)]
+pub fn preview_docx(plan: ExportPlan) -> Result<docx_preview::Preview> {
+    docx_preview::render(&plan.docx()?)
+}
+
+/// The pages of the PDF as images, so the preview is the document itself.
+#[tauri::command(async)]
+pub fn preview_pdf(plan: ExportPlan) -> Result<Vec<String>> {
+    let pages = plan.with_pdf(|input| ultimatemd_pdf::preview(input, PREVIEW_PIXELS_PER_POINT))?;
+    Ok(pages.iter().map(|png| format!("data:image/png;base64,{}", BASE64.encode(png))).collect())
+}
+
+#[tauri::command(async)]
+pub fn template_styles(template: Option<String>) -> Result<Vec<docx::StyleInfo>> {
+    let bytes = template.as_deref().map(templates::read).transpose()?;
+    docx::paragraph_styles(bytes.as_deref())
+}
+
+/// Saves a template as a normal `.docx`, to adapt the example in Word.
+#[tauri::command(async)]
+pub fn save_template_copy(app: AppHandle, name: String) -> Result<bool> {
+    save_as(&app, format!("{name}.docx"), "Word", "docx", templates::read(&name)?)
 }
 
 #[derive(Serialize)]

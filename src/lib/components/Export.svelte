@@ -1,32 +1,71 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
-  import { api } from '../api';
-  import { exportDocx, exportHtml, exportPdf } from '../export';
+  import PagedPreview from './PagedPreview.svelte';
+  import { api, type DocxPreview, type TemplateStyle } from '../api';
+  import { buildContent, buildPlan, documentCss, exportHtml, foldersOf, levelCount, levelExamples, type ExportOptions, type LevelChoice, type Scope } from '../export';
   import { store, type Tab } from '../store.svelte';
 
-  type Format = 'pdf' | 'html' | 'docx';
+  type Format = 'pdf' | 'docx' | 'html';
 
   const FORMATS: { id: Format; label: string }[] = [
     { id: 'pdf', label: 'PDF' },
-    { id: 'html', label: 'HTML' },
     { id: 'docx', label: 'Word' },
+    { id: 'html', label: 'HTML' },
   ];
+  const HEADINGS = [1, 2, 3, 4, 5, 6];
+  const EXAMPLE = 'Ejemplo';
+  const PREVIEW_DELAY = 400;
 
   let { tab }: { tab: Tab } = $props();
   let format = $state<Format>('pdf');
+  let scope = $state<Scope>('note');
+  let folder = $state('');
+  let levels = $state<LevelChoice[]>([]);
+  let noteTitles = $state(false);
+  let noteBreak = $state(false);
+  let cover = $state(false);
   let templates = $state<string[]>([]);
-  let template = $state('');
+  let template = $state(EXAMPLE);
+  let styles = $state<TemplateStyle[]>([]);
   let busy = $state(false);
 
-  async function load() {
+  let pages = $state<string[]>([]);
+  let docx = $state<DocxPreview | null>(null);
+  let htmlHost = $state<HTMLDivElement>();
+  let previewing = $state(false);
+  let previewError = $state('');
+  let timer: ReturnType<typeof setTimeout>;
+  let run = 0;
+
+  const folders = $derived(foldersOf(store.trees[tab.vaultId] ?? []));
+  const canWiden = $derived(!tab.loose);
+  const options = $derived<ExportOptions>({ scope, folder, levels: levels.map((l) => ({ ...l })), noteTitles, noteBreak, cover, template: format === 'docx' && template ? template : null });
+  const examples = $derived(scope === 'note' ? [] : levelExamples(tab, options));
+  const customStyles = $derived(styles.filter((s) => !/^(heading|toc) \d$|^(header|footer|normal|footnote text|toc heading)$/i.test(s.name)));
+
+  async function loadTemplates() {
     templates = await api.listTemplates().catch(() => []);
-    if (!templates.includes(template)) template = '';
+    if (template && !templates.includes(template)) template = EXAMPLE;
   }
 
-  onMount(load);
+  onMount(loadTemplates);
 
-  async function run<T>(action: () => Promise<T>) {
+  // One row per depth of folders; a new row titles folders at that depth.
+  $effect(() => {
+    const count = levelCount(tab, { scope, folder, levels: [], noteTitles: false, noteBreak: false, cover: false, template: null });
+    const current = $state.snapshot(levels);
+    if (current.length === count) return;
+    levels = Array.from({ length: count }, (_, i) => current[i] ?? { value: i === 0 ? '' : `heading:${Math.min(i, 6)}`, pageBreak: false });
+  });
+
+  $effect(() => {
+    if (format !== 'docx') return;
+    const name = template || null;
+    api.templateStyles(name).then((s) => (styles = s)).catch(() => (styles = []));
+  });
+
+  async function runAction<T>(action: () => Promise<T>) {
     try {
       return await action();
     } catch (e) {
@@ -34,34 +73,72 @@
     }
   }
 
+  async function refresh() {
+    const id = ++run;
+    previewing = true;
+    previewError = '';
+    try {
+      if (format === 'html') {
+        const article = await buildContent(tab, $state.snapshot(options) as ExportOptions);
+        if (id !== run || !htmlHost) return;
+        const shadow = htmlHost.shadowRoot ?? htmlHost.attachShadow({ mode: 'open' });
+        const style = document.createElement('style');
+        style.textContent = documentCss();
+        shadow.replaceChildren(style, article);
+      } else if (format === 'docx') {
+        const preview = await api.previewDocx(await buildPlan(tab, $state.snapshot(options) as ExportOptions));
+        if (id === run) docx = preview;
+      } else {
+        const rendered = await api.previewPdf(await buildPlan(tab, $state.snapshot(options) as ExportOptions));
+        if (id === run) pages = rendered;
+      }
+    } catch (e) {
+      if (id === run) previewError = String(e);
+    } finally {
+      if (id === run) previewing = false;
+    }
+  }
+
+  $effect(() => {
+    JSON.stringify(options);
+    format;
+    clearTimeout(timer);
+    timer = setTimeout(refresh, PREVIEW_DELAY);
+  });
+
+  function setScope(next: Scope) {
+    scope = next;
+    if (next === 'folder' && !folder) folder = folders[0] ?? '';
+    cover = next !== 'note';
+  }
+
   async function importTemplate() {
-    const name = await run(api.importTemplate);
-    await load();
+    const name = await runAction(api.importTemplate);
+    await loadTemplates();
     if (name) template = name;
   }
 
   async function renameTemplate() {
     const name = (await store.prompt('Nombre de la plantilla', template, 'Renombrar'))?.trim();
     if (!name || name === template) return;
-    await run(() => api.renameTemplate(template, name));
-    await load();
+    await runAction(() => api.renameTemplate(template, name));
+    await loadTemplates();
     if (templates.includes(name)) template = name;
   }
 
   async function deleteTemplate() {
     if (!(await store.confirm(`¿Eliminar la plantilla «${template}»?`, 'Eliminar', true))) return;
-    await run(() => api.deleteTemplate(template));
-    await load();
+    await runAction(() => api.deleteTemplate(template));
+    await loadTemplates();
   }
 
   async function submit() {
     busy = true;
-    const done = await run(async () => {
-      if (format === 'html') return exportHtml(tab);
-      if (format === 'docx') return exportDocx(tab, template || null);
-      store.exporting = false;
-      await exportPdf(tab);
-      return false;
+    const done = await runAction(async () => {
+      const current = $state.snapshot(options) as ExportOptions;
+      if (format === 'html') return exportHtml(tab, current);
+      const plan = await buildPlan(tab, current);
+      return format === 'docx' ? api.exportDocx(plan) : api.exportPdf(plan);
     });
     busy = false;
     if (done) {
@@ -73,58 +150,129 @@
 
 <button class="scrim" aria-label="Cerrar" onclick={() => (store.exporting = false)}></button>
 <div class="modal" role="dialog" aria-label="Exportar">
-  <header>
-    <h2>Exportar nota</h2>
-    <button class="icon" title="Cerrar" onclick={() => (store.exporting = false)}><Icon name="close" /></button>
-  </header>
+  <div class="config">
+    <header>
+      <h2>Exportar</h2>
+      <button class="icon" title="Cerrar" onclick={() => (store.exporting = false)}><Icon name="close" /></button>
+    </header>
 
-  <div class="seg" role="group" aria-label="Formato">
-    {#each FORMATS as f}
-      <button class:on={format === f.id} aria-pressed={format === f.id} onclick={() => (format = f.id)}>{f.label}</button>
-    {/each}
+    <h3>Formato</h3>
+    <div class="seg" role="group" aria-label="Formato">
+      {#each FORMATS as f}
+        <button class:on={format === f.id} aria-pressed={format === f.id} onclick={() => (format = f.id)}>{f.label}</button>
+      {/each}
+    </div>
+
+    <h3>Qué exportar</h3>
+    <div class="seg" role="group" aria-label="Alcance">
+      <button class:on={scope === 'note'} onclick={() => setScope('note')}>Esta nota</button>
+      <button class:on={scope === 'folder'} disabled={!canWiden || !folders.length} onclick={() => setScope('folder')}>Carpeta</button>
+      <button class:on={scope === 'vault'} disabled={!canWiden} onclick={() => setScope('vault')}>Vault</button>
+    </div>
+    {#if scope === 'folder'}
+      <label class="row">Carpeta
+        <select bind:value={folder}>
+          {#each folders as f}<option value={f}>{f}</option>{/each}
+        </select>
+      </label>
+    {/if}
+
+    {#if scope !== 'note'}
+      <h3>Carpetas en el documento</h3>
+      {#each levels as level, i}
+        <div class="level">
+          <label class="row">
+            <span class="name" title={examples[i]}>{i === 0 ? 'Raíz' : `Nivel ${i}`}{examples[i] ? ` · ${examples[i]}` : ''}</span>
+            <select bind:value={level.value} aria-label="Nivel {i}">
+              <option value="">Sin título, contenido seguido</option>
+              {#each HEADINGS as n}<option value="heading:{n}">Título {n}</option>{/each}
+              {#if format === 'docx' && customStyles.length}
+                <optgroup label="Estilos de la plantilla">
+                  {#each customStyles as s}<option value="style:{s.id}">{s.name}</option>{/each}
+                </optgroup>
+              {/if}
+            </select>
+          </label>
+          {#if level.value}
+            <label class="check"><input type="checkbox" bind:checked={level.pageBreak} /> Empezar en página nueva</label>
+          {/if}
+        </div>
+      {/each}
+      <h3>Notas</h3>
+      <label class="check"><input type="checkbox" bind:checked={noteTitles} /> Usar el nombre de cada nota como título</label>
+      <label class="check"><input type="checkbox" bind:checked={noteBreak} /> Empezar cada nota en página nueva</label>
+    {/if}
+
+    {#if format === 'pdf'}
+      <h3>Documento</h3>
+      <label class="check"><input type="checkbox" bind:checked={cover} /> Portada e índice</label>
+    {:else if format === 'docx'}
+      <h3>Plantilla</h3>
+      <select class="wide" aria-label="Plantilla" bind:value={template}>
+        <option value="">Sin plantilla</option>
+        {#each templates as t}<option value={t}>{t}{t === EXAMPLE ? ' (incluida)' : ''}</option>{/each}
+      </select>
+      <div class="buttons">
+        <button class="plain" onclick={importTemplate}>Importar .docx</button>
+        {#if template}<button class="plain" onclick={() => runAction(() => api.saveTemplateCopy(template))}>Guardar copia</button>{/if}
+        {#if template && template !== EXAMPLE}
+          <button class="plain" onclick={renameTemplate}>Renombrar</button>
+          <button class="plain" onclick={deleteTemplate}>Eliminar</button>
+        {/if}
+      </div>
+      <p>En tu plantilla, escribe <code>{'{{contenido}}'}</code> donde deba ir el texto, y <code>{'{{titulo}}'}</code>, <code>{'{{autor}}'}</code>, <code>{'{{fecha}}'}</code> o cualquier dato del frontmatter.</p>
+    {/if}
+
+    <footer>
+      <button class="main" disabled={busy} onclick={submit}>{busy ? 'Exportando…' : 'Exportar'}</button>
+    </footer>
   </div>
 
-  {#if format === 'pdf'}
-    <p>Se abrirá el diálogo de impresión del sistema. Elige guardar como PDF o imprimir a un archivo.</p>
-  {:else if format === 'html'}
-    <p>Un único archivo con las imágenes y los diagramas incluidos.</p>
-  {:else}
-    <label>Plantilla
-      <select bind:value={template}>
-        <option value="">Sin plantilla</option>
-        {#each templates as t}<option value={t}>{t}</option>{/each}
-      </select>
-    </label>
-    <div class="row">
-      <button class="plain" onclick={importTemplate}>Importar .docx</button>
-      {#if template}
-        <button class="plain" onclick={renameTemplate}>Renombrar</button>
-        <button class="plain" onclick={deleteTemplate}>Eliminar</button>
-      {/if}
-    </div>
-    <p>En la plantilla, escribe <code>{'{{contenido}}'}</code> donde deba ir la nota, y <code>{'{{titulo}}'}</code>, <code>{'{{autor}}'}</code>, <code>{'{{fecha}}'}</code> o cualquier dato del frontmatter. Word te pedirá actualizar el índice al abrir.</p>
-  {/if}
-
-  <footer>
-    <button class="main" disabled={busy} onclick={submit}>{busy ? 'Exportando…' : 'Exportar'}</button>
-  </footer>
+  <div class="preview" aria-label="Vista previa" aria-busy={previewing}>
+    {#if previewError}
+      <p class="error" role="alert">{previewError}</p>
+    {:else if format === 'pdf'}
+      {#each pages as page, i}
+        <img class="page" src={page} alt="Página {i + 1}" />
+      {/each}
+    {:else if format === 'docx'}
+      {#if docx}<PagedPreview preview={docx} />{/if}
+      <p class="note">Aproximación: Word puede variar fuentes y saltos de página.</p>
+    {:else}
+      <div class="html" bind:this={htmlHost}></div>
+    {/if}
+  </div>
 </div>
 
 <style>
-  .modal { position: fixed; top: 16vh; left: 50%; z-index: 31; width: min(460px, calc(100vw - 32px)); padding: 8px 18px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translateX(-50%); }
+  .modal { position: fixed; top: 50%; left: 50%; z-index: 31; display: grid; grid-template-columns: 340px 1fr; width: min(1040px, calc(100vw - 32px)); height: min(760px, calc(100vh - 32px)); overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translate(-50%, -50%); }
+  .config { display: flex; flex-direction: column; min-height: 0; padding: 8px 18px 14px; overflow-y: auto; }
   header { display: flex; align-items: center; justify-content: space-between; }
   h2 { margin: 8px 0; font-size: 15px; font-weight: 650; }
-  .seg { display: inline-flex; margin: 6px 0 12px; padding: 2px; border-radius: 8px; background: var(--hover); }
-  .seg button { padding: 4px 14px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 12.5px; }
+  h3 { margin: 14px 0 6px; font-size: 12px; font-weight: 650; }
+  .seg { display: inline-flex; align-self: flex-start; padding: 2px; border-radius: 8px; background: var(--hover); }
+  .seg button { padding: 4px 12px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 12.5px; }
+  .seg button:disabled { opacity: .45; }
   .seg .on { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 15%); }
-  p { margin: 8px 0 0; color: var(--text-2); font-size: 12.5px; line-height: 1.5; }
-  code { font: 11.5px var(--mono); }
-  label { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 12.5px; }
-  select { flex: 1; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
-  .row { display: flex; gap: 6px; margin-top: 8px; }
+  label { color: var(--text-2); font-size: 12.5px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+  .name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .level { margin-bottom: 4px; }
+  .check { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  select { flex: none; max-width: 170px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
+  select.wide { width: 100%; max-width: none; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .plain { padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text-2); font-size: 12px; }
   .plain:hover { background: var(--hover); color: var(--text); }
-  footer { display: flex; justify-content: flex-end; margin-top: 16px; }
-  .main { padding: 6px 14px; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent); color: var(--on-accent); font-size: 13px; }
+  p { margin: 8px 0 0; color: var(--text-2); font-size: 12px; line-height: 1.5; }
+  code { font: 11px var(--mono); }
+  footer { display: flex; justify-content: flex-end; margin-top: auto; padding-top: 14px; }
+  .main { padding: 6px 16px; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent); color: var(--on-accent); font-size: 13px; }
   .main:disabled { opacity: .6; }
+  .preview { min-width: 0; min-height: 0; padding: 16px 24px; overflow-y: auto; border-left: 1px solid var(--line); background: var(--panel); }
+  .preview[aria-busy='true'] { opacity: .6; }
+  .page { display: block; width: 100%; margin-bottom: 12px; box-shadow: 0 1px 4px rgb(0 0 0 / 30%); }
+  .html { background: #fff; }
+  .note { text-align: center; }
+  .error { color: var(--danger); }
 </style>

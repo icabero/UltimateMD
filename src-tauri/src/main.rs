@@ -109,6 +109,11 @@ fn main() {
             commands::delete_template,
             commands::read_image,
             commands::export_docx,
+            commands::export_pdf,
+            commands::preview_docx,
+            commands::preview_pdf,
+            commands::template_styles,
+            commands::save_template_copy,
         ])
         .build(tauri::generate_context!())
         .expect("error while building UltimateMD")

@@ -5,6 +5,8 @@
     a: {
       'Inicio.md': '# Inicio\n\nVer [[Destino]] y [[Falta]].\n\n<script>window.pwned = true</script><img src=x onerror="window.pwned=true"><b style="color:red">fuerte</b>\n\n```mermaid\nflowchart LR\n  A --> B\n```\n',
       'dir/Destino.md': '# Destino\n',
+      'dir/sub/Hondo.md': '# Hondo\n',
+      'vacia/imagen.png': '',
       'D2.md': '```d2\nuno -> dos\n```\n\n```d2\nesto no vale -> {\n```\n\n```d2\ntres -> cuatro\n```\n',
     },
     b: {
@@ -100,15 +102,26 @@
       vaultThemes[id] ??= { defaultTheme: null, themes: [], invalid: [] };
       vaultThemes[id].defaultTheme = theme;
     },
-    list_templates: () => ['Corporativa'],
+    list_templates: () => ['Ejemplo', 'Corporativa'],
     export_file: ({ name, data }) => {
       window.__exported = { name, text: new TextDecoder().decode(new Uint8Array(data)) };
       return true;
     },
-    export_docx: (args) => {
-      window.__docx = args;
+    export_docx: ({ plan }) => {
+      window.__docx = plan;
       return true;
     },
+    export_pdf: ({ plan }) => {
+      window.__pdf = plan;
+      return true;
+    },
+    preview_pdf: () => ['data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'],
+    preview_docx: () => ({
+      width: 595, height: 842, top: 72, right: 72, bottom: 72, left: 72, header: '<p>Cabecera</p>',
+      footer: '<p><span class="page-number"></span></p>', titlePage: false,
+      blocks: [{ html: '<p>Bloque uno</p>', breakBefore: false }, { html: '<p>Bloque dos</p>', breakBefore: true }],
+    }),
+    template_styles: () => [{ id: 'Destacado', name: 'Destacado' }, { id: 'Heading1', name: 'heading 1' }],
     take_pending_files: () => window.__pending ?? [],
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),
   };

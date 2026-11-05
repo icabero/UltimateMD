@@ -4,6 +4,7 @@
 //! they share one set of rules about what can be read or written.
 
 pub mod docx;
+pub mod docx_preview;
 pub mod error;
 pub mod files;
 pub mod links;
