@@ -77,6 +77,15 @@
       files.c = { 'nota.md': '# Suelto\n' };
       return vaults.at(-1);
     },
+    list_templates: () => ['Corporativa'],
+    export_file: ({ name, data }) => {
+      window.__exported = { name, text: new TextDecoder().decode(new Uint8Array(data)) };
+      return true;
+    },
+    export_docx: (args) => {
+      window.__docx = args;
+      return true;
+    },
     take_pending_files: () => window.__pending ?? [],
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),
   };

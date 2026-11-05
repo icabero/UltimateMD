@@ -13,6 +13,7 @@ Un vault es una carpeta normal con tus archivos, sin base de datos ni formato pr
 - Selector rápido (`Ctrl+P`) y búsqueda en todos los vaults (`Ctrl+Mayús+F`).
 - Archivos `.html` con vista previa, y HTML dentro de las notas.
 - Diagramas Mermaid y D2, exportables a SVG y PNG.
+- Exportación a PDF, HTML y Word, con plantillas de Word propias.
 - Siete temas que se aplican a la interfaz, el editor, la vista previa y los diagramas, con opción de seguir al sistema.
 - Servidor MCP con permisos por vault.
 - Los cambios externos aparecen al instante, sin sobrescribir lo que estás editando.
@@ -35,6 +36,21 @@ disco: Vaults { shape: cylinder }
 app -> disco: lee y escribe
 ```
 ````
+
+## Exportar
+
+Usa `Ctrl+E` para exportar la nota a PDF, HTML o Word. Lo exportado tiene siempre un aspecto claro de documento, sea cual sea el tema activo.
+
+Para Word puedes importar cualquier `.docx` como plantilla. La nota se escribe dentro de una copia, así que se conservan la portada, las cabeceras, las fuentes, los estilos y la tabla de contenido. En la plantilla puedes usar:
+
+| Marcador | Se sustituye por |
+|---|---|
+| `{{contenido}}` | La nota. Sin este marcador, va al final del documento |
+| `{{titulo}}` | El título del frontmatter, el primer encabezado o el nombre del archivo |
+| `{{autor}}`, `{{fecha}}` | Esos datos del frontmatter. La fecha, si falta, es la de hoy |
+| `{{cualquier-dato}}` | Ese campo del frontmatter |
+
+Al abrir el documento, Word pregunta si quieres actualizar los campos: acepta para que el índice muestre las páginas.
 
 ## Conectar una IA por MCP
 

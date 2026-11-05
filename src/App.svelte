@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Editor from './lib/components/Editor.svelte';
+  import Export from './lib/components/Export.svelte';
   import Modal from './lib/components/Modal.svelte';
   import Palette from './lib/components/Palette.svelte';
   import Preview from './lib/components/Preview.svelte';
@@ -54,12 +55,15 @@
   function onKey(e: KeyboardEvent) {
     const key = e.key.toLowerCase();
     if (key === 'escape') {
-      store.palette = store.settings = false;
+      store.palette = store.settings = store.exporting = false;
       return;
     }
     if (!(e.ctrlKey || e.metaKey)) return;
     const actions: Record<string, () => void> = {
       p: () => (store.palette = true),
+      e: () => {
+        if (tab?.kind === 'md') store.exporting = true;
+      },
       n: () => void newNote(),
       s: () => void store.saveAll(),
       w: () => tab && void store.close(tab),
@@ -142,6 +146,7 @@
 
 {#if store.palette}<Palette />{/if}
 {#if store.settings}<Settings />{/if}
+{#if store.exporting && tab}<Export {tab} />{/if}
 {#if store.dialog}
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}
 {/if}

@@ -9,6 +9,8 @@ use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use ultimatemd_core::links::{self, LinkInfo};
+use ultimatemd_core::paths::{is_image, join_relative};
+use ultimatemd_core::{docx, templates};
 use ultimatemd_core::{Error, McpAccess, Note, Registry, Result, SearchHit, TreeNode, Vault, VaultFs, WriteMode, search};
 
 const SEARCH_LIMIT: usize = 200;
@@ -163,6 +165,86 @@ pub fn open_with_system(app: AppHandle, id: String, path: String) -> Result<()> 
     app.opener()
         .open_path(file.to_string_lossy(), None::<&str>)
         .map_err(|e| Error::Vault(e.to_string()))
+}
+
+#[tauri::command(async)]
+pub fn list_templates() -> Result<Vec<String>> {
+    templates::list()
+}
+
+/// Asks for a `.docx` and adds it as a template. None if the dialog is cancelled.
+#[tauri::command(async)]
+pub fn import_template(app: AppHandle) -> Result<Option<String>> {
+    let picked = app.dialog().file().add_filter("Word", &["docx"]).blocking_pick_file();
+    let Some(file) = picked else { return Ok(None) };
+    let path = file.into_path().map_err(|e| Error::Vault(e.to_string()))?;
+    templates::import(&path).map(Some)
+}
+
+#[tauri::command(async)]
+pub fn rename_template(name: String, new_name: String) -> Result<()> {
+    templates::rename(&name, &new_name)
+}
+
+#[tauri::command(async)]
+pub fn delete_template(name: String) -> Result<()> {
+    templates::delete(&name)
+}
+
+/// Bytes of an image in a vault or beside a loose file, for self-contained exports.
+#[tauri::command(async)]
+pub fn read_image(id: String, path: String) -> Result<Vec<u8>> {
+    if !is_image(&path) {
+        return Err(Error::PathNotAllowed(path));
+    }
+    let root = match loose::dir_of(&id) {
+        Some(dir) => dir,
+        None => Registry::load()?.find(&id)?.path.clone(),
+    };
+    Ok(std::fs::read(VaultFs::new(root).resolve_file(&path)?)?)
+}
+
+/// Finds an image for a note: relative to it, or by name in the vault as
+/// `![[image.png]]` does.
+fn note_image(id: &str, note: &str, reference: &str) -> Option<Vec<u8>> {
+    let relative = join_relative(note, reference)?;
+    if let Ok(bytes) = read_image(id.to_string(), relative) {
+        return Some(bytes);
+    }
+    let vault = fs(id).ok()?;
+    let name = reference.rsplit('/').next()?;
+    fn find(nodes: &[TreeNode], name: &str) -> Option<String> {
+        nodes.iter().find_map(|n| if n.is_dir { find(&n.children, name) } else { (n.name == name).then(|| n.path.clone()) })
+    }
+    read_image(id.to_string(), find(&vault.tree().ok()?, name)?).ok()
+}
+
+/// Writes a note as `.docx` where the user picks. False if the dialog is cancelled.
+#[tauri::command(async)]
+pub fn export_docx(
+    app: AppHandle,
+    id: String,
+    path: String,
+    template: Option<String>,
+    date: String,
+    diagrams: Vec<Vec<u8>>,
+) -> Result<bool> {
+    let note = file_fs(&id, &path)?.read(&path)?;
+    let template = template.map(|name| templates::read(&name)).transpose()?;
+    let stem = path.rsplit('/').next().unwrap_or(&path);
+    let stem = stem.rsplit_once('.').map_or(stem, |(s, _)| s);
+    let bytes = docx::render(&docx::Input {
+        markdown: &note.content,
+        title: stem,
+        date: &date,
+        diagrams: &diagrams,
+        image: &|reference| note_image(&id, &path, reference),
+        template: template.as_deref(),
+    })?;
+    let picked = app.dialog().file().set_file_name(format!("{stem}.docx")).add_filter("Word", &["docx"]).blocking_save_file();
+    let Some(target) = picked else { return Ok(false) };
+    std::fs::write(target.into_path().map_err(|e| Error::Vault(e.to_string()))?, bytes)?;
+    Ok(true)
 }
 
 #[derive(Serialize)]

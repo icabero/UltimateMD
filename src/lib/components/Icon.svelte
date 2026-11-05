@@ -13,6 +13,7 @@
     edit: 'M4 20l1-4L16 5l3 3L8 19zM14 7l3 3',
     split: 'M4 5h16v14H4zM12 5v14',
     eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+    export: 'M12 15V4M8 8l4-4 4 4M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5',
     link: 'M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1',
   };
   let { name, size = 16 }: { name: string; size?: number } = $props();

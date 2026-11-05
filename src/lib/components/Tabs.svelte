@@ -31,6 +31,9 @@
       {#each VIEWS as v}
         <button class="icon" class:on={active.view === v.mode} title={v.title} onclick={() => { active.view = v.mode; store.persist(); }}><Icon name={v.icon} /></button>
       {/each}
+      {#if active.kind === 'md'}
+        <button class="icon" title="Exportar (Ctrl+E)" onclick={() => (store.exporting = true)}><Icon name="export" /></button>
+      {/if}
     </div>
   {/if}
 </div>

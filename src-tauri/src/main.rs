@@ -99,6 +99,12 @@ fn main() {
             commands::take_pending_files,
             commands::default_app_info,
             commands::set_default_app,
+            commands::list_templates,
+            commands::import_template,
+            commands::rename_template,
+            commands::delete_template,
+            commands::read_image,
+            commands::export_docx,
         ])
         .build(tauri::generate_context!())
         .expect("error while building UltimateMD")

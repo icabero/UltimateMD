@@ -21,6 +21,29 @@ pub fn is_note(path: &str) -> bool {
     }
 }
 
+const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "bmp"];
+
+pub fn is_image(path: &str) -> bool {
+    path.rsplit_once('.').is_some_and(|(_, ext)| IMAGE_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
+}
+
+/// Resolves a reference written in a note against that note's folder.
+/// None if it climbs out of the vault.
+pub fn join_relative(note: &str, reference: &str) -> Option<String> {
+    let mut parts: Vec<&str> = note.split('/').collect();
+    parts.pop();
+    for part in reference.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            _ => parts.push(part),
+        }
+    }
+    Some(parts.join("/"))
+}
+
 /// Splits a relative path into validated components.
 /// Hidden entries (`.git`, `.obsidian`, `.env`...) are not reachable.
 fn components(rel: &str) -> Result<Vec<&str>> {
@@ -122,6 +145,14 @@ pub fn to_rel(root: &Path, path: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn joins_references_against_the_note() {
+        assert_eq!(join_relative("a/b/n.md", "img/x.png").unwrap(), "a/b/img/x.png");
+        assert_eq!(join_relative("a/b/n.md", "../x.png").unwrap(), "a/x.png");
+        assert_eq!(join_relative("n.md", "./x.png").unwrap(), "x.png");
+        assert!(join_relative("n.md", "../x.png").is_none());
+    }
 
     #[test]
     fn normalizes_separators() {

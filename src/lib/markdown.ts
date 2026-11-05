@@ -90,7 +90,10 @@ function linkContent(root: DocumentFragment, ctx: RenderContext) {
       : src && !isExternal(src) && !src.startsWith('#')
         ? resolveRelative(dir, decode(src.split(/[?#]/)[0]))
         : null;
-    if (path) el.setAttribute('src', fileUrl(ctx.vaultId, path));
+    if (path) {
+      el.setAttribute('src', fileUrl(ctx.vaultId, path));
+      el.dataset.path = path;
+    }
   }
   for (const a of root.querySelectorAll<HTMLAnchorElement>('a[data-wikilink]')) {
     const path = resolveLink(a.dataset.wikilink!, ctx.path, ctx.files);
