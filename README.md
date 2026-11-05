@@ -81,7 +81,19 @@ npm run test:e2e
 | `src-tauri` | Aplicación de escritorio |
 | `src` | Interfaz (Svelte) |
 
-Para publicar una versión, sube una etiqueta como `v0.1.0`: GitHub Actions compilará todos los instaladores y creará un borrador de release.
+### Ramas
+
+El proyecto sigue gitflow:
+
+| Rama | Sale de | Se fusiona en | Uso |
+|---|---|---|---|
+| `main` | | | Versiones publicadas |
+| `develop` | `main` | | Integración del siguiente trabajo |
+| `feature/*` | `develop` | `develop` | Funciones y mejoras |
+| `release/x.y.z` | `develop` | `main` y `develop` | Preparar una versión |
+| `hotfix/x.y.z` | `main` | `main` y `develop` | Arreglos urgentes en una versión publicada |
+
+Al fusionar una `release/*` o `hotfix/*` en `main`, etiqueta ese commit como `vx.y.z`. La etiqueta hace que GitHub Actions compile todos los instaladores y cree un borrador de release.
 
 ## Licencia
 
