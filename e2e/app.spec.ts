@@ -526,11 +526,28 @@ test('the toolbar formats the selection and undoes it', async ({ page }) => {
   await expect(editorText(page)).toContainText('**hola**');
   await page.getByRole('button', { name: 'Negrita' }).click();
   await expect(editorText(page)).not.toContainText('**hola**');
-  await page.getByRole('button', { name: 'Título 2' }).click();
+  await page.getByRole('toolbar').getByLabel('Título').selectOption('2');
   await expect(editorText(page)).toContainText('## hola');
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
   await expect(editorText(page)).toContainText('- hola');
   await expect(editorText(page)).not.toContainText('## hola');
+});
+
+test('the heading menu offers six levels and can remove a heading', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\nhola');
+  const menu = page.getByRole('toolbar').getByLabel('Título');
+  await expect(menu.locator('option')).toHaveCount(8);
+  await menu.selectOption('6');
+  await expect(editorText(page)).toContainText('###### hola');
+  await expect(menu).toHaveValue('');
+  await menu.selectOption('1');
+  await expect(editorText(page)).toContainText('# hola');
+  await expect(editorText(page)).not.toContainText('## hola');
+  await menu.selectOption('0');
+  await expect(page.locator('.cm-line').last()).toHaveText('hola');
+  await page.keyboard.type('!');
+  await expect(editorText(page)).toContainText('hola!');
 });
 
 test('keyboard shortcuts format too', async ({ page }) => {
@@ -1111,6 +1128,17 @@ test('the Word screen shows what the template suggests and saves changes', async
   await expect.poll(() => page.evaluate(() => (window as any).__word)).toMatchObject({ imageMaxWidth: 420, plainCode: true, headings: [null, null, 'Propio2', null, null, null] });
   await expect.poll(() => page.evaluate(() => (window as any).__wordSample)).toBeGreaterThan(0);
   expect(await page.evaluate(() => (window as any).__wordMarkdown)).toContain('###### Nivel 6');
+});
+
+test('the Word screen opens from the vault in the sidebar', async ({ page }) => {
+  const vault = page.getByRole('region', { name: 'Trabajo' });
+  await vault.hover();
+  await vault.getByTitle('Ajustes de Word de este vault').click();
+  await expect(page.getByRole('dialog', { name: 'Word en Trabajo' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.locator('aside').getByRole('button', { name: 'Trabajo' }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Ajustes de Word de este vault' }).click();
+  await expect(page.getByRole('dialog', { name: 'Word en Trabajo' })).toBeVisible();
 });
 
 test('the Word screen warns about levels the template does not number', async ({ page }) => {

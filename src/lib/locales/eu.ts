@@ -224,6 +224,8 @@ export const eu: Record<Key, string> = {
   'toolbar.italic': 'Etzana (Ctrl+I)',
   'toolbar.strike': 'Marratua',
   'toolbar.inlineCode': 'Kodea',
+  'toolbar.headingMenu': 'Izenburua',
+  'toolbar.paragraph': 'Testu arrunta',
   'toolbar.heading': '{n}. izenburua',
   'toolbar.bullets': 'Zerrenda',
   'toolbar.numbers': 'Zerrenda zenbakitua',

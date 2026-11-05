@@ -224,6 +224,8 @@ export const en: Record<Key, string> = {
   'toolbar.italic': 'Italic (Ctrl+I)',
   'toolbar.strike': 'Strikethrough',
   'toolbar.inlineCode': 'Code',
+  'toolbar.headingMenu': 'Heading',
+  'toolbar.paragraph': 'Normal text',
   'toolbar.heading': 'Heading {n}',
   'toolbar.bullets': 'List',
   'toolbar.numbers': 'Numbered list',

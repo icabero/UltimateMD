@@ -223,6 +223,8 @@ export const es = {
   'toolbar.italic': 'Cursiva (Ctrl+I)',
   'toolbar.strike': 'Tachado',
   'toolbar.inlineCode': 'Código',
+  'toolbar.headingMenu': 'Título',
+  'toolbar.paragraph': 'Texto normal',
   'toolbar.heading': 'Título {n}',
   'toolbar.bullets': 'Lista',
   'toolbar.numbers': 'Lista numerada',
