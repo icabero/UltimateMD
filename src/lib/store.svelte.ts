@@ -76,6 +76,7 @@ class Store {
   palette = $state(false);
   settings = $state(false);
   searching = $state(false);
+  exporting = $state(false);
   dialog = $state<Dialog | null>(null);
 
   #timers = new Map<string, ReturnType<typeof setTimeout>>();

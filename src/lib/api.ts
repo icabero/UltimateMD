@@ -71,6 +71,13 @@ export const api = {
   takePendingFiles: () => invoke<string[]>('take_pending_files'),
   defaultAppInfo: () => invoke<DefaultAppInfo>('default_app_info'),
   setDefaultApp: () => invoke<void>('set_default_app'),
+  listTemplates: () => invoke<string[]>('list_templates'),
+  importTemplate: () => invoke<string | null>('import_template'),
+  renameTemplate: (name: string, newName: string) => invoke<void>('rename_template', { name, newName }),
+  deleteTemplate: (name: string) => invoke<void>('delete_template', { name }),
+  readImage: (id: string, path: string) => invoke<number[]>('read_image', { id, path }),
+  exportDocx: (id: string, path: string, template: string | null, date: string, diagrams: number[][]) =>
+    invoke<boolean>('export_docx', { id, path, template, date, diagrams }),
   exportFile: (name: string, data: Uint8Array) => invoke<boolean>('export_file', { name, data: Array.from(data) }),
 };
 

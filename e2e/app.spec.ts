@@ -215,3 +215,51 @@ test('settings explain how to set the default app on Windows', async ({ page }) 
   await page.getByTitle('Ajustes y MCP').click();
   await expect(page.getByRole('button', { name: 'Abrir aplicaciones predeterminadas' })).toBeVisible();
 });
+
+async function exportAs(page: Page, format: string) {
+  await page.keyboard.press('Control+e');
+  await page.getByRole('group', { name: 'Formato' }).getByRole('button', { name: format }).click();
+}
+
+test('export to HTML gives a self-contained page in the print look', async ({ page }) => {
+  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByRole('button', { name: /Medianoche/ }).click();
+  await page.getByTitle('Cerrar', { exact: true }).click();
+  await open(page, 'Inicio');
+  await exportAs(page, 'HTML');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+  const { name, text } = await page.evaluate(() => (window as any).__exported);
+  expect(name).toBe('Inicio.html');
+  expect(text).toContain('<svg');
+  expect(text).toContain('--bg:#fbfaf7');
+  expect(text).not.toContain('<script');
+  expect(text).not.toContain('onerror');
+});
+
+test('export to Word sends the template and rendered diagrams', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'Word');
+  await page.getByLabel('Plantilla').selectOption('Corporativa');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+  const args = await page.evaluate(() => (window as any).__docx);
+  expect(args.template).toBe('Corporativa');
+  expect(args.diagrams).toHaveLength(1);
+  expect(args.diagrams[0].slice(1, 4)).toEqual([0x50, 0x4e, 0x47]);
+});
+
+test('export to PDF prints only the note', async ({ page }) => {
+  await page.evaluate(() => {
+    window.print = () => {
+      (window as any).__printed = document.getElementById('print-root')?.shadowRoot?.textContent;
+    };
+  });
+  await open(page, 'Inicio');
+  await exportAs(page, 'PDF');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__printed)).toContain('Inicio');
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('#app')).toBeHidden();
+  await expect(page.locator('#print-root')).toBeVisible();
+});

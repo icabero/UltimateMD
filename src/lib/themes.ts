@@ -113,11 +113,16 @@ export const themeById = (id: string) => THEMES.find((t) => t.id === id);
 
 const kebab = (name: string) => name.replace(/[A-Z0-9]/g, (c) => `-${c.toLowerCase()}`);
 
+/** A theme's CSS variables. */
+export function themeVariables(theme: Theme): Record<string, string> {
+  const colors = Object.entries(theme.colors).map(([name, value]) => [`--${kebab(name)}`, value]);
+  return { ...Object.fromEntries(colors), '--prose-font': theme.prose === 'serif' ? 'var(--serif)' : 'var(--sans)' };
+}
+
 /** Publishes a theme as CSS variables, which also reach the preview's shadow root. */
 export function applyTheme(theme: Theme) {
   const root = document.documentElement;
-  for (const [name, value] of Object.entries(theme.colors)) root.style.setProperty(`--${kebab(name)}`, value);
-  root.style.setProperty('--prose-font', theme.prose === 'serif' ? 'var(--serif)' : 'var(--sans)');
+  for (const [name, value] of Object.entries(themeVariables(theme))) root.style.setProperty(name, value);
   root.style.colorScheme = theme.mode;
   root.dataset.theme = theme.id;
 }

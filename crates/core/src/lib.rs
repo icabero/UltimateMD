@@ -3,12 +3,14 @@
 //! Both the desktop app and the MCP server are thin layers over this crate, so
 //! they share one set of rules about what can be read or written.
 
+pub mod docx;
 pub mod error;
 pub mod files;
 pub mod links;
 pub mod paths;
 pub mod registry;
 pub mod search;
+pub mod templates;
 
 pub use error::{Error, Result};
 pub use files::{Note, TreeNode, Vault as VaultFs, WriteMode};
