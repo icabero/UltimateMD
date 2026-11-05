@@ -15,7 +15,7 @@ use ultimatemd_core::paths::{is_image, join_relative};
 use ultimatemd_core::vault_themes::{self, ThemeFile, VaultThemes};
 use ultimatemd_core::docx::Section;
 use ultimatemd_core::word_settings::{self, WordSettings};
-use ultimatemd_core::{docx, docx_preview, templates};
+use ultimatemd_core::{docx, templates};
 use ultimatemd_core::{Error, McpAccess, Note, Registry, Result, SearchHit, TreeNode, Vault, VaultFs, WriteMode, search};
 
 const SEARCH_LIMIT: usize = 200;
@@ -299,7 +299,7 @@ impl ExportPlan {
             .collect()
     }
 
-    fn docx(&self) -> Result<Vec<u8>> {
+    fn docx(&self, inline_numbering: bool) -> Result<Vec<u8>> {
         let sections = self.sections()?;
         let root = fs(&self.vault_id)?;
         let template = match self.template.as_deref() {
@@ -317,7 +317,7 @@ impl ExportPlan {
             image: &|note, reference| note_image(&self.vault_id, note, reference),
             template: template.as_deref(),
             settings: &word_settings::load(root.root()),
-            inline_numbering: false,
+            inline_numbering,
         })
     }
 
@@ -346,7 +346,7 @@ fn save_as(app: &AppHandle, name: String, kind: &str, ext: &str, bytes: Vec<u8>)
 /// Writes a `.docx` where the user picks. False if the dialog is cancelled.
 #[tauri::command(async)]
 pub fn export_docx(app: AppHandle, plan: ExportPlan) -> Result<bool> {
-    save_as(&app, format!("{}.docx", plan.title), "Word", "docx", plan.docx()?)
+    save_as(&app, format!("{}.docx", plan.title), "Word", "docx", plan.docx(false)?)
 }
 
 /// Writes a PDF where the user picks. False if the dialog is cancelled.
@@ -356,10 +356,10 @@ pub fn export_pdf(app: AppHandle, plan: ExportPlan) -> Result<bool> {
     save_as(&app, format!("{}.pdf", plan.title), "PDF", "pdf", bytes)
 }
 
-/// The generated `.docx`, read back for display.
+/// The generated `.docx`, written for the viewer that displays it.
 #[tauri::command(async)]
-pub fn preview_docx(plan: ExportPlan) -> Result<docx_preview::Preview> {
-    docx_preview::render(&plan.docx()?)
+pub fn preview_docx(plan: ExportPlan) -> Result<Vec<u8>> {
+    plan.docx(true)
 }
 
 /// The pages of the PDF as images, so the preview is the document itself.

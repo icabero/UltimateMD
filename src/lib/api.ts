@@ -95,19 +95,6 @@ export interface TemplateStyle {
   name: string;
 }
 
-export interface DocxPreview {
-  width: number;
-  height: number;
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-  header: string;
-  footer: string;
-  titlePage: boolean;
-  blocks: { html: string; breakBefore: boolean }[];
-}
-
 export type Opened =
   | { kind: 'vault'; vaultId: string; path: string }
   | { kind: 'loose'; id: string; name: string; absolute: string; dir: string };
@@ -156,7 +143,7 @@ export const api = {
   readImage: (id: string, path: string) => invoke<number[]>('read_image', { id, path }),
   exportDocx: (plan: ExportPlan) => invoke<boolean>('export_docx', { plan }),
   exportPdf: (plan: ExportPlan) => invoke<boolean>('export_pdf', { plan }),
-  previewDocx: (plan: ExportPlan) => invoke<DocxPreview>('preview_docx', { plan }),
+  previewDocx: (plan: ExportPlan) => invoke<number[]>('preview_docx', { plan }),
   previewPdf: (plan: ExportPlan) => invoke<string[]>('preview_pdf', { plan }),
   templateStyles: (template: string | null) => invoke<TemplateStyle[]>('template_styles', { template }),
   saveTemplateCopy: (name: string) => invoke<boolean>('save_template_copy', { name }),

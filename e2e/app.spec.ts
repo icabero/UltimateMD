@@ -329,7 +329,7 @@ test('a folder can be exported on its own', async ({ page }) => {
   expect(plan.sections[1]).toMatchObject({ path: 'dir/Destino.md', shift: 1 });
 });
 
-test('word offers the example template, its styles and a paged preview', async ({ page }) => {
+test('word offers the example template, its styles and a preview of the file', async ({ page }) => {
   await open(page, 'Inicio');
   await exportAs(page, 'Word');
   await expect(page.getByLabel('Plantilla')).toHaveValue('Ejemplo');
@@ -337,10 +337,7 @@ test('word offers the example template, its styles and a paged preview', async (
   await scope(page, 'Vault');
   await expect(page.getByLabel('Nivel 1', { exact: true }).locator('option', { hasText: 'Destacado' })).toHaveCount(1);
   await page.getByLabel('Nivel 1', { exact: true }).selectOption('style:Destacado');
-  await expect(page.locator('.paged .page')).toHaveCount(2);
-  await expect(page.locator('.paged .page').nth(1)).toContainText('Bloque dos');
-  await expect(page.locator('.paged .page').nth(1)).toContainText('Cabecera');
-  await expect(page.locator('.paged .page').nth(1)).toContainText('2');
+  await expect(page.locator('.sheet section')).toContainText('Documento de prueba');
   await page.getByRole('button', { name: 'Exportar', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Exportado');
   const plan = await page.evaluate(() => (window as any).__docx);

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import DocxSheet from './DocxSheet.svelte';
   import Icon from './Icon.svelte';
   import { api, type WordConfig, type WordSettings } from '../api';
   import { tr } from '../i18n.svelte';
@@ -10,16 +11,10 @@
   const DELAY = 300;
   const LEVELS = [1, 2, 3, 4, 5, 6];
   const PICTURE = { width: 720, height: 240 };
-  /** Word's size when a template sets none, which the viewer does not assume. */
-  const CSS = `
-    :host { display: block; }
-    .docx-wrapper { padding: 0 !important; background: none !important; }
-    .docx-wrapper > section.docx { margin: 0 auto 12px !important; box-shadow: 0 1px 4px rgb(0 0 0 / 30%) !important; font-size: 10pt; }
-  `;
 
   let config = $state<WordConfig | null>(null);
   let settings = $state<WordSettings | null>(null);
-  let host = $state<HTMLDivElement>();
+  let sheet = $state<DocxSheet>();
   let error = $state('');
   let busy = $state(false);
   let picture: number[] = [];
@@ -48,7 +43,7 @@
   }
 
   async function draw() {
-    if (!settings || !host) return;
+    if (!settings || !sheet) return;
     const id = ++run;
     busy = true;
     try {
@@ -56,17 +51,7 @@
       await api.saveWordSettings(vaultId, current);
       const bytes = await api.wordSample(vaultId, current, tr('word.sample'), picture);
       if (id !== run) return;
-      const { renderAsync } = await import('docx-preview');
-      const root = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
-      const body = document.createElement('div');
-      const style = document.createElement('style');
-      style.textContent = CSS;
-      await renderAsync(new Uint8Array(bytes), body, body, { inWrapper: true, breakPages: true, useBase64URL: true });
-      if (id !== run) return;
-      root.replaceChildren(style, body);
-      // The sheets keep their real size; the zoom only fits them to the panel.
-      const sheet = body.querySelector('section');
-      if (sheet?.offsetWidth) body.style.zoom = String(host.clientWidth / sheet.offsetWidth);
+      await sheet.show(bytes);
       error = '';
     } catch (e) {
       if (id === run) error = String(e);
@@ -180,7 +165,7 @@
   <div class="preview" aria-label={tr('word.sampleTitle')} aria-busy={busy}>
     <p class="note">{tr('word.sampleNote')}</p>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
-    <div class="sheet" bind:this={host}></div>
+    <DocxSheet bind:this={sheet} />
   </div>
 </div>
 
@@ -205,7 +190,6 @@
   .link { padding: 0; border: 0; background: none; color: var(--accent-text); font-size: 12px; }
   .note { margin: 6px 0; color: var(--text-3); font-size: 11.5px; }
   .preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 10px 20px 16px; overflow: auto; border-left: 1px solid var(--line); background: var(--panel); }
-  .preview[aria-busy='true'] .sheet { opacity: .6; }
-  .sheet { width: 100%; }
+  .preview[aria-busy='true'] :global(.sheet) { opacity: .6; }
   .error { color: var(--danger); }
 </style>

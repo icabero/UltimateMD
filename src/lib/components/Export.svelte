@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import DocxSheet from './DocxSheet.svelte';
   import Icon from './Icon.svelte';
-  import PagedPreview from './PagedPreview.svelte';
-  import { api, type DocxPreview, type TemplateStyle } from '../api';
+  import { api, type TemplateStyle } from '../api';
   import { buildContent, buildPlan, documentCss, exportHtml, foldersOf, levelCount, levelExamples, type ExportOptions, type LevelChoice, type Scope } from '../export';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
@@ -35,7 +35,7 @@
   let busy = $state(false);
 
   let pages = $state<string[]>([]);
-  let docx = $state<DocxPreview | null>(null);
+  let docx = $state<DocxSheet>();
   let htmlHost = $state<HTMLDivElement>();
   let previewing = $state(false);
   let previewError = $state('');
@@ -95,8 +95,8 @@
         style.textContent = documentCss();
         shadow.replaceChildren(style, article);
       } else if (format === 'docx') {
-        const preview = await api.previewDocx(await buildPlan(tab, $state.snapshot(options) as ExportOptions));
-        if (id === run) docx = preview;
+        const bytes = await api.previewDocx(await buildPlan(tab, $state.snapshot(options) as ExportOptions));
+        if (id === run) await docx?.show(bytes);
       } else {
         const rendered = await api.previewPdf(await buildPlan(tab, $state.snapshot(options) as ExportOptions));
         if (id === run) pages = rendered;
@@ -247,8 +247,8 @@
         <img class="page" src={page} alt={tr('export.page', { n: i + 1 })} />
       {/each}
     {:else if format === 'docx'}
-      {#if docx}<PagedPreview preview={docx} />{/if}
       <p class="note">{tr('export.wordNote')}</p>
+      <DocxSheet bind:this={docx} />
     {:else}
       <div class="html" bind:this={htmlHost}></div>
     {/if}
@@ -284,6 +284,6 @@
   .preview[aria-busy='true'] { opacity: .6; }
   .page { display: block; width: 100%; margin-bottom: 12px; box-shadow: 0 1px 4px rgb(0 0 0 / 30%); }
   .html { background: #fff; }
-  .note { text-align: center; }
+  .note { margin: 0 0 12px; text-align: center; }
   .error { color: var(--danger); }
 </style>

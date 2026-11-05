@@ -6046,7 +6046,6 @@ dependencies = [
 name = "ultimatemd-core"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
  "directories",
  "dunce",
  "imagesize 0.15.0",
