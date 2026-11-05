@@ -385,7 +385,7 @@ export const eu: Record<Key, string> = {
   'word.headings': 'Izenburuak',
   'word.autoStyle': 'Automatikoa: {name}',
   'word.standard': 'Estandarra',
-  'word.levelsWithout': 'Txantiloiak ez ditu {list} mailak zenbakitzen. Erabiltzen badituzu, izenburu estandarra izango dute.',
+  'word.levelsWithout': 'Txantiloiak ez du estilo propiorik {list} mailetarako. Erabiltzen badituzu, izenburu estandarra izango dute eta haren zenbakitzeari jarraituko diote.',
   'word.text': 'Testua',
   'word.body': 'Paragrafoak',
   'word.tables': 'Taulak',

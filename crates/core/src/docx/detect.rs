@@ -19,6 +19,9 @@ pub struct Detected {
     pub body: Option<String>,
     /// The list that numbers those headings.
     pub heading_list: Option<String>,
+    /// The list to write on levels past those styles whose standard heading
+    /// numbers elsewhere; `0` takes the number away.
+    pub loose_levels: [Option<String>; HEADING_LEVELS],
     /// Background of the first filled cell of the template, as `RRGGBB`.
     pub header_fill: Option<String>,
 }
@@ -106,6 +109,18 @@ fn list_number(xml: &str, definition: &str) -> Option<String> {
         .find(|n| value(*n, "abstractNumId") == Some(definition))
         .and_then(|n| attr(n, "numId"))
         .map(String::from)
+}
+
+/// Whether a list definition counts this level, as `%4` does for the fourth.
+fn counts_level(xml: &str, definition: &str, slot: usize) -> bool {
+    let Ok(document) = Document::parse(xml) else { return false };
+    let counter = format!("%{}", slot + 1);
+    document
+        .root_element()
+        .children()
+        .filter(|n| n.tag_name().name() == "abstractNum" && attr(*n, "abstractNumId").unwrap_or_default() == definition)
+        .flat_map(|list| list.children().filter(|n| n.tag_name().name() == "lvl"))
+        .any(|level| attr(level, "ilvl") == Some(slot.to_string().as_str()) && value(level, "lvlText").is_some_and(|text| text.contains(&counter)))
 }
 
 /// The colour a template gives its tables, from the first filled cell it has.
@@ -196,6 +211,15 @@ pub fn detect(styles_xml: &str, numbering_xml: &str, document_xml: &str) -> Dete
         header_fill: table_fill(document_xml),
         ..Detected::default()
     };
+    if let Some(list) = detected.heading_list.clone() {
+        // Left alone, they would count from 1 in a list that nothing else uses.
+        for slot in chain.len()..HEADING_LEVELS {
+            let name = format!("heading {}", slot + 1);
+            if styles.values().any(|s| s.name == name && s.numbered) {
+                detected.loose_levels[slot] = Some(if counts_level(numbering_xml, &definition, slot) { list.clone() } else { "0".into() });
+            }
+        }
+    }
     for (slot, id) in detected.headings.iter_mut().zip(chain) {
         *slot = Some(listed_variant(&styles, &id, &listed).unwrap_or(id));
     }
@@ -324,6 +348,38 @@ mod tests {
         let cell = |fill: &str| format!(r#"<w:tc><w:tcPr><w:shd w:val="clear" w:fill="{fill}"/></w:tcPr></w:tc>"#);
         let tables = format!("<w:document {NS}><w:body><w:tbl>{}{}{}</w:tbl></w:body></w:document>", cell("auto"), cell("FFFFFF"), cell("a1b2c3"));
         assert_eq!(detect("", "", &tables).header_fill.as_deref(), Some("A1B2C3"));
+    }
+
+    /// Two levels with styles of their own, in a list that defines a third.
+    fn short_list(third: &str) -> String {
+        let levels = format!(r#"<w:lvl w:ilvl="0"><w:pStyle w:val="Propio1"/></w:lvl><w:lvl w:ilvl="1"><w:pStyle w:val="Propio2"/></w:lvl><w:lvl w:ilvl="2"><w:lvlText w:val="{third}"/></w:lvl>"#);
+        format!(r#"<w:numbering {NS}><w:abstractNum w:abstractNumId="5">{levels}</w:abstractNum><w:num w:numId="9"><w:abstractNumId w:val="5"/></w:num></w:numbering>"#)
+    }
+
+    fn numbered_third_heading() -> String {
+        styles().replace(&style("Tit3", "heading 3", "Normal"), &with_numbering("Tit3", "heading 3", "Normal"))
+    }
+
+    #[test]
+    fn a_heading_numbered_elsewhere_continues_in_the_list_that_has_its_level() {
+        let found = detect(&numbered_third_heading(), &short_list("%1.%2.%3."), &document(&[]));
+        assert_eq!(found.headings[2], None);
+        assert_eq!(found.loose_levels[2].as_deref(), Some("9"));
+        assert_eq!(found.loose_levels[0], None, "that level has its style");
+        assert_eq!(found.loose_levels[3], None, "the template has no such heading");
+    }
+
+    #[test]
+    fn a_heading_numbered_elsewhere_loses_the_number_if_the_list_stops_before_it() {
+        let found = detect(&numbered_third_heading(), &short_list("%3"), &document(&[]));
+        assert_eq!(found.loose_levels[2].as_deref(), Some("9"));
+        let found = detect(&numbered_third_heading(), &short_list("-"), &document(&[]));
+        assert_eq!(found.loose_levels[2].as_deref(), Some("0"));
+    }
+
+    #[test]
+    fn a_heading_without_a_number_is_left_as_the_template_has_it() {
+        assert_eq!(detect(&styles(), &short_list("%1.%2.%3."), &document(&[])).loose_levels, Detected::default().loose_levels);
     }
 
     #[test]

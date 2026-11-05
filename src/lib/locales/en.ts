@@ -385,7 +385,7 @@ export const en: Record<Key, string> = {
   'word.headings': 'Headings',
   'word.autoStyle': 'Automatic: {name}',
   'word.standard': 'Standard',
-  'word.levelsWithout': 'The template does not number levels {list}. If you use them, they get the standard heading.',
+  'word.levelsWithout': 'The template has no style of its own for levels {list}. If you use them, they get the standard heading and keep its numbering.',
   'word.text': 'Text',
   'word.body': 'Paragraphs',
   'word.tables': 'Tables',

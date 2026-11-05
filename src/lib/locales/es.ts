@@ -384,7 +384,7 @@ export const es = {
   'word.headings': 'Títulos',
   'word.autoStyle': 'Automático: {name}',
   'word.standard': 'Estándar',
-  'word.levelsWithout': 'La plantilla no numera los niveles {list}. Si los usas, saldrán con el título estándar.',
+  'word.levelsWithout': 'La plantilla no tiene estilo propio para los niveles {list}. Si los usas, saldrán con el título estándar y seguirán su numeración.',
   'word.text': 'Texto',
   'word.body': 'Párrafos',
   'word.tables': 'Tablas',

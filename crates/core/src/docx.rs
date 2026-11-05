@@ -280,6 +280,20 @@ impl Writer<'_> {
         own.or_else(|| self.styles.get(&format!("heading {level}")).map(String::from))
     }
 
+    /// The list a heading is written with, when its style alone would not do.
+    fn heading_numbering(&self, level: usize) -> String {
+        let slot = level - 1;
+        // The viewer of the sample does not follow a list through the styles.
+        let list = if self.detected.headings[slot].is_some() {
+            self.detected.heading_list.as_ref().filter(|_| self.input.inline_numbering)
+        } else if self.input.settings.headings[slot].is_none() {
+            self.detected.loose_levels[slot].as_ref()
+        } else {
+            None
+        };
+        list.map_or(String::new(), |list| format!(r#"<w:numPr><w:ilvl w:val="{slot}"/><w:numId w:val="{list}"/></w:numPr>"#))
+    }
+
     /// The paragraph properties of the template's body text, if it has its own.
     fn body_style(&self) -> String {
         let id = self.input.settings.body.as_ref().or(self.detected.body.as_ref());
@@ -472,11 +486,13 @@ impl Writer<'_> {
         self.flush();
         self.page_break = page_break;
         let level = level.clamp(1, MAX_LEVELS);
+        let chosen = style.is_some();
         let id = style.map(String::from).or_else(|| self.heading_style(level));
         let is_heading = id.as_deref().is_some_and(|id| self.styles.0.iter().any(|(name, v)| v == id && name.starts_with("heading ")));
         let outline = if is_heading { String::new() } else { format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1) };
+        let numbering = if chosen { String::new() } else { self.heading_numbering(level) };
         let style = id.as_ref().map_or(String::new(), |id| format!(r#"<w:pStyle w:val="{id}"/>"#));
-        self.open(format!("{style}{outline}"));
+        self.open(format!("{style}{numbering}{outline}"));
         self.format.bold = id.is_none();
         self.heading = Some(Heading { level, text: String::new() });
         self.push_text(text, false);
@@ -612,10 +628,7 @@ impl Writer<'_> {
                 let level = (heading_number(level) + self.shift).min(MAX_LEVELS);
                 let style = self.heading_style(level);
                 // Without the style, the outline level keeps it in the contents.
-                // Only levels that are in the list: others are not numbered in Word.
-                let listed = self.detected.headings.get(level - 1).is_some_and(Option::is_some);
-                let numbering = (self.input.inline_numbering && listed).then_some(self.detected.heading_list.as_ref()).flatten();
-                let numbering = numbering.map_or(String::new(), |list| format!(r#"<w:numPr><w:ilvl w:val="{}"/><w:numId w:val="{list}"/></w:numPr>"#, level - 1));
+                let numbering = self.heading_numbering(level);
                 let properties = style.as_ref().map_or(format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1), |id| format!(r#"<w:pStyle w:val="{id}"/>{numbering}"#));
                 self.open(properties);
                 self.format.bold = style.is_none();
