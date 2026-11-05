@@ -1,3 +1,5 @@
+import type { ThemeFile } from './api';
+
 // A theme is plain data: adding one here is all it takes. Everything visual
 // derives from these values, including the preview, the editor and diagrams.
 
@@ -110,6 +112,32 @@ export const THEMES: Theme[] = [
 ];
 
 export const themeById = (id: string) => THEMES.find((t) => t.id === id);
+
+/** A vault theme applied over its built-in base. */
+export function resolveTheme(file: ThemeFile): Theme {
+  const base = themeById(file.base) ?? THEMES[0];
+  return {
+    ...base,
+    id: file.id,
+    name: file.name,
+    prose: file.prose ?? base.prose,
+    colors: { ...base.colors, ...file.colors },
+    diagram: { ...base.diagram, ...file.diagram },
+  };
+}
+
+/** Identifies a theme's look, for caching what was drawn with it. */
+export const themeKey = (theme: Theme) => JSON.stringify([theme.colors, theme.diagram]);
+
+const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
+
+/** Reads a simple `key: value` from a note's frontmatter. */
+export function frontmatterValue(note: string, key: string) {
+  const block = FRONTMATTER.exec(note)?.[1];
+  if (!block) return null;
+  const line = block.split(/\r?\n/).find((l) => l.startsWith(`${key}:`));
+  return line?.slice(key.length + 1).trim().replace(/^['"]|['"]$/g, '') || null;
+}
 
 const kebab = (name: string) => name.replace(/[A-Z0-9]/g, (c) => `-${c.toLowerCase()}`);
 

@@ -1,6 +1,6 @@
 // Diagram engines are large, so each one loads the first time it is needed.
 import DOMPurify from 'dompurify';
-import type { Theme } from './themes';
+import { themeKey, type Theme } from './themes';
 
 function palette({ colors, diagram }: Theme) {
   return {
@@ -28,7 +28,7 @@ function official() {
   return officialReady;
 }
 
-async function renderOfficial(src: string, theme: Theme) {
+async function renderOfficial(src: string, theme: Theme, sketch: boolean) {
   const mermaid = await official();
   const p = palette(theme);
   mermaid.initialize({
@@ -36,7 +36,7 @@ async function renderOfficial(src: string, theme: Theme) {
     securityLevel: 'strict',
     theme: 'base',
     layout: 'elk',
-    look: 'classic',
+    look: sketch ? 'handDrawn' : 'classic',
     // SVG text, not HTML labels, so diagrams can be exported to PNG.
     htmlLabels: false,
     flowchart: { htmlLabels: false, curve: 'basis' },
@@ -59,8 +59,9 @@ async function renderOfficial(src: string, theme: Theme) {
   return (await mermaid.render(`umd-mermaid-${++counter}`, src)).svg;
 }
 
-async function renderMermaid(src: string, theme: Theme) {
-  if (BEAUTIFUL.test(src)) {
+async function renderMermaid(src: string, theme: Theme, sketch: boolean) {
+  // The lighter renderer has no hand-drawn look.
+  if (!sketch && BEAUTIFUL.test(src)) {
     try {
       const { renderMermaidSVG } = await import('beautiful-mermaid');
       return renderMermaidSVG(src, { ...palette(theme), transparent: true });
@@ -68,7 +69,7 @@ async function renderMermaid(src: string, theme: Theme) {
       // Syntax it does not cover: the official renderer may still take it.
     }
   }
-  return renderOfficial(src, theme);
+  return renderOfficial(src, theme, sketch);
 }
 
 let d2Worker: Worker | null = null;
@@ -86,7 +87,7 @@ function d2Config(theme: Theme) {
   return `\nvars: { d2-config: { theme-overrides: { ${body} } } }\n`;
 }
 
-function renderD2(source: string, theme: Theme) {
+function renderD2(source: string, theme: Theme, sketch: boolean) {
   // A diagram that sets its own configuration keeps it.
   const src = source.includes('d2-config') ? source : source + d2Config(theme);
 
@@ -102,7 +103,7 @@ function renderD2(source: string, theme: Theme) {
   const id = ++counter;
   return new Promise<string>((ok, fail) => {
     d2Pending.set(id, { ok, fail });
-    d2Worker!.postMessage({ id, src });
+    d2Worker!.postMessage({ id, src, sketch });
   });
 }
 
@@ -110,11 +111,11 @@ const cache = new Map<string, string>();
 const MAX_CACHE = 100;
 
 /** Renders to sanitised SVG. Throws with the engine's message on bad syntax. */
-export async function renderDiagram(lang: string, src: string, theme: Theme): Promise<string> {
-  const key = `${lang}:${theme.id}:${src}`;
+export async function renderDiagram(lang: string, src: string, theme: Theme, sketch = false): Promise<string> {
+  const key = `${lang}:${sketch}:${themeKey(theme)}:${src}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const raw = await (lang === 'd2' ? renderD2(src, theme) : renderMermaid(src, theme));
+  const raw = await (lang === 'd2' ? renderD2(src, theme, sketch) : renderMermaid(src, theme, sketch));
   const svg = DOMPurify.sanitize(raw, {
     USE_PROFILES: { svg: true, svgFilters: true, html: true },
     ADD_TAGS: ['style', 'foreignObject', 'use'],

@@ -7,13 +7,24 @@
       'dir/Destino.md': '# Destino\n',
       'D2.md': '```d2\nuno -> dos\n```\n\n```d2\nesto no vale -> {\n```\n\n```d2\ntres -> cuatro\n```\n',
     },
-    b: { 'Otra.md': '# Otra\n' },
+    b: {
+      'Otra.md': '# Otra\n',
+      'Propia.md': '---\ntema: sepia\n---\n# Propia\n',
+      'Rara.md': '---\ntema: no-existe\n---\n# Rara\n',
+    },
   };
   const vaults = [
     { id: 'a', name: 'Trabajo', path: '/v/Trabajo', open: true, mcp: 'read', allowScripts: false },
     { id: 'b', name: 'Personal', path: '/v/Personal', open: true, mcp: 'off', allowScripts: false },
   ];
   const versions = {};
+  const vaultThemes = {
+    b: {
+      defaultTheme: 'mar',
+      themes: [{ id: 'mar', name: 'Mar', base: 'claro', colors: { bg: '#e0f0ff' }, diagram: {} }],
+      invalid: [],
+    },
+  };
   const versionOf = (id, path) => (versions[`${id}:${path}`] ??= 'v0');
   const bump = (id, path) => (versions[`${id}:${path}`] = `v${Date.now()}${Math.random()}`);
   const listeners = {};
@@ -77,6 +88,18 @@
       files.c = { 'nota.md': '# Suelto\n' };
       return vaults.at(-1);
     },
+    vault_themes: ({ id }) => vaultThemes[id] ?? { defaultTheme: null, themes: [], invalid: [] },
+    save_vault_theme: ({ id, theme }) => {
+      vaultThemes[id] ??= { defaultTheme: null, themes: [], invalid: [] };
+      vaultThemes[id].themes = vaultThemes[id].themes.filter((t) => t.id !== theme.id).concat(theme);
+    },
+    delete_vault_theme: ({ id, theme }) => {
+      vaultThemes[id].themes = vaultThemes[id].themes.filter((t) => t.id !== theme);
+    },
+    set_vault_default_theme: ({ id, theme }) => {
+      vaultThemes[id] ??= { defaultTheme: null, themes: [], invalid: [] };
+      vaultThemes[id].defaultTheme = theme;
+    },
     list_templates: () => ['Corporativa'],
     export_file: ({ name, data }) => {
       window.__exported = { name, text: new TextDecoder().decode(new Uint8Array(data)) };
@@ -106,6 +129,7 @@
 
   window.__test = {
     files,
+    vaultThemes,
     /** Simulates another program, such as the MCP server, changing a file. */
     externalWrite(id, path, content) {
       files[id][path] = content;

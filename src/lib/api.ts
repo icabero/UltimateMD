@@ -35,6 +35,21 @@ export interface LinkInfo {
   backlinks: string[];
 }
 
+export interface ThemeFile {
+  id: string;
+  name: string;
+  base: string;
+  colors: Record<string, string>;
+  diagram: Record<string, string>;
+  prose?: 'serif' | 'sans';
+}
+
+export interface VaultThemes {
+  defaultTheme: string | null;
+  themes: ThemeFile[];
+  invalid: string[];
+}
+
 export type Opened =
   | { kind: 'vault'; vaultId: string; path: string }
   | { kind: 'loose'; id: string; name: string; absolute: string; dir: string };
@@ -71,6 +86,10 @@ export const api = {
   takePendingFiles: () => invoke<string[]>('take_pending_files'),
   defaultAppInfo: () => invoke<DefaultAppInfo>('default_app_info'),
   setDefaultApp: () => invoke<void>('set_default_app'),
+  vaultThemes: (id: string) => invoke<VaultThemes>('vault_themes', { id }),
+  saveVaultTheme: (id: string, theme: ThemeFile) => invoke<void>('save_vault_theme', { id, theme }),
+  deleteVaultTheme: (id: string, theme: string) => invoke<void>('delete_vault_theme', { id, theme }),
+  setVaultDefaultTheme: (id: string, theme: string | null) => invoke<void>('set_vault_default_theme', { id, theme }),
   listTemplates: () => invoke<string[]>('list_templates'),
   importTemplate: () => invoke<string | null>('import_template'),
   renameTemplate: (name: string, newName: string) => invoke<void>('rename_template', { name, newName }),

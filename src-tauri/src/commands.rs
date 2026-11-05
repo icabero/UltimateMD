@@ -10,6 +10,7 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use ultimatemd_core::links::{self, LinkInfo};
 use ultimatemd_core::paths::{is_image, join_relative};
+use ultimatemd_core::vault_themes::{self, ThemeFile, VaultThemes};
 use ultimatemd_core::{docx, templates};
 use ultimatemd_core::{Error, McpAccess, Note, Registry, Result, SearchHit, TreeNode, Vault, VaultFs, WriteMode, search};
 
@@ -165,6 +166,26 @@ pub fn open_with_system(app: AppHandle, id: String, path: String) -> Result<()> 
     app.opener()
         .open_path(file.to_string_lossy(), None::<&str>)
         .map_err(|e| Error::Vault(e.to_string()))
+}
+
+#[tauri::command(async)]
+pub fn vault_themes(id: String) -> Result<VaultThemes> {
+    vault_themes::load(fs(&id)?.root())
+}
+
+#[tauri::command(async)]
+pub fn save_vault_theme(id: String, theme: ThemeFile) -> Result<()> {
+    vault_themes::save(fs(&id)?.root(), &theme)
+}
+
+#[tauri::command(async)]
+pub fn delete_vault_theme(id: String, theme: String) -> Result<()> {
+    vault_themes::delete(fs(&id)?.root(), &theme)
+}
+
+#[tauri::command(async)]
+pub fn set_vault_default_theme(id: String, theme: Option<String>) -> Result<()> {
+    vault_themes::set_default(fs(&id)?.root(), theme)
 }
 
 #[tauri::command(async)]
