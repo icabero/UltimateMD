@@ -10,6 +10,7 @@
   import Sidebar from './lib/components/Sidebar.svelte';
   import ThemeEditor from './lib/components/ThemeEditor.svelte';
   import Tutorial from './lib/components/Tutorial.svelte';
+  import WordScreen from './lib/components/WordScreen.svelte';
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
   import { applyInstallerLanguage, tr } from './lib/i18n.svelte';
@@ -159,6 +160,7 @@
 {#if store.settings}<Settings />{/if}
 {#if store.about}<About />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
+{#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
 {#if store.exporting && tab}<Export {tab} />{/if}
 {#if store.dialog}
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}

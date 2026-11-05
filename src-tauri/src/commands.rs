@@ -14,10 +14,13 @@ use ultimatemd_core::links::{self, LinkInfo};
 use ultimatemd_core::paths::{is_image, join_relative};
 use ultimatemd_core::vault_themes::{self, ThemeFile, VaultThemes};
 use ultimatemd_core::docx::Section;
-use ultimatemd_core::{docx, docx_preview, templates};
+use ultimatemd_core::word_settings::{self, WordSettings};
+use ultimatemd_core::{docx, templates};
 use ultimatemd_core::{Error, McpAccess, Note, Registry, Result, SearchHit, TreeNode, Vault, VaultFs, WriteMode, search};
 
 const SEARCH_LIMIT: usize = 200;
+/// In an export plan, the template kept in the vault itself.
+const VAULT_TEMPLATE: &str = ":vault";
 const PREVIEW_PIXELS_PER_POINT: f64 = 1.1;
 
 /// Serialises read-modify-write cycles on the registry file.
@@ -296,9 +299,14 @@ impl ExportPlan {
             .collect()
     }
 
-    fn docx(&self) -> Result<Vec<u8>> {
+    fn docx(&self, inline_numbering: bool) -> Result<Vec<u8>> {
         let sections = self.sections()?;
-        let template = self.template.as_deref().map(templates::read).transpose()?;
+        let root = fs(&self.vault_id)?;
+        let template = match self.template.as_deref() {
+            Some(VAULT_TEMPLATE) => word_settings::template(root.root()),
+            Some(name) => Some(templates::read(name)?),
+            None => None,
+        };
         docx::render(&docx::Input {
             sections: &sections,
             title: &self.title,
@@ -308,6 +316,8 @@ impl ExportPlan {
             diagrams: &self.diagrams,
             image: &|note, reference| note_image(&self.vault_id, note, reference),
             template: template.as_deref(),
+            settings: &word_settings::load(root.root()),
+            inline_numbering,
         })
     }
 
@@ -336,7 +346,7 @@ fn save_as(app: &AppHandle, name: String, kind: &str, ext: &str, bytes: Vec<u8>)
 /// Writes a `.docx` where the user picks. False if the dialog is cancelled.
 #[tauri::command(async)]
 pub fn export_docx(app: AppHandle, plan: ExportPlan) -> Result<bool> {
-    save_as(&app, format!("{}.docx", plan.title), "Word", "docx", plan.docx()?)
+    save_as(&app, format!("{}.docx", plan.title), "Word", "docx", plan.docx(false)?)
 }
 
 /// Writes a PDF where the user picks. False if the dialog is cancelled.
@@ -346,10 +356,10 @@ pub fn export_pdf(app: AppHandle, plan: ExportPlan) -> Result<bool> {
     save_as(&app, format!("{}.pdf", plan.title), "PDF", "pdf", bytes)
 }
 
-/// The generated `.docx`, read back for display.
+/// The generated `.docx`, written for the viewer that displays it.
 #[tauri::command(async)]
-pub fn preview_docx(plan: ExportPlan) -> Result<docx_preview::Preview> {
-    docx_preview::render(&plan.docx()?)
+pub fn preview_docx(plan: ExportPlan) -> Result<Vec<u8>> {
+    plan.docx(true)
 }
 
 /// The pages of the PDF as images, so the preview is the document itself.
@@ -357,6 +367,53 @@ pub fn preview_docx(plan: ExportPlan) -> Result<docx_preview::Preview> {
 pub fn preview_pdf(plan: ExportPlan) -> Result<Vec<String>> {
     let pages = plan.with_pdf(|input| ultimatemd_pdf::preview(input, PREVIEW_PIXELS_PER_POINT))?;
     Ok(pages.iter().map(|png| format!("data:image/png;base64,{}", BASE64.encode(png))).collect())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WordConfig {
+    settings: WordSettings,
+    has_template: bool,
+    info: docx::TemplateInfo,
+}
+
+#[tauri::command(async)]
+pub fn word_config(id: String) -> Result<WordConfig> {
+    let root = fs(&id)?;
+    let template = word_settings::template(root.root());
+    Ok(WordConfig {
+        settings: word_settings::load(root.root()),
+        has_template: template.is_some(),
+        info: docx::template_info(template.as_deref())?,
+    })
+}
+
+#[tauri::command(async)]
+pub fn save_word_settings(id: String, settings: WordSettings) -> Result<()> {
+    word_settings::save(fs(&id)?.root(), &settings)
+}
+
+/// Asks for a `.docx` and makes it the vault's template. False if cancelled.
+#[tauri::command(async)]
+pub fn choose_vault_template(app: AppHandle, id: String) -> Result<bool> {
+    let picked = app.dialog().file().add_filter("Word", &["docx"]).blocking_pick_file();
+    let Some(file) = picked else { return Ok(false) };
+    let path = file.into_path().map_err(|e| Error::Vault(e.to_string()))?;
+    word_settings::set_template(fs(&id)?.root(), &path)?;
+    Ok(true)
+}
+
+#[tauri::command(async)]
+pub fn remove_vault_template(id: String) -> Result<()> {
+    word_settings::remove_template(fs(&id)?.root())
+}
+
+/// One example of everything, written by the real exporter.
+#[tauri::command(async)]
+pub fn word_sample(id: String, settings: WordSettings, markdown: String, picture: Vec<u8>) -> Result<Vec<u8>> {
+    settings.validate()?;
+    let template = word_settings::template(fs(&id)?.root());
+    docx::sample(template.as_deref(), &settings, &markdown, &picture)
 }
 
 #[tauri::command(async)]

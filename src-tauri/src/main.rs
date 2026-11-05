@@ -115,6 +115,11 @@ fn main() {
             commands::preview_docx,
             commands::preview_pdf,
             commands::template_styles,
+            commands::word_config,
+            commands::save_word_settings,
+            commands::choose_vault_template,
+            commands::remove_vault_template,
+            commands::word_sample,
             commands::save_template_copy,
         ])
         .build(tauri::generate_context!())

@@ -66,6 +66,7 @@
       items: [
         { label: tr('sidebar.newNote'), run: () => newNote(vault.id, '') },
         { label: tr('sidebar.newFolder'), run: () => newFolder(vault.id, '') },
+        { label: tr('word.openSettings'), run: () => (store.wordScreen = vault.id) },
         { label: tr('sidebar.closeVault'), run: () => store.setVaultOpen(vault.id, false) },
       ],
     };
@@ -125,6 +126,7 @@
             </button>
             <button class="icon small" title={tr('sidebar.newNote')} onclick={() => newNote(vault.id, '')}><Icon name="plus" size={14} /></button>
             <button class="icon small" title={tr('sidebar.newFolder')} onclick={() => newFolder(vault.id, '')}><Icon name="folderPlus" size={14} /></button>
+            <button class="icon small" title={tr('word.openSettings')} onclick={() => (store.wordScreen = vault.id)}><Icon name="word" size={14} /></button>
           </div>
           {#if !collapsed[vault.id]}
             {#each store.trees[vault.id] ?? [] as node (node.path)}
