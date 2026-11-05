@@ -116,9 +116,21 @@
       <h2>Descargar</h2>
       <p>Libre y gratuito, con licencia MIT. Tus notas no salen de tu equipo.</p>
       <div class="platforms">
-        <a href="https://github.com/icabero/UltimateMD/releases/latest"><strong>Windows</strong><span>Instalador .exe o .msi</span></a>
-        <a href="https://github.com/icabero/UltimateMD/releases/latest"><strong>macOS</strong><span>Apple Silicon e Intel, .dmg</span></a>
-        <a href="https://github.com/icabero/UltimateMD/releases/latest"><strong>Linux</strong><span>AppImage, .deb o .rpm</span></a>
+        <div class="platform">
+          <strong>Windows</strong>
+          <a data-asset="x64-setup\.exe$" href="https://github.com/icabero/UltimateMD/releases/latest">Instalador .exe</a>
+        </div>
+        <div class="platform">
+          <strong>macOS</strong>
+          <a data-asset="_aarch64\.dmg$" href="https://github.com/icabero/UltimateMD/releases/latest">Apple Silicon</a>
+          <a data-asset="_x64\.dmg$" href="https://github.com/icabero/UltimateMD/releases/latest">Intel</a>
+        </div>
+        <div class="platform">
+          <strong>Linux</strong>
+          <a data-asset="\.AppImage$" href="https://github.com/icabero/UltimateMD/releases/latest">AppImage</a>
+          <a data-asset="\.deb$" href="https://github.com/icabero/UltimateMD/releases/latest">.deb</a>
+          <a data-asset="\.rpm$" href="https://github.com/icabero/UltimateMD/releases/latest">.rpm</a>
+        </div>
       </div>
       <p class="hint">Los instaladores aún no están firmados, así que Windows y macOS mostrarán un aviso la primera vez. Las instrucciones están en el <a href="https://github.com/icabero/UltimateMD#instalación">README</a>.</p>
     </section>
@@ -130,5 +142,6 @@
     <a href="https://github.com/icabero/UltimateMD/issues">Issues</a>
     <a href="https://github.com/icabero/UltimateMD/releases">Versiones</a>
   </footer>
+  <script src="download.js" defer></script>
 </body>
 </html>

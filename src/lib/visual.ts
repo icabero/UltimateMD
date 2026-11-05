@@ -95,10 +95,10 @@ const CELL_SEPARATOR = /(?<!\\)\|/;
 
 function splitRow(line: string) {
   const inner = line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '');
-  return inner.split(CELL_SEPARATOR).map((cell) => cell.trim().replace(/\\\|/g, '|'));
+  return inner.split(CELL_SEPARATOR).map((cell) => cell.trim().replace(/\\([\\|])/g, '$1'));
 }
 
-const joinRow = (cells: string[]) => `| ${cells.map((cell) => cell.replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|')).join(' | ')} |`;
+const joinRow = (cells: string[]) => `| ${cells.map((cell) => cell.replace(/\s+/g, ' ').trim().replace(/[\\|]/g, '\\$&')).join(' | ')} |`;
 
 function tableRows(text: string) {
   const lines = text.split('\n');
