@@ -13,6 +13,8 @@
 
 ![UltimateMD en modo visual, con una nota formateada, tareas y una tabla](site/img/visual.png)
 
+**[Visita la web de UltimateMD](https://icabero.github.io/UltimateMD/)** para ver qué puede hacer y descargarla.
+
 UltimateMD es un editor libre para Windows, macOS y Linux. Tus notas siguen siendo archivos `.md` en carpetas normales, sin base de datos ni formato propio, así que también puedes abrir un vault de Obsidian tal cual.
 
 ## Qué puedes hacer
@@ -154,7 +156,7 @@ npm run build   # crea los instaladores para tu sistema
 
 ## Contribuir
 
-El código es abierto y puedes usarlo, estudiarlo o adaptarlo con su licencia. El desarrollo es privado por ahora: no se aceptan pull requests sin acuerdo previo. Si encuentras un fallo o tienes una idea, abre una [issue](https://github.com/icabero/UltimateMD/issues).
+El código es abierto y puedes usarlo, estudiarlo o adaptarlo con su licencia. El desarrollo es privado por ahora: no se aceptan pull requests sin acuerdo previo. Si encuentras un fallo o tienes una idea, abre una [issue](https://github.com/icabero/UltimateMD/issues). Para avisar de un problema de seguridad, sigue la [política de seguridad](SECURITY.md).
 
 ## Licencia
 
