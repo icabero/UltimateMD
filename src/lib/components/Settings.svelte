@@ -194,6 +194,7 @@
           </label>
           <span class="spacer"></span>
           {#if vault.open}<button onclick={() => (store.themeEditor = vault.id)}>{tr('settings.themes')}</button>{/if}
+          {#if vault.open}<button onclick={() => { store.settings = false; store.wordScreen = vault.id; }}>{tr('word.open')}</button>{/if}
           <button onclick={() => store.setVaultOpen(vault.id, !vault.open)}>{tr(vault.open ? 'common.close' : 'common.open')}</button>
           <button onclick={() => remove(vault)}>{tr('common.remove')}</button>
         </div>

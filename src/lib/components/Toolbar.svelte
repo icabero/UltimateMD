@@ -16,7 +16,7 @@
   }
 
   const placeholder = () => tr('toolbar.text');
-  const heading = (n: number): Tool => ({ title: 'toolbar.heading', params: { n }, text: `H${n}`, run: (v) => prefixLines(v, `${'#'.repeat(n)} `) });
+  const LEVELS = [1, 2, 3, 4, 5, 6];
 
   const GROUPS: Tool[][] = [
     [
@@ -25,7 +25,6 @@
       { title: 'toolbar.strike', text: 'S', run: (v) => wrap(v, '~~', placeholder()) },
       { title: 'toolbar.inlineCode', icon: 'code', run: (v) => wrap(v, '`', placeholder()) },
     ],
-    [heading(1), heading(2), heading(3)],
     [
       { title: 'toolbar.bullets', icon: 'list', run: (v) => prefixLines(v, '- ') },
       { title: 'toolbar.numbers', icon: 'numbers', run: (v) => prefixLines(v, (i) => `${i + 1}. `) },
@@ -39,6 +38,14 @@
     ],
   ];
 
+  /** The menu is an action, not a state: it goes back to its label each time. */
+  function setHeading(menu: HTMLSelectElement) {
+    const level = Number(menu.value);
+    menu.value = '';
+    const current = view();
+    if (current) prefixLines(current, level ? `${'#'.repeat(level)} ` : '');
+  }
+
   function use(tool: Tool) {
     const current = view();
     if (current) tool.run(current);
@@ -46,6 +53,11 @@
 </script>
 
 <div class="bar" role="toolbar" aria-label={tr('toolbar.label')}>
+  <select class="headings" aria-label={tr('toolbar.headingMenu')} title={tr('toolbar.headingMenu')} value="" onchange={(e) => setHeading(e.currentTarget)}>
+    <option value="" hidden>{tr('toolbar.headingMenu')}</option>
+    <option value="0">{tr('toolbar.paragraph')}</option>
+    {#each LEVELS as n}<option value={String(n)}>{tr('toolbar.heading', { n })}</option>{/each}
+  </select>
   {#each GROUPS as group}
     <div class="group">
       {#each group as tool}
@@ -66,6 +78,7 @@
 <style>
   .bar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 2px 10px; padding: 4px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
   .group { display: flex; gap: 1px; }
+  .headings { flex: none; width: 104px; height: 26px; padding: 0 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text-2); font: inherit; font-size: 12.5px; }
   button { display: flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 5px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 12.5px; }
   button:hover { background: var(--hover); color: var(--text); }
   .t-B { font-weight: 700; }

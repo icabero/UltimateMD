@@ -3,6 +3,9 @@
 //! parts that new content needs, so cover pages, headers, fonts and styles
 //! survive untouched.
 
+mod detect;
+
+use crate::word_settings::WordSettings;
 use crate::{Error, Result};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use regex::{Captures, Regex};
@@ -24,12 +27,15 @@ const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/rela
 /// EMU per twip and per CSS pixel, Word's and the web's units.
 const EMU_PER_TWIP: u64 = 635;
 const EMU_PER_PX: u64 = 9525;
+const EMU_PER_POINT: u64 = 12700;
 /// A4 with 2.5 cm margins, for templates that state no section size.
 const DEFAULT_TEXT_WIDTH: u64 = 9026;
 /// Diagrams are rasterised at twice their size so they print sharply.
 const DIAGRAM_SCALE: u64 = 2;
 const CODE_FONT: &str = "Consolas";
 const MAX_LEVELS: usize = 6;
+/// Word's space around the text of a table cell, in twentieths of a point.
+const CELL_SPACING: &str = r#"<w:spacing w:before="40" w:after="40"/>"#;
 
 macro_rules! re {
     ($name:ident, $pattern:literal) => {
@@ -53,6 +59,7 @@ re!(FOOTNOTE_ID, r#"<w:footnote [^>]*w:id="(-?\d+)""#);
 re!(UPDATE_FIELDS, r"<w:updateFields\b[^>]*/>");
 re!(TOC_INSTR, r"(?s)<w:instrText[^>]*>\s*TOC\b(.*?)</w:instrText>");
 re!(TOC_LEVELS, r#"\\o\s+(?:&quot;|")(\d)-(\d)(?:&quot;|")"#);
+re!(TOC_STYLES, r#"\\t\s+(?:&quot;|")(.*?)(?:&quot;|")"#);
 re!(WIKI_EMBED, r"!\[\[([^\]|#]+)[^\]]*\]\]");
 re!(WIKI_LINK, r"\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]");
 re!(FRONTMATTER, r"(?s)\A---\r?\n(.*?)\r?\n---(?:\r?\n|\z)");
@@ -91,6 +98,10 @@ pub struct Input<'a> {
     /// Loads an image: note path, then the reference written in it.
     pub image: &'a dyn Fn(&str, &str) -> Option<Vec<u8>>,
     pub template: Option<&'a [u8]>,
+    pub settings: &'a WordSettings,
+    /// Writes each heading's numbering on the paragraph, for viewers that do not
+    /// follow it through the style chain. Word does not need it.
+    pub inline_numbering: bool,
 }
 
 fn invalid(what: &str) -> Error {
@@ -254,9 +265,41 @@ struct Writer<'a> {
     note_index: usize,
     shift: usize,
     table: Option<Table>,
+    /// The table style formats its first row, so the header needs no bold of its own.
+    styled_header: bool,
+    /// The template's own styles.
+    detected: detect::Detected,
 }
 
 impl Writer<'_> {
+    /// The style id for a heading level: the template's own, or the standard one.
+    fn heading_style(&self, level: usize) -> Option<String> {
+        let slot = level.wrapping_sub(1);
+        let chosen = self.input.settings.headings.get(slot).cloned().flatten();
+        let own = chosen.or_else(|| self.detected.headings.get(slot).cloned().flatten());
+        own.or_else(|| self.styles.get(&format!("heading {level}")).map(String::from))
+    }
+
+    /// The list a heading is written with, when its style alone would not do.
+    fn heading_numbering(&self, level: usize) -> String {
+        let slot = level - 1;
+        // The viewer of the sample does not follow a list through the styles.
+        let list = if self.detected.headings[slot].is_some() {
+            self.detected.heading_list.as_ref().filter(|_| self.input.inline_numbering)
+        } else if self.input.settings.headings[slot].is_none() {
+            self.detected.loose_levels[slot].as_ref()
+        } else {
+            None
+        };
+        list.map_or(String::new(), |list| format!(r#"<w:numPr><w:ilvl w:val="{slot}"/><w:numId w:val="{list}"/></w:numPr>"#))
+    }
+
+    /// The paragraph properties of the template's body text, if it has its own.
+    fn body_style(&self) -> String {
+        let id = self.input.settings.body.as_ref().or(self.detected.body.as_ref());
+        id.map_or(String::new(), |id| format!(r#"<w:pStyle w:val="{id}"/>"#))
+    }
+
     fn open(&mut self, properties: String) {
         self.flush();
         let properties = if std::mem::take(&mut self.page_break) {
@@ -283,7 +326,7 @@ impl Writer<'_> {
 
     fn body_properties(&mut self) -> String {
         if let Some((num, level)) = self.item_marker.take() {
-            let style = self.styles.paragraph("list paragraph");
+            let style = self.list_style();
             return format!(r#"{style}<w:numPr><w:ilvl w:val="{level}"/><w:numId w:val="{num}"/></w:numPr>"#);
         }
         if self.quote > 0 {
@@ -292,12 +335,17 @@ impl Writer<'_> {
         }
         if !self.lists.is_empty() {
             let indent = 360 * (self.lists.len() + 1);
-            return format!(r#"{}<w:ind w:left="{indent}"/>"#, self.styles.paragraph("list paragraph"));
+            return format!(r#"{}<w:ind w:left="{indent}"/>"#, self.list_style());
         }
         if self.footnote_start {
             return self.styles.paragraph("footnote text");
         }
-        String::new()
+        self.body_style()
+    }
+
+    fn list_style(&self) -> String {
+        let body = self.body_style();
+        if body.is_empty() { self.styles.paragraph("list paragraph") } else { body }
     }
 
     fn push_raw(&mut self, xml: &str) {
@@ -331,6 +379,12 @@ impl Writer<'_> {
         }
         if self.link.is_some() && self.styles.get("hyperlink").is_none() {
             p.push_str(r#"<w:color w:val="0563C1"/><w:u w:val="single"/>"#);
+        }
+        let settings = self.input.settings;
+        let size = if code { settings.code_text_size } else { None };
+        if let Some(size) = size.or(if self.table.is_some() { settings.table_text_size } else { None }) {
+            let half_points = (size * 2.0).round() as u32;
+            p.push_str(&format!(r#"<w:sz w:val="{half_points}"/><w:szCs w:val="{half_points}"/>"#));
         }
         if p.is_empty() { p } else { format!("<w:rPr>{p}</w:rPr>") }
     }
@@ -375,9 +429,10 @@ impl Writer<'_> {
 
         let mut cx = size.width as u64 * EMU_PER_PX / scale;
         let mut cy = size.height as u64 * EMU_PER_PX / scale;
-        if cx > self.text_width_emu {
-            cy = cy * self.text_width_emu / cx;
-            cx = self.text_width_emu;
+        let limit = self.input.settings.image_max_width.map_or(self.text_width_emu, |pt| (u64::from(pt) * EMU_PER_POINT).min(self.text_width_emu));
+        if cx > limit {
+            cy = cy * limit / cx;
+            cx = limit;
         }
         self.drawing_id += 1;
         let id = self.drawing_id;
@@ -414,7 +469,9 @@ impl Writer<'_> {
             self.flush();
             return;
         }
-        self.open(r#"<w:shd w:val="clear" w:color="auto" w:fill="F3F1EA"/>"#.to_string());
+        let background = if self.input.settings.plain_code { "" } else { r#"<w:shd w:val="clear" w:color="auto" w:fill="F3F1EA"/>"# };
+        let body = self.body_style();
+        self.open(format!("{body}{background}"));
         for (i, line) in code.trim_end_matches('\n').split('\n').enumerate() {
             if i > 0 {
                 self.push_raw("<w:r><w:br/></w:r>");
@@ -429,12 +486,13 @@ impl Writer<'_> {
         self.flush();
         self.page_break = page_break;
         let level = level.clamp(1, MAX_LEVELS);
-        let standard = self.styles.get(&format!("heading {level}")).map(String::from);
-        let id = style.map(String::from).or(standard);
+        let chosen = style.is_some();
+        let id = style.map(String::from).or_else(|| self.heading_style(level));
         let is_heading = id.as_deref().is_some_and(|id| self.styles.0.iter().any(|(name, v)| v == id && name.starts_with("heading ")));
         let outline = if is_heading { String::new() } else { format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1) };
+        let numbering = if chosen { String::new() } else { self.heading_numbering(level) };
         let style = id.as_ref().map_or(String::new(), |id| format!(r#"<w:pStyle w:val="{id}"/>"#));
-        self.open(format!("{style}{outline}"));
+        self.open(format!("{style}{numbering}{outline}"));
         self.format.bold = id.is_none();
         self.heading = Some(Heading { level, text: String::new() });
         self.push_text(text, false);
@@ -482,15 +540,17 @@ impl Writer<'_> {
     fn end_table(&mut self) {
         let Some(table) = self.table.take() else { return };
         self.out = table.body;
-        let width = self.text_width_emu / EMU_PER_TWIP;
-        let cell = width / table.columns.max(1) as u64;
+        let cell = self.text_width_emu / EMU_PER_TWIP / table.columns.max(1) as u64;
         let grid = format!(r#"<w:gridCol w:w="{cell}"/>"#).repeat(table.columns);
         const BORDERS: &str = r#"<w:tblBorders><w:top w:val="single" w:sz="4" w:color="auto"/><w:left w:val="single" w:sz="4" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:color="auto"/><w:right w:val="single" w:sz="4" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:color="auto"/></w:tblBorders>"#;
-        // Schema order: the style goes before the width, borders after it.
-        let table_width = format!(r#"<w:tblW w:w="{width}" w:type="dxa"/>"#);
+        // Full width, with Word fitting each column to its content. The look is
+        // what lets a table style format the first row.
+        const FULL_WIDTH: &str = r#"<w:tblW w:w="5000" w:type="pct"/>"#;
+        const LOOK: &str = r#"<w:tblLook w:val="0020" w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="0"/>"#;
+        // Schema order: style, width, borders, look.
         let properties = match self.styles.get("table grid") {
-            Some(id) => format!(r#"<w:tblStyle w:val="{id}"/>{table_width}"#),
-            None => format!("{table_width}{BORDERS}"),
+            Some(id) => format!(r#"<w:tblStyle w:val="{id}"/>{FULL_WIDTH}{LOOK}"#),
+            None => format!("{FULL_WIDTH}{BORDERS}{LOOK}"),
         };
         self.out.push_str(&format!("<w:tbl><w:tblPr>{properties}</w:tblPr><w:tblGrid>{grid}</w:tblGrid>{}</w:tbl>", table.rows));
         // Word needs a paragraph after a table that ends the body or a cell.
@@ -500,14 +560,15 @@ impl Writer<'_> {
 
     fn end_cell(&mut self) {
         if self.para.is_none() {
-            self.open(String::new());
+            let body = self.body_style();
+            self.open(body);
         }
         self.flush();
         let cell = std::mem::take(&mut self.out);
-        let width = self.text_width_emu / EMU_PER_TWIP;
+        let fill = self.input.settings.header_fill.as_ref().or(self.detected.header_fill.as_ref());
         let Some(table) = &mut self.table else { return };
-        let width = width / table.columns.max(1) as u64;
-        table.row.push_str(&format!(r#"<w:tc><w:tcPr><w:tcW w:w="{width}" w:type="dxa"/></w:tcPr>{cell}</w:tc>"#));
+        let shade = fill.filter(|_| table.head).map_or(String::new(), |fill| format!(r#"<w:shd w:val="clear" w:color="auto" w:fill="{fill}"/>"#));
+        table.row.push_str(&format!(r#"<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/>{shade}</w:tcPr>{cell}</w:tc>"#));
     }
 
     fn end_row(&mut self) {
@@ -565,12 +626,12 @@ impl Writer<'_> {
             }
             Tag::Heading { level, .. } => {
                 let level = (heading_number(level) + self.shift).min(MAX_LEVELS);
-                let name = format!("heading {level}");
-                let style = self.styles.paragraph(&name);
+                let style = self.heading_style(level);
                 // Without the style, the outline level keeps it in the contents.
-                let properties = if style.is_empty() { format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1) } else { style };
+                let numbering = self.heading_numbering(level);
+                let properties = style.as_ref().map_or(format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1), |id| format!(r#"<w:pStyle w:val="{id}"/>{numbering}"#));
                 self.open(properties);
-                self.format.bold = self.styles.get(&name).is_none();
+                self.format.bold = style.is_none();
                 self.heading = Some(Heading { level, text: String::new() });
             }
             Tag::BlockQuote(_) => {
@@ -591,9 +652,12 @@ impl Writer<'_> {
                 if let Some(t) = &mut self.table {
                     t.head = true;
                 }
-                self.format.bold = true;
+                self.format.bold = !self.styled_header;
             }
-            Tag::TableCell => self.open(String::new()),
+            Tag::TableCell => {
+                let body = self.body_style();
+                self.open(if body.is_empty() { body } else { format!("{body}{CELL_SPACING}") });
+            }
             Tag::Emphasis => self.format.italic = true,
             Tag::Strong => self.format.bold = true,
             Tag::Strikethrough => self.format.strike = true,
@@ -787,15 +851,36 @@ fn insert_body(document: &str, body: &str, styles_xml: &str) -> String {
     format!("{}{body}{}", &document[..end], &document[end..])
 }
 
+/// The heading levels a TOC field lists: the range of `\o`, plus those that `\t`
+/// names as pairs of style and level, as in `\t "Título 1;1;Mi-titulo;2"`.
+fn toc_levels(instruction: &str) -> Vec<usize> {
+    let mut levels: Vec<usize> = TOC_LEVELS.captures(instruction).map_or(Vec::new(), |c| {
+        (c[1].parse().unwrap_or(1)..=c[2].parse().unwrap_or(3)).collect()
+    });
+    if let Some(styles) = TOC_STYLES.captures(instruction) {
+        let pairs: Vec<&str> = styles[1].split([';', ',']).collect();
+        levels.extend(pairs.chunks_exact(2).filter_map(|pair| pair[1].trim().parse::<usize>().ok()));
+    }
+    if levels.is_empty() { (1..=3).collect() } else { levels }
+}
+
+/// Whether a table style has its own format for the first row.
+fn formats_first_row(styles_xml: &str, id: &str) -> bool {
+    let start = format!(r#"w:styleId="{id}""#);
+    styles_xml.find(&start).is_some_and(|at| {
+        let style = &styles_xml[at..];
+        let end = style.find("</w:style>").unwrap_or(style.len());
+        style[..end].contains(r#"w:type="firstRow""#)
+    })
+}
+
 /// Refills the entries of a TOC field with the note's headings, so the contents
 /// are right even before Word recalculates the page numbers. The field itself
 /// stays real. Returns None when the template has no contents.
 fn rebuild_toc(document: &str, headings: &[Heading], styles: &Styles) -> Option<String> {
     let instr = TOC_INSTR.captures(document)?;
     let position = instr.get(0)?.end();
-    let (min, max) = TOC_LEVELS
-        .captures(&instr[1])
-        .map_or((1, 3), |c| (c[1].parse().unwrap_or(1), c[2].parse().unwrap_or(3)));
+    let levels = toc_levels(&instr[1]);
 
     let separate = position + document[position..].find(r#"w:fldCharType="separate""#)?;
     let result_start = separate + document[separate..].find("</w:r>")? + "</w:r>".len();
@@ -823,7 +908,7 @@ fn rebuild_toc(document: &str, headings: &[Heading], styles: &Styles) -> Option<
     };
     let result_end = document[..end].rfind("<w:r>").max(document[..end].rfind("<w:r "))?;
 
-    let entries: Vec<&Heading> = headings.iter().filter(|h| (min..=max).contains(&h.level)).collect();
+    let entries: Vec<&Heading> = headings.iter().filter(|h| levels.contains(&h.level)).collect();
     let mut generated = String::new();
     for (i, heading) in entries.iter().enumerate() {
         if i > 0 {
@@ -989,6 +1074,8 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
         note_index: 0,
         shift: 0,
         table: None,
+        styled_header: styles.get("table grid").is_some_and(|id| formats_first_row(&styles_xml, id)),
+        detected: detect::detect(&styles_xml, &text_of(&parts, NUMBERING).unwrap_or_default(), &text_of(&parts, DOCUMENT).unwrap_or_default()),
     };
     let mut saved = Vec::new();
     let mut values: HashMap<String, String> = HashMap::new();
@@ -1077,6 +1164,30 @@ pub fn paragraph_styles(template: Option<&[u8]>) -> Result<Vec<StyleInfo>> {
         .collect();
     styles.sort_by_key(|s| s.name.to_lowercase());
     Ok(styles)
+}
+
+/// What a template offers a vault: what could be detected, and its styles to pick from.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplateInfo {
+    pub headings: Vec<Option<String>>,
+    pub body: Option<String>,
+    pub header_fill: Option<String>,
+    pub styles: Vec<StyleInfo>,
+}
+
+pub fn template_info(template: Option<&[u8]>) -> Result<TemplateInfo> {
+    let parts = template.map_or_else(|| Ok(blank_package()), read_package)?;
+    let part = |name| text_of(&parts, name).unwrap_or_default();
+    let found = detect::detect(&part(STYLES), &part(NUMBERING), &part(DOCUMENT));
+    Ok(TemplateInfo { headings: found.headings.to_vec(), body: found.body, header_fill: found.header_fill, styles: paragraph_styles(template)? })
+}
+
+/// A short document with one example of everything, written like a real export.
+pub fn sample(template: Option<&[u8]>, settings: &WordSettings, markdown: &str, picture: &[u8]) -> Result<Vec<u8>> {
+    let sections = [Section::Note { path: "muestra.md".into(), markdown: markdown.to_string(), shift: 0, page_break: false }];
+    let image = |_: &str, _: &str| Some(picture.to_vec());
+    render(&Input { sections: &sections, title: "", fixed_title: false, date: "", contents: "", diagrams: &[], image: &image, template, settings, inline_numbering: true })
 }
 
 /// A complete template to try exports with: cover, contents, header, numbered

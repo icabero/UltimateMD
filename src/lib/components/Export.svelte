@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import DocxSheet from './DocxSheet.svelte';
   import Icon from './Icon.svelte';
-  import PagedPreview from './PagedPreview.svelte';
-  import { api, type DocxPreview, type TemplateStyle } from '../api';
+  import { api, type TemplateStyle } from '../api';
   import { buildContent, buildPlan, documentCss, exportHtml, foldersOf, levelCount, levelExamples, type ExportOptions, type LevelChoice, type Scope } from '../export';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
@@ -16,6 +16,8 @@
   ];
   const HEADINGS = [1, 2, 3, 4, 5, 6];
   const EXAMPLE = 'Ejemplo';
+  /** The backend reads this one from the vault. */
+  const VAULT_TEMPLATE = ':vault';
   const PREVIEW_DELAY = 400;
 
   let { tab }: { tab: Tab } = $props();
@@ -28,11 +30,12 @@
   let cover = $state(false);
   let templates = $state<string[]>([]);
   let template = $state(EXAMPLE);
+  let vaultTemplate = $state(false);
   let styles = $state<TemplateStyle[]>([]);
   let busy = $state(false);
 
   let pages = $state<string[]>([]);
-  let docx = $state<DocxPreview | null>(null);
+  let docx = $state<DocxSheet>();
   let htmlHost = $state<HTMLDivElement>();
   let previewing = $state(false);
   let previewError = $state('');
@@ -47,10 +50,15 @@
 
   async function loadTemplates() {
     templates = await api.listTemplates().catch(() => []);
-    if (template && !templates.includes(template)) template = EXAMPLE;
+    if (template !== VAULT_TEMPLATE && template && !templates.includes(template)) template = EXAMPLE;
   }
 
-  onMount(loadTemplates);
+  onMount(async () => {
+    await loadTemplates();
+    if (tab.loose) return;
+    vaultTemplate = await api.wordConfig(tab.vaultId).then((c) => c.hasTemplate).catch(() => false);
+    if (vaultTemplate) template = VAULT_TEMPLATE;
+  });
 
   // One row per depth of folders; a new row titles folders at that depth.
   $effect(() => {
@@ -87,8 +95,8 @@
         style.textContent = documentCss();
         shadow.replaceChildren(style, article);
       } else if (format === 'docx') {
-        const preview = await api.previewDocx(await buildPlan(tab, $state.snapshot(options) as ExportOptions));
-        if (id === run) docx = preview;
+        const bytes = await api.previewDocx(await buildPlan(tab, $state.snapshot(options) as ExportOptions));
+        if (id === run) await docx?.show(bytes);
       } else {
         const rendered = await api.previewPdf(await buildPlan(tab, $state.snapshot(options) as ExportOptions));
         if (id === run) pages = rendered;
@@ -210,13 +218,15 @@
     {:else if format === 'docx'}
       <h3>{tr('export.template')}</h3>
       <select class="wide" aria-label={tr('export.template')} bind:value={template}>
+        {#if vaultTemplate}<option value={VAULT_TEMPLATE}>{tr('export.vaultTemplate')}</option>{/if}
         <option value="">{tr('export.noTemplate')}</option>
         {#each templates as name}<option value={name}>{name === EXAMPLE ? tr('export.exampleTemplate') : name}</option>{/each}
       </select>
       <div class="buttons">
         <button class="plain" onclick={importTemplate}>{tr('export.import')}</button>
-        {#if template}<button class="plain" onclick={() => runAction(() => api.saveTemplateCopy(template))}>{tr('export.saveCopy')}</button>{/if}
-        {#if template && template !== EXAMPLE}
+        {#if template && template !== VAULT_TEMPLATE}<button class="plain" onclick={() => runAction(() => api.saveTemplateCopy(template))}>{tr('export.saveCopy')}</button>{/if}
+        {#if !tab.loose}<button class="plain" onclick={() => { store.exporting = false; store.wordScreen = tab.vaultId; }}>{tr('word.openSettings')}</button>{/if}
+        {#if template && template !== EXAMPLE && template !== VAULT_TEMPLATE}
           <button class="plain" onclick={renameTemplate}>{tr('common.rename')}</button>
           <button class="plain" onclick={deleteTemplate}>{tr('common.delete')}</button>
         {/if}
@@ -237,8 +247,8 @@
         <img class="page" src={page} alt={tr('export.page', { n: i + 1 })} />
       {/each}
     {:else if format === 'docx'}
-      {#if docx}<PagedPreview preview={docx} />{/if}
       <p class="note">{tr('export.wordNote')}</p>
+      <DocxSheet bind:this={docx} />
     {:else}
       <div class="html" bind:this={htmlHost}></div>
     {/if}
@@ -274,6 +284,6 @@
   .preview[aria-busy='true'] { opacity: .6; }
   .page { display: block; width: 100%; margin-bottom: 12px; box-shadow: 0 1px 4px rgb(0 0 0 / 30%); }
   .html { background: #fff; }
-  .note { text-align: center; }
+  .note { margin: 0 0 12px; text-align: center; }
   .error { color: var(--danger); }
 </style>

@@ -329,7 +329,7 @@ test('a folder can be exported on its own', async ({ page }) => {
   expect(plan.sections[1]).toMatchObject({ path: 'dir/Destino.md', shift: 1 });
 });
 
-test('word offers the example template, its styles and a paged preview', async ({ page }) => {
+test('word offers the example template, its styles and a preview of the file', async ({ page }) => {
   await open(page, 'Inicio');
   await exportAs(page, 'Word');
   await expect(page.getByLabel('Plantilla')).toHaveValue('Ejemplo');
@@ -337,10 +337,7 @@ test('word offers the example template, its styles and a paged preview', async (
   await scope(page, 'Vault');
   await expect(page.getByLabel('Nivel 1', { exact: true }).locator('option', { hasText: 'Destacado' })).toHaveCount(1);
   await page.getByLabel('Nivel 1', { exact: true }).selectOption('style:Destacado');
-  await expect(page.locator('.paged .page')).toHaveCount(2);
-  await expect(page.locator('.paged .page').nth(1)).toContainText('Bloque dos');
-  await expect(page.locator('.paged .page').nth(1)).toContainText('Cabecera');
-  await expect(page.locator('.paged .page').nth(1)).toContainText('2');
+  await expect(page.locator('.sheet section')).toContainText('Documento de prueba');
   await page.getByRole('button', { name: 'Exportar', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Exportado');
   const plan = await page.evaluate(() => (window as any).__docx);
@@ -526,11 +523,28 @@ test('the toolbar formats the selection and undoes it', async ({ page }) => {
   await expect(editorText(page)).toContainText('**hola**');
   await page.getByRole('button', { name: 'Negrita' }).click();
   await expect(editorText(page)).not.toContainText('**hola**');
-  await page.getByRole('button', { name: 'Título 2' }).click();
+  await page.getByRole('toolbar').getByLabel('Título').selectOption('2');
   await expect(editorText(page)).toContainText('## hola');
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
   await expect(editorText(page)).toContainText('- hola');
   await expect(editorText(page)).not.toContainText('## hola');
+});
+
+test('the heading menu offers six levels and can remove a heading', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\nhola');
+  const menu = page.getByRole('toolbar').getByLabel('Título');
+  await expect(menu.locator('option')).toHaveCount(8);
+  await menu.selectOption('6');
+  await expect(editorText(page)).toContainText('###### hola');
+  await expect(menu).toHaveValue('');
+  await menu.selectOption('1');
+  await expect(editorText(page)).toContainText('# hola');
+  await expect(editorText(page)).not.toContainText('## hola');
+  await menu.selectOption('0');
+  await expect(page.locator('.cm-line').last()).toHaveText('hola');
+  await page.keyboard.type('!');
+  await expect(editorText(page)).toContainText('hola!');
 });
 
 test('keyboard shortcuts format too', async ({ page }) => {
@@ -1091,4 +1105,58 @@ test('the pastel pink theme can be chosen for the whole app', async ({ page }) =
   await page.getByLabel('Seguir al sistema').check();
   await page.getByLabel('Modo claro').selectOption('rosa');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'rosa');
+});
+
+const wordScreen = async (page: Page) => {
+  await openSettings(page);
+  await settingsSection(page, 'Vaults');
+  await page.getByRole('button', { name: 'Word', exact: true }).first().click();
+  return page.getByRole('dialog', { name: 'Word en Trabajo' });
+};
+
+test('the Word screen shows what the template suggests and saves changes', async ({ page }) => {
+  const screen = await wordScreen(page);
+  await expect(screen.getByLabel('Título 1')).toHaveValue('');
+  await expect(screen.getByLabel('Título 1').locator('option').first()).toHaveText('Automático: Propio 1');
+  await expect(screen.getByLabel('Título 3').locator('option').first()).toHaveText('Estándar');
+  await screen.getByLabel('Título 3').selectOption('Propio2');
+  await screen.getByLabel('Ancho máximo (pt)').fill('420');
+  await screen.getByLabel('Sin fondo').check();
+  await expect.poll(() => page.evaluate(() => (window as any).__word)).toMatchObject({ imageMaxWidth: 420, plainCode: true, headings: [null, null, 'Propio2', null, null, null] });
+  await expect.poll(() => page.evaluate(() => (window as any).__wordSample)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => (window as any).__wordMarkdown)).toContain('###### Nivel 6');
+});
+
+test('the Word screen opens from the vault in the sidebar', async ({ page }) => {
+  const vault = page.getByRole('region', { name: 'Trabajo' });
+  await vault.hover();
+  await vault.getByTitle('Ajustes de Word de este vault').click();
+  await expect(page.getByRole('dialog', { name: 'Word en Trabajo' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.locator('aside').getByRole('button', { name: 'Trabajo' }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Ajustes de Word de este vault' }).click();
+  await expect(page.getByRole('dialog', { name: 'Word en Trabajo' })).toBeVisible();
+});
+
+test('the Word screen warns about levels the template does not number', async ({ page }) => {
+  const screen = await wordScreen(page);
+  await expect(screen.getByRole('status')).toHaveCount(0);
+  await screen.getByRole('button', { name: 'Elegir plantilla' }).click();
+  await expect(screen.getByRole('status')).toContainText('3, 4, 5, 6');
+  await expect(screen.getByRole('button', { name: 'Cambiar plantilla' })).toBeVisible();
+});
+
+test('the header colour can be set and given back to the template', async ({ page }) => {
+  const screen = await wordScreen(page);
+  await screen.getByLabel('Color de cabecera').fill('#112233');
+  await expect.poll(() => page.evaluate(() => (window as any).__word.headerFill)).toBe('112233');
+  await screen.getByRole('button', { name: 'El de la plantilla' }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__word.headerFill)).toBeNull();
+});
+
+test('a vault with its own template offers it first when exporting', async ({ page }) => {
+  await page.evaluate(() => ((window as any).__wordTemplate = true));
+  await open(page, 'Inicio');
+  await exportAs(page, 'Word');
+  await expect(page.getByLabel('Plantilla')).toHaveValue(':vault');
 });
