@@ -810,6 +810,20 @@ test('a cell saves as you type and keeps your place', async ({ page }) => {
   await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| 1 dos tres | 2 |');
 });
 
+test('a cell keeps pipes and backslashes intact', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\nfin');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('fin');
+  await page.getByTitle('Visual', { exact: true }).click();
+  const cell = page.locator('.cm-v-table td input').first();
+  await cell.fill(String.raw`a|b\c`);
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain(String.raw`| a\|b\\c | 2 |`);
+  await page.getByTitle('Dividido', { exact: true }).click();
+  await page.getByTitle('Visual', { exact: true }).click();
+  await expect(page.locator('.cm-v-table td input').first()).toHaveValue(String.raw`a|b\c`);
+  await expect(page.locator('.cm-v-table td input').nth(1)).toHaveValue('2');
+});
+
 test('text typed below a block at the end of a note stays out of it', async ({ page }) => {
   await open(page, 'Inicio');
   await typeInEditor(page, '\n\n| A | B |\n| --- | --- |\n| 1 | 2 |');
