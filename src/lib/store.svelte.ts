@@ -1,7 +1,7 @@
 import { listen } from '@tauri-apps/api/event';
-import { api, type TreeNode, type Vault } from './api';
+import { api, type TreeNode, type Vault, type VaultThemes } from './api';
 import { baseName, dirName, join, kindOf, type FileKind } from './paths';
-import { THEMES, applyTheme, themeById, type Theme } from './themes';
+import { THEMES, applyTheme, frontmatterValue, resolveTheme, themeById, type Theme } from './themes';
 
 export type ViewMode = 'edit' | 'split' | 'preview';
 
@@ -78,6 +78,8 @@ class Store {
   searching = $state(false);
   exporting = $state(false);
   dialog = $state<Dialog | null>(null);
+  vaultThemes = $state<Record<string, VaultThemes>>({});
+  themeEditor = $state<string | null>(null);
 
   #timers = new Map<string, ReturnType<typeof setTimeout>>();
   #toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -86,6 +88,36 @@ class Store {
     const { fixed, light, dark } = this.themeChoice;
     const id = fixed ?? (this.systemDark ? dark : light);
     return themeById(id) ?? THEMES[0];
+  }
+
+  /** Finds a theme by id: this vault's own first, then the built-in ones. */
+  lookUpTheme(vaultId: string, id: string | null | undefined) {
+    if (!id) return null;
+    const file = this.vaultThemes[vaultId]?.themes.find((t) => t.id === id);
+    return file ? resolveTheme(file) : (themeById(id) ?? null);
+  }
+
+  /** The theme of a note's content: note, then vault, then application. */
+  noteTheme(tab: Tab) {
+    return (
+      this.lookUpTheme(tab.vaultId, frontmatterValue(tab.content, 'tema')) ??
+      this.lookUpTheme(tab.vaultId, this.vaultThemes[tab.vaultId]?.defaultTheme) ??
+      this.theme
+    );
+  }
+
+  /** Diagrams can differ from their note. `boceto` keeps the note's colours, hand-drawn. */
+  diagramLook(tab: Tab) {
+    const value = frontmatterValue(tab.content, 'tema-diagramas');
+    const sketch = value === 'boceto';
+    return { theme: (!sketch && this.lookUpTheme(tab.vaultId, value)) || this.noteTheme(tab), sketch };
+  }
+
+  async loadVaultThemes(id: string) {
+    const loaded = await api.vaultThemes(id).catch(() => null);
+    if (!loaded) return;
+    this.vaultThemes[id] = loaded;
+    if (loaded.invalid.length) this.notify(`Temas no válidos, ignorados: ${loaded.invalid.join(', ')}`);
   }
 
   setThemeChoice(change: Partial<ThemeChoice>) {
@@ -147,6 +179,7 @@ class Store {
   async init() {
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => (this.systemDark = e.matches));
     await listen<{ vaultId: string; paths: string[] }>('vault-changed', (e) => this.onChanged(e.payload));
+    await listen<string>('themes-changed', (e) => this.loadVaultThemes(e.payload));
     await listen<string[]>('open-files', (e) => this.openPaths(e.payload));
     await this.loadVaults();
     await this.restore();
@@ -155,7 +188,7 @@ class Store {
 
   async loadVaults() {
     this.vaults = await api.listVaults();
-    await Promise.all(this.openVaults.map((v) => this.refreshTree(v.id)));
+    await Promise.all(this.openVaults.flatMap((v) => [this.refreshTree(v.id), this.loadVaultThemes(v.id)]));
   }
 
   async refreshTree(id: string) {

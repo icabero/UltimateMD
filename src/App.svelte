@@ -7,6 +7,7 @@
   import Preview from './lib/components/Preview.svelte';
   import Settings from './lib/components/Settings.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
+  import ThemeEditor from './lib/components/ThemeEditor.svelte';
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
   import { dirName } from './lib/paths';
@@ -56,6 +57,7 @@
     const key = e.key.toLowerCase();
     if (key === 'escape') {
       store.palette = store.settings = store.exporting = false;
+      store.themeEditor = null;
       return;
     }
     if (!(e.ctrlKey || e.metaKey)) return;
@@ -146,6 +148,7 @@
 
 {#if store.palette}<Palette />{/if}
 {#if store.settings}<Settings />{/if}
+{#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
 {#if store.exporting && tab}<Export {tab} />{/if}
 {#if store.dialog}
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}

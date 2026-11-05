@@ -7,11 +7,11 @@
 
 const engine = import('@terrastruct/d2').then(({ D2 }) => new D2());
 
-async function render({ id, src }: { id: number; src: string }) {
+async function render({ id, src, sketch }: { id: number; src: string; sketch: boolean }) {
   try {
     const d2 = await engine;
     const { diagram, renderOptions } = await d2.compile(src, { options: { layout: 'elk' } });
-    const svg = await d2.render(diagram, { ...renderOptions, pad: 12, scale: 1, noXMLTag: true, salt: `s${id}`, center: true });
+    const svg = await d2.render(diagram, { ...renderOptions, sketch: sketch || renderOptions.sketch, pad: 12, scale: 1, noXMLTag: true, salt: `s${id}`, center: true });
     self.postMessage({ id, svg });
   } catch (e) {
     self.postMessage({ id, error: e instanceof Error ? e.message : String(e) });

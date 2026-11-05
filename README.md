@@ -37,6 +37,25 @@ app -> disco: lee y escribe
 ```
 ````
 
+## Temas
+
+La aplicación tiene siete temas. Además, cada vault puede tener los suyos, que se guardan en `.ultimatemd/temas/` y viajan con él. Se crean desde **Ajustes → Temas** en cada vault, partiendo de un tema base.
+
+El aspecto de una nota se decide por capas, y gana la más específica: nota, vault y aplicación. La interfaz sigue siempre el tema de la aplicación.
+
+```yaml
+---
+tema: corporativo
+tema-diagramas: boceto
+---
+```
+
+- `tema` elige el tema de la nota, propio del vault o incluido.
+- `tema-diagramas` elige otro tema solo para sus diagramas, o `boceto` para un aspecto dibujado a mano.
+- Un diagrama también puede llevar su propia configuración, como `%%{init}%%` en Mermaid o `vars` en D2.
+
+Los temas son datos validados, sin CSS, de modo que un vault ajeno no puede cargar recursos externos ni alterar la interfaz.
+
 ## Exportar
 
 Usa `Ctrl+E` para exportar la nota a PDF, HTML o Word. Lo exportado tiene siempre un aspecto claro de documento, sea cual sea el tema activo.

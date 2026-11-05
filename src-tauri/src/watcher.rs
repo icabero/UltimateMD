@@ -23,6 +23,11 @@ struct VaultChanged {
     paths: Vec<String>,
 }
 
+/// Theme files live in a hidden folder, yet their changes must still show.
+fn touches_themes(root: &Path, path: &Path) -> bool {
+    path.strip_prefix(root).is_ok_and(|rel| rel.starts_with(ultimatemd_core::vault_themes::FOLDER))
+}
+
 fn is_hidden(root: &Path, path: &Path) -> bool {
     path.strip_prefix(root)
         .is_ok_and(|rel| rel.components().any(|c| c.as_os_str().to_string_lossy().starts_with('.')))
@@ -48,6 +53,9 @@ fn watch_path(app: &AppHandle, id: &str, path: &Path, mode: RecursiveMode, only:
     let key = id.clone();
     let debouncer = new_debouncer(DEBOUNCE, None, move |result: DebounceEventResult| {
         let Ok(events) = result else { return };
+        if events.iter().flat_map(|e| e.paths.iter()).any(|p| touches_themes(&root, p)) {
+            let _ = emitter.emit("themes-changed", id.clone());
+        }
         let mut paths: Vec<String> = events
             .iter()
             .flat_map(|e| e.paths.iter())

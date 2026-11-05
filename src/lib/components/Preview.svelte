@@ -6,6 +6,7 @@
   import { renderMarkdown } from '../markdown';
   import { dirName } from '../paths';
   import { store, type Tab } from '../store.svelte';
+  import { themeKey, themeVariables } from '../themes';
   import previewCss from '../preview.css?inline';
 
   let { tab }: { tab: Tab } = $props();
@@ -18,6 +19,7 @@
   let body: HTMLElement;
   let timer: ReturnType<typeof setTimeout>;
   let run = 0;
+  let drawnWith = '';
 
   export function scrollTo(ratio: number) {
     if (scroller) scroller.scrollTop = ratio * (scroller.scrollHeight - scroller.clientHeight);
@@ -42,12 +44,12 @@
   }
 
   async function hydrate(id: number) {
-    const theme = store.theme;
+    const { theme, sketch } = store.diagramLook(tab);
     const blocks = [...body.querySelectorAll<HTMLElement>('.diagram')];
     await Promise.all(blocks.map(async (el, index) => {
       const src = decodeURIComponent(el.dataset.src ?? '');
       try {
-        const svg = await renderDiagram(el.dataset.lang!, src, theme);
+        const svg = await renderDiagram(el.dataset.lang!, src, theme, sketch);
         if (id !== run) return;
         el.innerHTML = svg;
         const node = el.querySelector('svg');
@@ -75,9 +77,11 @@
       files: store.files(tab.vaultId),
     });
     // Diagrams already drawn stay on screen until their source really changes.
-    const kept = body.dataset.theme === store.theme.id ? [...body.querySelectorAll<HTMLElement>('.diagram')] : [];
+    const look = store.diagramLook(tab);
+    const lookKey = `${look.sketch}:${themeKey(look.theme)}`;
+    const kept = drawnWith === lookKey ? [...body.querySelectorAll<HTMLElement>('.diagram')] : [];
     const old = new Map(kept.map((e) => [`${e.dataset.lang}:${e.dataset.src}`, e]));
-    body.dataset.theme = store.theme.id;
+    drawnWith = lookKey;
     for (const el of fragment.querySelectorAll<HTMLElement>('.diagram')) {
       const previous = old.get(`${el.dataset.lang}:${el.dataset.src}`);
       if (previous) el.innerHTML = previous.innerHTML;
@@ -118,18 +122,22 @@
   $effect(() => {
     if (tab.kind !== 'md' || !body) return;
     tab.content;
-    store.theme;
+    store.diagramLook(tab);
     store.trees[tab.vaultId];
     clearTimeout(timer);
     timer = setTimeout(render, DELAY);
   });
+
+  // A note's own theme is scoped here, so it never reaches the app around it.
+  const content = $derived(store.noteTheme(tab));
+  const scoped = $derived(content === store.theme ? '' : Object.entries(themeVariables(content)).map(([k, v]) => `${k}:${v}`).join(';'));
 
   const htmlSrc = $derived(`${fileUrl(tab.vaultId, tab.path)}?v=${tab.version ?? tab.revision}`);
   const scripts = $derived(store.vault(tab.vaultId)?.allowScripts ?? false);
 </script>
 
 {#if tab.kind === 'md'}
-  <div class="scroll" bind:this={scroller}><div bind:this={host}></div></div>
+  <div class="scroll" style={scoped} data-note-theme={content.id} bind:this={scroller}><div bind:this={host}></div></div>
 {:else if tab.kind === 'html'}
   <div class="frame">
     {#key `${htmlSrc}:${scripts}`}

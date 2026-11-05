@@ -109,7 +109,7 @@ test('the quick switcher finds notes in every vault', async ({ page }) => {
 test('global search covers every vault', async ({ page }) => {
   await page.keyboard.press('Control+Shift+f');
   await page.getByPlaceholder('Buscar en los vaults abiertos').fill('#');
-  await expect(page.locator('.results button')).toHaveCount(3);
+  await expect(page.locator('.results button')).toHaveCount(5);
 });
 
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
@@ -262,4 +262,76 @@ test('export to PDF prints only the note', async ({ page }) => {
   await page.emulateMedia({ media: 'print' });
   await expect(page.locator('#app')).toBeHidden();
   await expect(page.locator('#print-root')).toBeVisible();
+});
+
+const noteBackground = (page: Page) => page.locator('.scroll').evaluate((el) => getComputedStyle(el).backgroundColor);
+
+test('the vault theme applies to its notes but not to the interface', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await open(page, 'Otra');
+  await expect(page.locator('.scroll')).toHaveAttribute('data-note-theme', 'mar');
+  expect(await noteBackground(page)).toBe('rgb(224, 240, 255)');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'oscuro');
+  await expect(page.locator('aside')).toHaveCSS('background-color', 'rgb(30, 29, 26)');
+});
+
+test('a note theme beats the vault theme', async ({ page }) => {
+  await open(page, 'Propia');
+  await expect(page.locator('.scroll')).toHaveAttribute('data-note-theme', 'sepia');
+});
+
+test('an unknown note theme falls back to the vault theme', async ({ page }) => {
+  await open(page, 'Rara');
+  await expect(page.locator('.scroll')).toHaveAttribute('data-note-theme', 'mar');
+});
+
+test('notes without any theme follow the application', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await open(page, 'Inicio');
+  await expect(page.locator('.scroll')).toHaveAttribute('data-note-theme', 'claro');
+});
+
+test('diagrams can use their own theme and are redrawn when it changes', async ({ page }) => {
+  await open(page, 'Inicio');
+  const svg = prose(page).locator('.diagram > svg');
+  await expect(svg).toBeVisible();
+  // Outer HTML: the renderer keeps its colours on the svg element itself.
+  const drawn = () => svg.evaluate((el) => el.outerHTML);
+  const before = await drawn();
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.type('---\ntema-diagramas: medianoche\n---\n');
+  await expect.poll(drawn).not.toBe(before);
+  expect(await drawn()).toContain('#1b2a45');
+});
+
+test('a theme can be created, edited and made the vault default', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByRole('button', { name: 'Temas' }).first().click();
+  const editor = page.getByRole('dialog', { name: /Temas de Trabajo/ });
+  await editor.getByRole('button', { name: 'Nuevo tema' }).click();
+  await page.getByRole('textbox').last().fill('Mi Marca');
+  await page.keyboard.press('Enter');
+  await editor.getByLabel('Fondo', { exact: true }).fill('#102030');
+  await expect(editor.getByRole('alert')).toContainText('contraste');
+  await editor.getByLabel('Texto', { exact: true }).fill('#ffffff');
+  await editor.getByLabel('Secundario', { exact: true }).fill('#e0e0e0');
+  await editor.getByRole('button', { name: 'Guardar' }).click();
+  await editor.getByLabel('Tema por defecto del vault').selectOption('mi-marca');
+  await expect(page.locator('.scroll')).toHaveAttribute('data-note-theme', 'mi-marca');
+  const saved = await page.evaluate(() => (window as any).__test.vaultThemes.a);
+  expect(saved.defaultTheme).toBe('mi-marca');
+  expect(saved.themes[0].colors.bg).toBe('#102030');
+});
+
+test('a theme can be edited as JSON and bad JSON is refused', async ({ page }) => {
+  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByRole('button', { name: 'Temas' }).nth(1).click();
+  const editor = page.getByRole('dialog', { name: /Temas de Personal/ });
+  await editor.getByRole('button', { name: 'Mar' }).click();
+  await editor.getByRole('button', { name: 'Editar JSON' }).click();
+  await editor.getByRole('textbox', { name: 'JSON del tema' }).fill('{ roto');
+  await editor.getByRole('button', { name: 'Guardar' }).click();
+  await expect(page.getByRole('status')).toContainText('JSON');
 });

@@ -146,6 +146,7 @@
             Scripts en HTML
           </label>
           <span class="spacer"></span>
+          {#if vault.open}<button onclick={() => (store.themeEditor = vault.id)}>Temas</button>{/if}
           <button onclick={() => store.setVaultOpen(vault.id, !vault.open)}>{vault.open ? 'Cerrar' : 'Abrir'}</button>
           <button onclick={() => remove(vault)}>Quitar</button>
         </div>
