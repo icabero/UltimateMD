@@ -298,9 +298,10 @@ test('diagrams can use their own theme and are redrawn when it changes', async (
   // Outer HTML: the renderer keeps its colours on the svg element itself.
   const drawn = () => svg.evaluate((el) => el.outerHTML);
   const before = await drawn();
-  await page.locator('.cm-content').click();
-  await page.keyboard.press('Control+Home');
-  await page.keyboard.type('---\ntema-diagramas: medianoche\n---\n');
+  await page.evaluate(() => {
+    const test = (window as any).__test;
+    test.externalWrite('a', 'Inicio.md', `---\ntema-diagramas: medianoche\n---\n${test.files.a['Inicio.md']}`);
+  });
   await expect.poll(drawn).not.toBe(before);
   expect(await drawn()).toContain('#1b2a45');
 });
