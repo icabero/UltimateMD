@@ -33,11 +33,11 @@
 
 <style>
   .top { z-index: 50; }
-  .dialog { position: fixed; top: 22vh; left: 50%; z-index: 51; width: min(420px, calc(100vw - 32px)); padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); box-shadow: var(--shadow); transform: translateX(-50%); }
+  .dialog { position: fixed; top: 22vh; left: 50%; z-index: 51; width: min(420px, calc(100vw - 32px)); padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translateX(-50%); }
   p { margin: 0 0 12px; font-size: 13.5px; }
   input { width: 100%; }
   .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
   button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 7px; background: none; color: var(--text); font-size: 13px; }
   .main { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
-  .main.danger { border-color: var(--danger); background: var(--danger); color: #fff; }
+  .main.danger { border-color: var(--danger); background: none; color: var(--danger); }
 </style>

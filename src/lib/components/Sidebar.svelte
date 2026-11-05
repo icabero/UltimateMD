@@ -7,8 +7,9 @@
   import { baseName, dirName, join } from '../paths';
   import { store } from '../store.svelte';
 
-  const COLORS = ['#8b5cf6', '#0ea5a4', '#f59e0b', '#ec4899', '#3b82f6', '#10b981', '#ef4444', '#84cc16'];
-  const colorOf = (id: string) => COLORS[[...id].reduce((n, c) => n + c.charCodeAt(0), 0) % COLORS.length];
+  // Tints of the theme's text, accent and syntax colours, to tell vaults apart.
+  const COLORS = ['--accent', '--syn-string', '--syn-attr', '--syn-number', '--syn-keyword', '--text-2'];
+  const colorOf = (id: string) => `var(${COLORS[[...id].reduce((n, c) => n + c.charCodeAt(0), 0) % COLORS.length]})`;
 
   interface Menu {
     x: number;
@@ -152,8 +153,8 @@
 <style>
   aside { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--panel); border-right: 1px solid var(--line); }
   header { display: flex; align-items: center; gap: 2px; padding: 10px 8px 8px 14px; }
-  .brand { flex: 1; font-size: 14px; letter-spacing: -.01em; color: var(--text); }
-  .brand b { color: var(--accent-text); font-weight: 700; }
+  .brand { flex: 1; font-size: 13.5px; letter-spacing: -.01em; color: var(--text-2); }
+  .brand b { color: var(--text); font-weight: 700; }
   .vaults { flex: 1; min-height: 0; overflow-y: auto; padding: 0 6px 8px; }
   .vault { margin-bottom: 8px; border-radius: 8px; }
   .vault.drop { background: var(--accent-soft); }
@@ -164,12 +165,12 @@
   .label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .chev { display: flex; flex: none; color: var(--text-3); transition: transform .12s; }
   .chev.open { transform: rotate(90deg); }
-  .dot { flex: none; width: 9px; height: 9px; border-radius: 3px; }
+  .dot { flex: none; width: 8px; height: 8px; border-radius: 2px; }
   .empty { margin: 2px 0 6px 28px; color: var(--text-3); font-size: 12.5px; }
   footer { display: flex; gap: 4px; padding: 8px; border-top: 1px solid var(--line); }
   footer button { display: flex; flex: 1; align-items: center; justify-content: center; gap: 5px; height: 30px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 12px; white-space: nowrap; }
   footer button:hover { background: var(--hover); color: var(--text); }
-  .menu { position: fixed; z-index: 40; min-width: 180px; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--raised); box-shadow: var(--shadow); }
+  .menu { position: fixed; z-index: 40; min-width: 180px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); box-shadow: var(--shadow); }
   .menu button { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: var(--text); font-size: 13px; text-align: left; }
   .menu button:hover { background: var(--hover); }
   .menu .danger { color: var(--danger); }

@@ -1,6 +1,7 @@
 import { listen } from '@tauri-apps/api/event';
 import { api, type TreeNode, type Vault } from './api';
 import { baseName, dirName, join, kindOf, type FileKind } from './paths';
+import { THEMES, applyTheme, themeById, type Theme } from './themes';
 
 export type ViewMode = 'edit' | 'split' | 'preview';
 
@@ -32,6 +33,23 @@ export interface Dialog {
 
 const SAVE_DELAY = 700;
 const SESSION_KEY = 'ultimatemd.session';
+const THEME_KEY = 'ultimatemd.theme';
+
+/** `fixed` null means following the system, with one theme for each mode. */
+export interface ThemeChoice {
+  fixed: string | null;
+  light: string;
+  dark: string;
+}
+
+function loadThemeChoice(): ThemeChoice {
+  const fallback = { fixed: null, light: 'claro', dark: 'oscuro' };
+  try {
+    return { ...fallback, ...JSON.parse(localStorage.getItem(THEME_KEY) ?? '{}') };
+  } catch {
+    return fallback;
+  }
+}
 
 const tabKey = (vaultId: string, path: string) => `${vaultId}:${path}`;
 const isText = (kind: FileKind) => kind === 'md' || kind === 'html';
@@ -50,7 +68,8 @@ class Store {
   tabs = $state<Tab[]>([]);
   activeKey = $state<string | null>(null);
   toast = $state<string | null>(null);
-  dark = $state(matchMedia('(prefers-color-scheme: dark)').matches);
+  systemDark = $state(matchMedia('(prefers-color-scheme: dark)').matches);
+  themeChoice = $state(loadThemeChoice());
 
   palette = $state(false);
   settings = $state(false);
@@ -59,6 +78,21 @@ class Store {
 
   #timers = new Map<string, ReturnType<typeof setTimeout>>();
   #toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+  get theme(): Theme {
+    const { fixed, light, dark } = this.themeChoice;
+    const id = fixed ?? (this.systemDark ? dark : light);
+    return themeById(id) ?? THEMES[0];
+  }
+
+  setThemeChoice(change: Partial<ThemeChoice>) {
+    this.themeChoice = { ...this.themeChoice, ...change };
+    try {
+      localStorage.setItem(THEME_KEY, JSON.stringify(this.themeChoice));
+    } catch {
+      // The choice lasts for this session only.
+    }
+  }
 
   get active() {
     return this.tabs.find((t) => t.key === this.activeKey) ?? null;
@@ -102,8 +136,13 @@ class Store {
     return (await this.#ask(title, null, action, danger)) !== null;
   }
 
+  constructor() {
+    // Before the first paint, so the app never flashes the wrong colours.
+    applyTheme(this.theme);
+  }
+
   async init() {
-    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => (this.dark = e.matches));
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => (this.systemDark = e.matches));
     await listen<{ vaultId: string; paths: string[] }>('vault-changed', (e) => this.onChanged(e.payload));
     await this.loadVaults();
     await this.restore();

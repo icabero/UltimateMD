@@ -7,6 +7,8 @@ mod watcher;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use ultimatemd_core::Registry;
 
+const SHOW_FALLBACK: std::time::Duration = std::time::Duration::from_secs(3);
+
 /// Only the app itself and vault files may load in the webview.
 fn allowed_navigation(url: &tauri::Url) -> bool {
     let host = url.host_str().unwrap_or("");
@@ -46,13 +48,20 @@ fn main() {
             let handle = app.handle();
             // Drag and drop in the file tree needs the webview's HTML5 events,
             // which the native file-drop handler would otherwise swallow.
-            WebviewWindowBuilder::new(handle, "main", WebviewUrl::default())
+            // Hidden until the frontend has applied its theme, so it never flashes.
+            let window = WebviewWindowBuilder::new(handle, "main", WebviewUrl::default())
                 .title("UltimateMD")
+                .visible(false)
                 .inner_size(1280.0, 820.0)
                 .min_inner_size(720.0, 480.0)
                 .disable_drag_drop_handler()
                 .on_navigation(allowed_navigation)
                 .build()?;
+            // A frontend that fails to start must not leave an invisible app.
+            std::thread::spawn(move || {
+                std::thread::sleep(SHOW_FALLBACK);
+                let _ = window.show();
+            });
             if let Ok(registry) = Registry::load() {
                 for vault in registry.vaults.iter().filter(|v| v.open) {
                     watcher::watch(handle, vault);

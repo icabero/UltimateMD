@@ -64,7 +64,7 @@
 </div>
 
 <style>
-  .box { position: fixed; top: 12vh; left: 50%; z-index: 31; width: min(600px, calc(100vw - 32px)); padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); box-shadow: var(--shadow); transform: translateX(-50%); }
+  .box { position: fixed; top: 12vh; left: 50%; z-index: 31; width: min(600px, calc(100vw - 32px)); padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translateX(-50%); }
   input { width: 100%; }
   .list { max-height: 50vh; margin-top: 6px; overflow-y: auto; }
   .list button { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 7px 9px; border: 0; border-radius: 6px; background: none; color: var(--text); font-size: 13px; text-align: left; }

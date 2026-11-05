@@ -39,7 +39,7 @@
   .tabs { display: flex; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .tab { display: flex; align-items: center; gap: 6px; max-width: 200px; padding: 0 6px 0 12px; border-right: 1px solid var(--line); color: var(--text-2); font-size: 12.5px; cursor: default; }
   .tab:hover { color: var(--text); }
-  .tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 2px 0 var(--accent); }
+  .tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
   .name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .dirty { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
   .x { display: flex; flex: none; padding: 3px; border: 0; border-radius: 4px; background: none; color: inherit; opacity: 0; }

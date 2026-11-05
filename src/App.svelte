@@ -10,6 +10,8 @@
   import Welcome from './lib/components/Welcome.svelte';
   import { dirName } from './lib/paths';
   import { store, type ViewMode } from './lib/store.svelte';
+  import { applyTheme } from './lib/themes';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
 
   const VIEWS: ViewMode[] = ['edit', 'split', 'preview'];
   const SIDEBAR_KEY = 'ultimatemd.sidebar';
@@ -23,7 +25,7 @@
   );
 
   $effect(() => {
-    document.documentElement.dataset.theme = store.dark ? 'dark' : 'light';
+    applyTheme(store.theme);
   });
 
   onMount(() => {
@@ -34,6 +36,12 @@
       // Keeps the default width.
     }
     store.init().catch((e) => store.notify(e));
+    // The window starts hidden so it first appears with the right theme.
+    try {
+      void getCurrentWindow().show();
+    } catch {
+      // Outside the app, in the interface tests.
+    }
   });
 
   async function newNote() {
@@ -139,16 +147,16 @@
 <style>
   .app { position: relative; display: grid; height: 100vh; overflow: hidden; }
   .grip { position: absolute; top: 0; bottom: 0; z-index: 5; width: 6px; padding: 0; border: 0; background: none; cursor: col-resize; }
-  .grip:hover { background: var(--accent-soft); }
+  .grip:hover { background: var(--line); }
   main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .content { display: flex; flex: 1; min-height: 0; background: var(--bg); }
   .pane { flex: 1 1 0; min-width: 0; min-height: 0; }
   .pane.hidden { display: none; }
   .pane.preview:not(:first-child) { border-left: 1px solid var(--line); }
-  .banner { display: flex; align-items: center; gap: 8px; padding: 7px 12px; flex: none; background: var(--warn-soft); color: var(--text); font-size: 13px; }
+  .banner { display: flex; align-items: center; gap: 8px; padding: 7px 12px; flex: none; background: var(--warn); color: var(--text); font-size: 13px; }
   .banner span { flex: 1; }
   .banner button { padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--raised); color: var(--text); font-size: 12.5px; }
-  footer { display: flex; gap: 14px; align-items: center; height: 24px; flex: none; padding: 0 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--text-3); font-size: 11.5px; white-space: nowrap; overflow: hidden; }
+  footer { display: flex; gap: 16px; align-items: center; height: 24px; flex: none; padding: 0 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
   .spacer { flex: 1; }
-  .toast { position: fixed; bottom: 36px; left: 50%; z-index: 60; max-width: min(560px, calc(100vw - 32px)); padding: 9px 14px; border-radius: 9px; background: var(--text); color: var(--bg); font-size: 13px; transform: translateX(-50%); }
+  .toast { position: fixed; bottom: 36px; left: 50%; z-index: 60; max-width: min(560px, calc(100vw - 32px)); padding: 9px 14px; border-radius: 8px; background: var(--text); color: var(--bg); box-shadow: var(--shadow); font-size: 13px; transform: translateX(-50%); }
 </style>
