@@ -8,10 +8,15 @@ const PNG: &[u8] = &[
 
 const SAMPLE: &str = "---\nautor: Ane\n---\n# Informe\n\nAntes de la tabla. Texto **fuerte** y *leve* con [web](https://e.com/?a=1&b=2) y [[Otra|alias]].\n\n## Datos & más\n\n- uno\n  - anidado\n- dos\n\n1. primero\n2. segundo\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n> cita\n\nNota[^n].\n\n[^n]: pie.\n\n```mermaid\nflowchart LR\n```\n\n```rust\nfn a() {}\n```\n\n![foto](img.png)\n";
 
+fn note(markdown: &str) -> Vec<Section> {
+    vec![Section::Note { path: "n.md".into(), markdown: markdown.into(), shift: 0, page_break: false }]
+}
+
 fn render_with(template: Option<&[u8]>) -> Package {
     let diagrams = [PNG.to_vec()];
-    let image = |path: &str| (path == "img.png").then(|| PNG.to_vec());
-    let input = Input { markdown: SAMPLE, title: "archivo", date: "5/11/2026", diagrams: &diagrams, image: &image, template };
+    let image = |_: &str, path: &str| (path == "img.png").then(|| PNG.to_vec());
+    let sections = note(SAMPLE);
+    let input = Input { sections: &sections, title: "archivo", fixed_title: false, date: "5/11/2026", diagrams: &diagrams, image: &image, template };
     read_package(&render(&input).unwrap()).unwrap()
 }
 
@@ -180,8 +185,9 @@ fn images_fit_the_text_width() {
 
 #[test]
 fn missing_assets_leave_a_note_rather_than_fail() {
-    let image = |_: &str| None;
-    let input = Input { markdown: "![x](no.png)\n\n```d2\na\n```\n", title: "t", date: "", diagrams: &[], image: &image, template: None };
+    let image = |_: &str, _: &str| None;
+    let sections = note("![x](no.png)\n\n```d2\na\n```\n");
+    let input = Input { sections: &sections, title: "t", fixed_title: false, date: "", diagrams: &[], image: &image, template: None };
     let doc = text(&read_package(&render(&input).unwrap()).unwrap(), DOCUMENT);
     assert!(doc.contains("[Imagen: no.png]") && doc.contains("[Diagrama no disponible]"));
 }
@@ -189,17 +195,19 @@ fn missing_assets_leave_a_note_rather_than_fail() {
 #[test]
 fn bad_templates_are_rejected() {
     assert!(check_template(b"esto no es un zip").is_err());
-    let image = |_: &str| None;
-    let input = Input { markdown: "x", title: "t", date: "", diagrams: &[], image: &image, template: Some(b"nope") };
+    let image = |_: &str, _: &str| None;
+    let sections = note("x");
+    let input = Input { sections: &sections, title: "t", fixed_title: false, date: "", diagrams: &[], image: &image, template: Some(b"nope") };
     assert!(render(&input).is_err());
     assert!(check_template(&template()).is_ok());
 }
 
 #[test]
 fn title_prefers_frontmatter() {
-    let image = |_: &str| None;
+    let image = |_: &str, _: &str| None;
     let source = template();
-    let input = Input { markdown: "---\ntitulo: Elegido\n---\n# Otro\n", title: "t", date: "", diagrams: &[], image: &image, template: Some(&source) };
+    let sections = note("---\ntitulo: Elegido\n---\n# Otro\n");
+    let input = Input { sections: &sections, title: "t", fixed_title: false, date: "", diagrams: &[], image: &image, template: Some(&source) };
     let doc = text(&read_package(&render(&input).unwrap()).unwrap(), DOCUMENT);
     assert!(doc.contains("<w:t xml:space=\"preserve\">Elegido"));
 }
@@ -217,9 +225,87 @@ fn marker_paragraph_keeps_its_breaks() {
 
     let styles = r#"<w:style w:type="paragraph" w:styleId="Salto"><w:name w:val="Salto"/><w:pPr><w:pageBreakBefore/></w:pPr></w:style>"#;
     let styled = insert_body(&marker(r#"<w:pPr><w:pStyle w:val="Salto"/></w:pPr>"#), body, styles);
-    assert!(styled.find("Salto").unwrap() < styled.find("CUERPO").unwrap(), "a style can carry the break");
+    assert!(styled.contains("<w:pageBreakBefore/>") && !styled.contains("Salto"), "a style can carry the break");
+    assert_eq!(styled.matches("<w:p>").count(), 3, "no empty paragraph is left behind");
+
+    let breaking = r#"<w:p><w:pPr><w:pStyle w:val="H"/><w:pageBreakBefore/></w:pPr>T</w:p>"#;
+    let twice = insert_body(&marker("<w:pPr><w:pageBreakBefore/></w:pPr>"), breaking, "");
+    assert_eq!(twice.matches("<w:pageBreakBefore/>").count(), 1, "two breaks would leave a blank page");
+
+    let styled_first = r#"<w:p><w:pPr><w:pStyle w:val="H"/></w:pPr>T</w:p>"#;
+    let order = insert_body(&marker("<w:pPr><w:pageBreakBefore/></w:pPr>"), styled_first, "");
+    assert!(order.contains(r#"<w:pStyle w:val="H"/><w:pageBreakBefore/>"#), "schema order");
+
+    let table = insert_body(&marker("<w:pPr><w:pageBreakBefore/></w:pPr>"), "<w:tbl></w:tbl>", "");
+    assert!(table.find("pageBreakBefore").unwrap() < table.find("<w:tbl>").unwrap(), "a table cannot carry it");
 
     let section = insert_body(&marker("<w:pPr><w:sectPr/></w:pPr>"), body, "");
     assert!(section.find("CUERPO").unwrap() < section.find("<w:sectPr/>").unwrap(), "the body stays in its section");
     assert!(!section.contains("contenido"));
+}
+
+fn folder_document() -> Package {
+    let sections = vec![
+        Section::Heading { text: "Reuniones".into(), style: None, level: 1, page_break: true },
+        Section::Note { path: "r/a.md".into(), markdown: "---\nautor: Ane\n---\n# Lunes\n\nUno[^n].\n\n[^n]: pie uno\n".into(), shift: 1, page_break: false },
+        Section::Heading { text: "Anexo".into(), style: Some("Destacado".into()), level: 2, page_break: false },
+        Section::Note { path: "r/b.md".into(), markdown: "# Martes\n\nDos[^n].\n\n[^n]: pie dos\n".into(), shift: 2, page_break: true },
+    ];
+    let image = |_: &str, _: &str| None;
+    let source = template();
+    let input = Input { sections: &sections, title: "Vault", fixed_title: true, date: "", diagrams: &[], image: &image, template: Some(&source) };
+    read_package(&render(&input).unwrap()).unwrap()
+}
+
+#[test]
+fn folders_become_titles_and_notes_move_down_a_level() {
+    let parts = folder_document();
+    assert_well_formed(&parts);
+    let doc = text(&parts, DOCUMENT);
+    let folder = doc.rfind(">Reuniones<").unwrap();
+    assert!(doc[..folder].rfind(r#"<w:pPr><w:pStyle w:val="Ttulo1"/><w:pageBreakBefore/></w:pPr>"#).is_some(), "style first, then the break");
+    let lunes = doc.rfind(">Lunes<").unwrap();
+    assert!(doc[..lunes].rfind(r#"w:val="Ttulo2""#).unwrap() > folder, "a note's h1 sits under its folder");
+    let martes = doc.rfind(">Martes<").unwrap();
+    assert!(doc[..martes].rfind(r#"<w:pStyle w:val="Ttulo2"/><w:pageBreakBefore/>"#).is_none_or(|i| i < lunes), "shift 2 has no style in this template");
+    assert!(doc[..martes].rfind("<w:pageBreakBefore/>").unwrap() > lunes, "a note can start a new page");
+}
+
+#[test]
+fn custom_styles_stay_in_the_contents() {
+    let doc = text(&folder_document(), DOCUMENT);
+    assert!(doc.contains(r#"<w:pStyle w:val="Destacado"/><w:outlineLvl w:val="1"/>"#), "the outline level keeps it listed");
+    let toc_end = doc.find(">Reuniones<").unwrap();
+    assert!(toc_end < doc.rfind(">Reuniones<").unwrap(), "folder titles appear in the contents");
+}
+
+#[test]
+fn notes_can_reuse_footnote_labels() {
+    let notes = text(&folder_document(), FOOTNOTES);
+    assert!(notes.contains("pie uno") && notes.contains("pie dos"));
+    assert_eq!(notes.matches("<w:footnote ").count(), 4, "two separators and one note each");
+}
+
+#[test]
+fn fixed_title_wins_and_the_first_note_gives_the_author() {
+    let parts = folder_document();
+    assert!(text(&parts, DOCUMENT).contains(">Vault<"));
+    assert!(text(&parts, DOCUMENT).contains("PORTADA de Ane"));
+}
+
+#[test]
+fn example_template_is_complete_and_usable() {
+    let source = example_template();
+    assert!(check_template(&source).is_ok());
+    assert_well_formed(&read_package(&source).unwrap());
+    let names: Vec<String> = paragraph_styles(Some(&source)).unwrap().into_iter().map(|s| s.name).collect();
+    assert!(names.iter().any(|n| n == "heading 1") && names.iter().any(|n| n == "Quote"));
+
+    let parts = render_with(Some(&source));
+    assert_well_formed(&parts);
+    let doc = text(&parts, DOCUMENT);
+    assert!(doc.contains("TOC \\o") && !doc.contains("{{"));
+    assert!(doc.contains(r#"<w:pStyle w:val="TOC2"/>"#));
+    assert!(text(&parts, "word/header1.xml").contains("Informe"));
+    assert!(text(&parts, SETTINGS).contains("updateFields"));
 }

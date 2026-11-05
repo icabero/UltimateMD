@@ -29,7 +29,7 @@ jobs:
       - run: npm run check
       - run: npm run build:web
       - run: npm run sidecar -- --debug
-      - run: cargo test -p ultimatemd-core -p ultimatemd-mcp
+      - run: cargo test -p ultimatemd-core -p ultimatemd-mcp -p ultimatemd-pdf
       # The app crate has no tests, and its test binary cannot start on Windows
       # without the manifest that a real build embeds.
       - run: cargo check -p ultimatemd

@@ -50,6 +50,39 @@ export interface VaultThemes {
   invalid: string[];
 }
 
+export type PlanSection =
+  | { kind: 'heading'; text: string; style: string | null; level: number; pageBreak: boolean }
+  | { kind: 'note'; path: string; shift: number; pageBreak: boolean };
+
+export interface ExportPlan {
+  vaultId: string;
+  title: string;
+  fixedTitle: boolean;
+  date: string;
+  cover: boolean;
+  template: string | null;
+  sections: PlanSection[];
+  diagrams: number[][];
+}
+
+export interface TemplateStyle {
+  id: string;
+  name: string;
+}
+
+export interface DocxPreview {
+  width: number;
+  height: number;
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+  header: string;
+  footer: string;
+  titlePage: boolean;
+  blocks: { html: string; breakBefore: boolean }[];
+}
+
 export type Opened =
   | { kind: 'vault'; vaultId: string; path: string }
   | { kind: 'loose'; id: string; name: string; absolute: string; dir: string };
@@ -95,8 +128,12 @@ export const api = {
   renameTemplate: (name: string, newName: string) => invoke<void>('rename_template', { name, newName }),
   deleteTemplate: (name: string) => invoke<void>('delete_template', { name }),
   readImage: (id: string, path: string) => invoke<number[]>('read_image', { id, path }),
-  exportDocx: (id: string, path: string, template: string | null, date: string, diagrams: number[][]) =>
-    invoke<boolean>('export_docx', { id, path, template, date, diagrams }),
+  exportDocx: (plan: ExportPlan) => invoke<boolean>('export_docx', { plan }),
+  exportPdf: (plan: ExportPlan) => invoke<boolean>('export_pdf', { plan }),
+  previewDocx: (plan: ExportPlan) => invoke<DocxPreview>('preview_docx', { plan }),
+  previewPdf: (plan: ExportPlan) => invoke<string[]>('preview_pdf', { plan }),
+  templateStyles: (template: string | null) => invoke<TemplateStyle[]>('template_styles', { template }),
+  saveTemplateCopy: (name: string) => invoke<boolean>('save_template_copy', { name }),
   exportFile: (name: string, data: Uint8Array) => invoke<boolean>('export_file', { name, data: Array.from(data) }),
 };
 

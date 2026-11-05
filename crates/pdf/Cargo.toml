@@ -1,0 +1,16 @@
+[package]
+name = "ultimatemd-pdf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ultimatemd-core = { path = "../core" }
+typst = "0.15"
+typst-layout = "0.15"
+typst-pdf = "0.15"
+typst-render = "0.15"
+typst-assets = { version = "0.15", features = ["fonts"] }
+pulldown-cmark = { version = "0.13", default-features = false }
+imagesize = "0.15"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
