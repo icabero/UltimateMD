@@ -69,7 +69,7 @@ Necesitas [Rust](https://rustup.rs), Node.js y las [dependencias de Tauri](https
 npm install
 npm run dev          # app en modo desarrollo
 npm run build        # instaladores para tu sistema
-cargo test --workspace
+cargo test -p ultimatemd-core -p ultimatemd-mcp
 npm run check
 npm run test:e2e
 ```

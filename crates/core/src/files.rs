@@ -97,6 +97,11 @@ impl Vault {
     /// the BOM of an existing file are kept, so editing never rewrites a whole
     /// file on Windows.
     pub fn write(&self, rel: &str, content: &str, mode: WriteMode) -> Result<String> {
+        // First, so a bad name gets a clear error rather than the one the
+        // operating system gives when it reads a path containing it.
+        if matches!(mode, WriteMode::Create) {
+            check_new_path(&normalize(rel)?)?;
+        }
         let path = resolve(&self.root, rel)?;
         let current = match std::fs::read(&path) {
             Ok(bytes) => Some(bytes),
@@ -111,11 +116,10 @@ impl Vault {
             }
             _ => {}
         }
-        if current.is_none() {
-            check_new_path(&normalize(rel)?)?;
-            if let Some(dir) = path.parent() {
-                std::fs::create_dir_all(dir)?;
-            }
+        if current.is_none()
+            && let Some(dir) = path.parent()
+        {
+            std::fs::create_dir_all(dir)?;
         }
         let bytes = encode_like(content, current.as_deref());
         atomic_write(&path, &bytes)?;
@@ -167,12 +171,14 @@ impl Vault {
         if !path.exists() {
             return Err(Error::NotFound(rel.to_string()));
         }
-        trash::delete(&path).map_err(|e| Error::Trash(e.to_string()))
+        // Canonical Windows paths are `\\?\C:\...`; the shell API behind the
+        // trash expects the ordinary form.
+        trash::delete(dunce::simplified(&path)).map_err(|e| Error::Trash(e.to_string()))
     }
 }
 
 fn not_found(e: std::io::Error, rel: &str) -> Error {
-    if e.kind() == std::io::ErrorKind::NotFound {
+    if matches!(e.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::InvalidFilename) {
         Error::NotFound(rel.to_string())
     } else {
         e.into()

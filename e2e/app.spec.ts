@@ -80,12 +80,13 @@ test('wikilinks open notes and mark missing ones', async ({ page }) => {
 
 test('mermaid diagrams render to SVG', async ({ page }) => {
   await open(page, 'Inicio');
-  await expect(prose(page).locator('.diagram svg')).toBeVisible();
+  await expect(prose(page).locator('.diagram > svg')).toBeVisible();
 });
 
 test('several D2 diagrams in a note all finish, even with a bad one', async ({ page }) => {
   await open(page, 'D2');
-  await expect(prose(page).locator('.diagram svg')).toHaveCount(2, { timeout: 15_000 });
+  // Direct children only: a D2 diagram nests one svg inside another.
+  await expect(prose(page).locator('.diagram > svg')).toHaveCount(2, { timeout: 15_000 });
   await expect(prose(page).locator('.diagram-error')).toHaveCount(1);
 });
 
