@@ -3,6 +3,7 @@
   import Icon from './Icon.svelte';
   import { api, type McpAccess, type Vault } from '../api';
   import { store } from '../store.svelte';
+  import { THEMES, type Theme } from '../themes';
 
   type Client = 'claude-code' | 'claude-desktop' | 'cursor' | 'other';
 
@@ -39,6 +40,10 @@
     { 'claude-code': 'Ejecútalo en una terminal.', 'claude-desktop': `Añádelo a ${desktopConfig} y reinicia Claude Desktop.`, cursor: 'Añádelo a ~/.cursor/mcp.json.', other: 'Cualquier cliente MCP por stdio: usa esta ruta como comando, sin argumentos.' }[client],
   );
 
+  const lightThemes = THEMES.filter((t) => t.mode === 'light');
+  const darkThemes = THEMES.filter((t) => t.mode === 'dark');
+  const following = $derived(store.themeChoice.fixed === null);
+
   async function setAccess(vault: Vault, value: McpAccess) {
     await api.setVaultAccess(vault.id, value).catch((e) => store.notify(e));
     await store.loadVaults();
@@ -68,12 +73,47 @@
   }
 </script>
 
+{#snippet swatch(t: Theme, selected: boolean, pick: () => void)}
+  <button class="swatch" class:selected aria-pressed={selected} onclick={pick} style:background={t.colors.bg} style:color={t.colors.text} style:border-color={selected ? t.colors.accent : t.colors.line}>
+    <span class="sample" style:font-family={t.prose === 'serif' ? 'var(--serif)' : 'var(--sans)'}>Aa</span>
+    <span class="bar" style:background={t.colors.accent}></span>
+    <span class="tname">{t.name}</span>
+  </button>
+{/snippet}
+
 <button class="scrim" aria-label="Cerrar" onclick={() => (store.settings = false)}></button>
 <div class="modal" role="dialog" aria-label="Ajustes">
   <header>
     <h2>Ajustes</h2>
     <button class="icon" title="Cerrar" onclick={() => (store.settings = false)}><Icon name="close" /></button>
   </header>
+
+  <section>
+    <h3>Apariencia</h3>
+    <div class="themes">
+      {#each THEMES as t (t.id)}
+        {@render swatch(t, store.theme.id === t.id, () => store.setThemeChoice({ fixed: t.id }))}
+      {/each}
+    </div>
+    <label class="follow">
+      <input type="checkbox" checked={following} onchange={(e) => store.setThemeChoice({ fixed: e.currentTarget.checked ? null : store.theme.id })} />
+      Seguir al sistema
+    </label>
+    {#if following}
+      <div class="modes">
+        <label>Modo claro
+          <select value={store.themeChoice.light} onchange={(e) => store.setThemeChoice({ light: e.currentTarget.value })}>
+            {#each lightThemes as t}<option value={t.id}>{t.name}</option>{/each}
+          </select>
+        </label>
+        <label>Modo oscuro
+          <select value={store.themeChoice.dark} onchange={(e) => store.setThemeChoice({ dark: e.currentTarget.value })}>
+            {#each darkThemes as t}<option value={t.id}>{t.name}</option>{/each}
+          </select>
+        </label>
+      </div>
+    {/if}
+  </section>
 
   <section>
     <h3>Vaults</h3>
@@ -123,24 +163,34 @@
 </div>
 
 <style>
-  .modal { position: fixed; top: 50%; left: 50%; z-index: 31; width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 8px 20px 20px; overflow-y: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--raised); box-shadow: var(--shadow); transform: translate(-50%, -50%); }
+  .modal { position: fixed; top: 50%; left: 50%; z-index: 31; width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 8px 20px 20px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translate(-50%, -50%); }
   header { display: flex; align-items: center; justify-content: space-between; }
-  h2 { margin: 8px 0; font-size: 17px; }
-  h3 { margin: 18px 0 8px; font-size: 13px; }
+  h2 { margin: 8px 0; font-size: 15px; font-weight: 650; }
+  h3 { margin: 20px 0 8px; font-size: 12.5px; font-weight: 650; }
+  .themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 8px; }
+  .swatch { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; padding: 8px 10px; border: 1.5px solid; border-radius: 8px; text-align: left; }
+  .swatch.selected { box-shadow: 0 0 0 1px currentColor; }
+  .sample { font-size: 20px; line-height: 1.2; }
+  .bar { width: 18px; height: 6px; border-radius: 3px; }
+  .tname { grid-column: 1 / -1; font-size: 12px; }
+  .follow { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: var(--text-2); font-size: 12.5px; }
+  .modes { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; color: var(--text-2); font-size: 12.5px; }
+  .modes label { display: flex; align-items: center; gap: 6px; }
+  select { padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
   .vault { padding: 10px 0; border-top: 1px solid var(--line); }
   .info { display: flex; align-items: baseline; gap: 10px; min-width: 0; margin-bottom: 8px; }
   .name { flex: none; padding: 0; border: 0; background: none; color: var(--text); font-size: 13.5px; font-weight: 600; }
   .path { overflow: hidden; color: var(--text-3); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
   .seg, .clients { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--hover); flex-wrap: wrap; }
   .seg button, .clients button { padding: 4px 10px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 12.5px; }
-  .seg .on, .clients .on { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px #0002; }
+  .seg .on, .clients .on { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 15%); }
   .actions { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--text-2); font-size: 12.5px; }
   .actions label { display: flex; align-items: center; gap: 5px; }
   .actions button, .code button { padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text-2); font-size: 12px; }
   .actions button:hover, .code button:hover { background: var(--hover); color: var(--text); }
   .spacer { flex: 1; }
   .code { position: relative; margin: 10px 0 6px; }
-  pre { margin: 0; padding: 12px; overflow-x: auto; border-radius: 8px; background: var(--panel); font: 12.5px/1.5 var(--mono); }
+  pre { margin: 0; padding: 12px 76px 12px 12px; overflow-x: auto; border-radius: 8px; background: var(--panel); font: 12.5px/1.5 var(--mono); }
   .code button { position: absolute; top: 8px; right: 8px; background: var(--raised); }
   .muted { margin: 4px 0; color: var(--text-2); font-size: 12.5px; }
   .warn { color: var(--danger); font-size: 12.5px; }

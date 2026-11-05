@@ -7,8 +7,6 @@
   import { dirName } from '../paths';
   import { store, type Tab } from '../store.svelte';
   import previewCss from '../preview.css?inline';
-  import hljsCss from 'highlight.js/styles/github.css?inline';
-  import hljsDarkCss from 'highlight.js/styles/github-dark.css?inline';
 
   let { tab }: { tab: Tab } = $props();
 
@@ -18,7 +16,6 @@
   let scroller = $state<HTMLDivElement>();
   let root: ShadowRoot;
   let body: HTMLElement;
-  let hljsStyle: HTMLStyleElement;
   let timer: ReturnType<typeof setTimeout>;
   let run = 0;
 
@@ -45,12 +42,12 @@
   }
 
   async function hydrate(id: number) {
-    const dark = store.dark;
+    const theme = store.theme;
     const blocks = [...body.querySelectorAll<HTMLElement>('.diagram')];
     await Promise.all(blocks.map(async (el, index) => {
       const src = decodeURIComponent(el.dataset.src ?? '');
       try {
-        const svg = await renderDiagram(el.dataset.lang!, src, dark);
+        const svg = await renderDiagram(el.dataset.lang!, src, theme);
         if (id !== run) return;
         el.innerHTML = svg;
         const node = el.querySelector('svg');
@@ -78,7 +75,9 @@
       files: store.files(tab.vaultId),
     });
     // Diagrams already drawn stay on screen until their source really changes.
-    const old = new Map([...body.querySelectorAll<HTMLElement>('.diagram')].map((e) => [`${e.dataset.lang}:${e.dataset.src}`, e]));
+    const kept = body.dataset.theme === store.theme.id ? [...body.querySelectorAll<HTMLElement>('.diagram')] : [];
+    const old = new Map(kept.map((e) => [`${e.dataset.lang}:${e.dataset.src}`, e]));
+    body.dataset.theme = store.theme.id;
     for (const el of fragment.querySelectorAll<HTMLElement>('.diagram')) {
       const previous = old.get(`${el.dataset.lang}:${el.dataset.src}`);
       if (previous) el.innerHTML = previous.innerHTML;
@@ -110,19 +109,16 @@
     root = host!.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
     style.textContent = previewCss;
-    hljsStyle = document.createElement('style');
     body = document.createElement('article');
     body.className = 'prose';
-    root.append(style, hljsStyle, body);
+    root.append(style, body);
     body.addEventListener('click', onClick);
   });
 
   $effect(() => {
     if (tab.kind !== 'md' || !body) return;
-    hljsStyle.textContent = store.dark ? hljsDarkCss : hljsCss;
-    host!.dataset.theme = store.dark ? 'dark' : 'light';
     tab.content;
-    store.dark;
+    store.theme;
     store.trees[tab.vaultId];
     clearTimeout(timer);
     timer = setTimeout(render, DELAY);

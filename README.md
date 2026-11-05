@@ -12,6 +12,7 @@ Un vault es una carpeta normal con tus archivos, sin base de datos ni formato pr
 - Selector rápido (`Ctrl+P`) y búsqueda en todos los vaults (`Ctrl+Mayús+F`).
 - Archivos `.html` con vista previa, y HTML dentro de las notas.
 - Diagramas Mermaid y D2, exportables a SVG y PNG.
+- Siete temas que se aplican a la interfaz, el editor, la vista previa y los diagramas, con opción de seguir al sistema.
 - Servidor MCP con permisos por vault.
 - Los cambios externos aparecen al instante, sin sobrescribir lo que estás editando.
 

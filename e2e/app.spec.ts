@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { THEMES, contrast, mix } from '../src/lib/themes';
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript({ path: 'e2e/mock.js' });
@@ -120,4 +121,51 @@ test('settings change MCP access and give a valid Windows config', async ({ page
   await page.getByRole('button', { name: 'Claude Desktop' }).click();
   const config = JSON.parse((await page.locator('.code pre').textContent())!);
   expect(config.mcpServers.ultimatemd.command).toBe('C:\\Program Files\\UltimateMD\\ultimatemd-mcp.exe');
+});
+
+test('every theme meets contrast targets', async () => {
+  for (const t of THEMES) {
+    const c = t.colors;
+    const min = t.id === 'contraste' ? 7 : 4.5;
+    const surfaces = { bg: c.bg, panel: c.panel, raised: c.raised };
+    for (const [surface, color] of Object.entries(surfaces)) {
+      for (const name of ['text', 'text2', 'text3', 'accentText', 'danger'] as const) {
+        expect(contrast(c[name], color), `${t.id}: ${name} on ${surface}`).toBeGreaterThanOrEqual(min);
+      }
+    }
+    expect(contrast(c.onAccent, c.accent), `${t.id}: on accent`).toBeGreaterThanOrEqual(min);
+    expect(contrast(c.text, c.warn), `${t.id}: warning`).toBeGreaterThanOrEqual(min);
+    const selected = mix(c.panel, c.accent, 0.15);
+    expect(contrast(c.accentText, selected), `${t.id}: selected row`).toBeGreaterThanOrEqual(min);
+    for (const name of ['synString', 'synKeyword', 'synNumber', 'synAttr'] as const) {
+      expect(contrast(c[name], c.bg), `${t.id}: ${name}`).toBeGreaterThanOrEqual(min);
+      expect(contrast(c[name], c.panel), `${t.id}: ${name} on code`).toBeGreaterThanOrEqual(min);
+    }
+  }
+});
+
+test('changing theme restyles the app and keeps the edit in progress', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, 'en curso');
+  await expect(prose(page).locator('.diagram > svg')).toBeVisible();
+  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByRole('button', { name: /Medianoche/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'medianoche');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(15, 22, 38)');
+  await expect(prose(page).locator('h1')).toHaveCSS('color', 'rgb(228, 233, 242)');
+  await page.getByTitle('Cerrar', { exact: true }).click();
+  await expect(page.locator('.cm-content')).toContainText('en curso');
+
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'medianoche');
+});
+
+test('following the system uses the theme chosen for each mode', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'claro');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'oscuro');
+  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByLabel('Modo oscuro').selectOption('bosque');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'bosque');
 });
