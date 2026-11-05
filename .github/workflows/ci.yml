@@ -9,10 +9,10 @@ on:
 permissions:
   contents: read
 
-# A new commit makes the run before it pointless.
+# One run at a time. GitHub keeps only the newest one waiting.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci
+  cancel-in-progress: false
 
 jobs:
   test:
