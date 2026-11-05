@@ -7,7 +7,7 @@
 use rmcp::{
     ErrorData, ServerHandler, ServiceExt,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
-    model::{CallToolResult, ContentBlock, Implementation, ServerCapabilities, ServerInfo},
+    model::{CallToolResult, ContentBlock, Implementation, ServerCapabilities, ServerConfig},
     schemars::{self, JsonSchema},
     tool, tool_handler, tool_router,
     transport::stdio,
@@ -299,8 +299,8 @@ impl Server {
 
 #[tool_handler]
 impl ServerHandler for Server {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("ultimatemd", env!("CARGO_PKG_VERSION")))
             .with_instructions(INSTRUCTIONS)
     }

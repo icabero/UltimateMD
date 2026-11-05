@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The app's own window. Vault content never runs here: HTML notes load in a sandboxed frame.",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:allow-open", "opener:allow-open-url"]
+}
