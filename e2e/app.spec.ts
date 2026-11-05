@@ -83,6 +83,12 @@ test('mermaid diagrams render to SVG', async ({ page }) => {
   await expect(prose(page).locator('.diagram svg')).toBeVisible();
 });
 
+test('several D2 diagrams in a note all finish, even with a bad one', async ({ page }) => {
+  await open(page, 'D2');
+  await expect(prose(page).locator('.diagram svg')).toHaveCount(2, { timeout: 15_000 });
+  await expect(prose(page).locator('.diagram-error')).toHaveCount(1);
+});
+
 test('a new note can be created and opened', async ({ page }) => {
   await page.keyboard.press('Control+n');
   await page.getByRole('textbox').fill('Nueva');

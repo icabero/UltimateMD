@@ -5,6 +5,7 @@
     a: {
       'Inicio.md': '# Inicio\n\nVer [[Destino]] y [[Falta]].\n\n<script>window.pwned = true</script><img src=x onerror="window.pwned=true"><b style="color:red">fuerte</b>\n\n```mermaid\nflowchart LR\n  A --> B\n```\n',
       'dir/Destino.md': '# Destino\n',
+      'D2.md': '```d2\nuno -> dos\n```\n\n```d2\nesto no vale -> {\n```\n\n```d2\ntres -> cuatro\n```\n',
     },
     b: { 'Otra.md': '# Otra\n' },
   };
