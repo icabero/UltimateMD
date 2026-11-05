@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, type VaultHit } from '../api';
+  import { tr } from '../i18n.svelte';
   import { store } from '../store.svelte';
 
   let query = $state('');
@@ -22,7 +23,7 @@
 
 <div class="panel">
   <!-- svelte-ignore a11y_autofocus -->
-  <input autofocus bind:value={query} oninput={onInput} placeholder="Buscar en los vaults abiertos" />
+  <input autofocus bind:value={query} oninput={onInput} placeholder={tr('search.placeholder')} />
   <div class="results">
     {#each hits as { vaultId, hit }}
       <button onclick={() => store.openFile(vaultId, hit.path)}>
@@ -30,7 +31,7 @@
         {#if hit.text}<span class="text">{hit.text}</span>{/if}
       </button>
     {:else}
-      {#if searched}<p>Sin resultados</p>{/if}
+      {#if searched}<p>{tr('search.empty')}</p>{/if}
     {/each}
   </div>
 </div>

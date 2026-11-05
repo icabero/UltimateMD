@@ -2,6 +2,7 @@
   import Self from './TreeItem.svelte';
   import Icon from './Icon.svelte';
   import type { TreeNode } from '../api';
+  import { tr } from '../i18n.svelte';
   import { baseName, join, kindOf } from '../paths';
   import { store } from '../store.svelte';
 
@@ -34,7 +35,7 @@
     const raw = e.dataTransfer!.getData('application/x-umd');
     if (!raw) return;
     const from = JSON.parse(raw) as { vaultId: string; path: string };
-    if (from.vaultId !== vaultId) return store.notify('Solo se puede mover dentro del mismo vault');
+    if (from.vaultId !== vaultId) return store.notify(tr('sidebar.sameVaultOnly'));
     if (node.path !== from.path) void store.move(vaultId, from.path, join(node.path, baseName(from.path)));
   }
 </script>

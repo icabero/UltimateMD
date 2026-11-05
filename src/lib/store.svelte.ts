@@ -1,9 +1,13 @@
+import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
 import { api, type TreeNode, type Vault, type VaultThemes } from './api';
-import { baseName, dirName, join, kindOf, type FileKind } from './paths';
+import { withColors, type DiagramStyle } from './diagramStyle';
+import { tr } from './i18n.svelte';
+import { baseName, dirName, join, kindOf, resolveLink, type FileKind } from './paths';
+import { checksAtStart, isNewer, latestVersion } from './updates';
 import { THEMES, applyTheme, frontmatterValue, resolveTheme, themeById, type Theme } from './themes';
 
-export type ViewMode = 'edit' | 'split' | 'preview';
+export type ViewMode = 'visual' | 'edit' | 'split' | 'preview';
 
 export interface Tab {
   key: string;
@@ -36,6 +40,9 @@ export interface Dialog {
 const SAVE_DELAY = 700;
 const SESSION_KEY = 'ultimatemd.session';
 const THEME_KEY = 'ultimatemd.theme';
+const TUTORIAL_KEY = 'ultimatemd.tutorial';
+const VIEW_KEY = 'ultimatemd.view';
+const VIEWS: ViewMode[] = ['visual', 'edit', 'split', 'preview'];
 
 /** `fixed` null means following the system, with one theme for each mode. */
 export interface ThemeChoice {
@@ -50,6 +57,23 @@ function loadThemeChoice(): ThemeChoice {
     return { ...fallback, ...JSON.parse(localStorage.getItem(THEME_KEY) ?? '{}') };
   } catch {
     return fallback;
+  }
+}
+
+function loadView(): ViewMode {
+  try {
+    const saved = localStorage.getItem(VIEW_KEY) as ViewMode | null;
+    return saved && VIEWS.includes(saved) ? saved : 'split';
+  } catch {
+    return 'split';
+  }
+}
+
+function tutorialSeen() {
+  try {
+    return localStorage.getItem(TUTORIAL_KEY) !== null;
+  } catch {
+    return true;
   }
 }
 
@@ -77,6 +101,12 @@ class Store {
   settings = $state(false);
   searching = $state(false);
   exporting = $state(false);
+  tutorial = $state(!tutorialSeen());
+  about = $state(false);
+  /** A newer published version, once known. */
+  update = $state<string | null>(null);
+  /** The view new tabs open in: the last one the user chose. */
+  preferredView = $state(loadView());
   dialog = $state<Dialog | null>(null);
   vaultThemes = $state<Record<string, VaultThemes>>({});
   themeEditor = $state<string | null>(null);
@@ -106,18 +136,28 @@ class Store {
     );
   }
 
-  /** Diagrams can differ from their note. `boceto` keeps the note's colours, hand-drawn. */
-  diagramLook(tab: Tab) {
-    const value = frontmatterValue(tab.content, 'tema-diagramas');
-    const sketch = value === 'boceto';
-    return { theme: (!sketch && this.lookUpTheme(tab.vaultId, value)) || this.noteTheme(tab), sketch };
+  /**
+   * A diagram's look: its own style, then its note, then its vault, and finally
+   * the note's theme. `boceto` keeps the colours it would have had, hand-drawn.
+   */
+  diagramLook(tab: Tab, style: DiagramStyle = {}, note = tab.content, fallback?: Theme) {
+    const value = style.theme ?? frontmatterValue(note, 'tema-diagramas') ?? this.vaultThemes[tab.vaultId]?.defaultDiagramTheme ?? null;
+    const theme = (value !== 'boceto' && this.lookUpTheme(tab.vaultId, value)) || fallback || this.noteTheme(tab);
+    return { theme: withColors(theme, style), sketch: !!style.sketch || value === 'boceto' };
+  }
+
+  /** Follows a `[[link]]` written in a note, offering to create it if it is missing. */
+  async followLink(tab: Tab, name: string) {
+    const path = resolveLink(name, tab.path, this.files(tab.vaultId));
+    if (path) return this.openFile(tab.vaultId, path);
+    if (await this.confirm(tr('preview.createMissing', { name }), tr('common.create'))) await this.createNote(tab.vaultId, dirName(tab.path), name);
   }
 
   async loadVaultThemes(id: string) {
     const loaded = await api.vaultThemes(id).catch(() => null);
     if (!loaded) return;
     this.vaultThemes[id] = loaded;
-    if (loaded.invalid.length) this.notify(`Temas no válidos, ignorados: ${loaded.invalid.join(', ')}`);
+    if (loaded.invalid.length) this.notify(tr('store.invalidThemes', { list: loaded.invalid.join(', ') }));
   }
 
   setThemeChoice(change: Partial<ThemeChoice>) {
@@ -126,6 +166,37 @@ class Store {
       localStorage.setItem(THEME_KEY, JSON.stringify(this.themeChoice));
     } catch {
       // The choice lasts for this session only.
+    }
+  }
+
+  closeTutorial() {
+    this.tutorial = false;
+    try {
+      localStorage.setItem(TUTORIAL_KEY, '1');
+    } catch {
+      // It may show again next time.
+    }
+  }
+
+  setView(tab: Tab, view: ViewMode) {
+    tab.view = view;
+    this.preferredView = view;
+    try {
+      localStorage.setItem(VIEW_KEY, view);
+    } catch {
+      // New tabs fall back to the default view.
+    }
+    this.persist();
+  }
+
+  /** Quiet on failure: being offline is no reason to bother anyone. */
+  async checkUpdates() {
+    if (!checksAtStart()) return;
+    try {
+      const [latest, current] = await Promise.all([latestVersion(), getVersion()]);
+      if (latest && isNewer(latest, current)) this.update = latest;
+    } catch {
+      // The next start tries again, and About can check by hand.
     }
   }
 
@@ -163,7 +234,7 @@ class Store {
     });
   }
 
-  prompt(title: string, value = '', action = 'Aceptar') {
+  prompt(title: string, value = '', action = tr('common.accept')) {
     return this.#ask(title, value, action, false);
   }
 
@@ -184,6 +255,7 @@ class Store {
     await this.loadVaults();
     await this.restore();
     await this.openPaths(await api.takePendingFiles());
+    void this.checkUpdates();
   }
 
   async loadVaults() {
@@ -236,7 +308,7 @@ class Store {
           await this.openFile(opened.id, opened.name, { absolute: opened.absolute, dir: opened.dir });
         }
       } catch (e) {
-        this.notify(`No se pudo abrir ${path}: ${e}`);
+        this.notify(tr('store.openFailed', { path, error: String(e) }));
       }
     }
   }
@@ -280,7 +352,7 @@ class Store {
     }
     this.tabs.push({
       key, vaultId, path, kind, content, version,
-      dirty: false, saving: false, view: 'split', revision: 0, conflict: null, missing: false, loose,
+      dirty: false, saving: false, view: kind === 'md' || this.preferredView !== 'visual' ? this.preferredView : 'split', revision: 0, conflict: null, missing: false, loose,
     });
     this.activeKey = key;
     this.persist();
@@ -344,7 +416,7 @@ class Store {
   async close(tab: Tab) {
     await this.save(tab);
     const name = baseName(tab.path);
-    if (tab.conflict && !(await this.confirm(`«${name}» cambió en disco y tiene ediciones sin guardar. ¿Cerrar y perderlas?`, 'Cerrar', true))) return;
+    if (tab.conflict && !(await this.confirm(tr('store.closeConflict', { name }), tr('common.close'), true))) return;
     const i = this.tabs.findIndex((t) => t.key === tab.key);
     if (i < 0) return;
     this.tabs.splice(i, 1);

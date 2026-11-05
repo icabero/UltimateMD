@@ -24,6 +24,10 @@ pub struct Input<'a> {
     pub sections: &'a [Section],
     pub title: &'a str,
     pub date: &'a str,
+    /// A language code, for hyphenation and quotes.
+    pub language: &'a str,
+    /// The title of the table of contents.
+    pub contents: &'a str,
     /// Adds a cover page and a table of contents.
     pub cover: bool,
     /// Rendered diagrams as PNG, in the order they appear. Empty if rendering failed.

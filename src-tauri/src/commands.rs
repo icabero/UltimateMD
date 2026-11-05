@@ -193,6 +193,11 @@ pub fn set_vault_default_theme(id: String, theme: Option<String>) -> Result<()> 
 }
 
 #[tauri::command(async)]
+pub fn set_vault_diagram_theme(id: String, theme: Option<String>) -> Result<()> {
+    vault_themes::set_default_diagrams(fs(&id)?.root(), theme)
+}
+
+#[tauri::command(async)]
 pub fn list_templates() -> Result<Vec<String>> {
     templates::list()
 }
@@ -260,6 +265,8 @@ pub struct ExportPlan {
     /// A folder or vault is named by its title, not by its first note.
     fixed_title: bool,
     date: String,
+    language: String,
+    contents: String,
     cover: bool,
     template: Option<String>,
     sections: Vec<PlanSection>,
@@ -297,6 +304,7 @@ impl ExportPlan {
             title: &self.title,
             fixed_title: self.fixed_title,
             date: &self.date,
+            contents: &self.contents,
             diagrams: &self.diagrams,
             image: &|note, reference| note_image(&self.vault_id, note, reference),
             template: template.as_deref(),
@@ -309,6 +317,8 @@ impl ExportPlan {
             sections: &sections,
             title: &self.title,
             date: &self.date,
+            language: &self.language,
+            contents: &self.contents,
             cover: self.cover,
             diagrams: &self.diagrams,
             image: &|note, reference| note_image(&self.vault_id, note, reference),
@@ -492,4 +502,11 @@ pub fn export_file(app: AppHandle, name: String, data: Vec<u8>) -> Result<bool> 
     let path = target.into_path().map_err(|e| Error::Vault(e.to_string()))?;
     std::fs::write(path, data)?;
     Ok(true)
+}
+
+/// The language picked in the Windows installer, left next to the program.
+#[tauri::command(async)]
+pub fn installer_language() -> Option<String> {
+    let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    Some(std::fs::read_to_string(dir.join("language.txt")).ok()?.trim().to_string())
 }

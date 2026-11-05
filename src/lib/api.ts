@@ -46,6 +46,7 @@ export interface ThemeFile {
 
 export interface VaultThemes {
   defaultTheme: string | null;
+  defaultDiagramTheme: string | null;
   themes: ThemeFile[];
   invalid: string[];
 }
@@ -59,6 +60,9 @@ export interface ExportPlan {
   title: string;
   fixedTitle: boolean;
   date: string;
+  language: string;
+  /** The title of the table of contents, in that language. */
+  contents: string;
   cover: boolean;
   template: string | null;
   sections: PlanSection[];
@@ -123,6 +127,7 @@ export const api = {
   saveVaultTheme: (id: string, theme: ThemeFile) => invoke<void>('save_vault_theme', { id, theme }),
   deleteVaultTheme: (id: string, theme: string) => invoke<void>('delete_vault_theme', { id, theme }),
   setVaultDefaultTheme: (id: string, theme: string | null) => invoke<void>('set_vault_default_theme', { id, theme }),
+  setVaultDiagramTheme: (id: string, theme: string | null) => invoke<void>('set_vault_diagram_theme', { id, theme }),
   listTemplates: () => invoke<string[]>('list_templates'),
   importTemplate: () => invoke<string | null>('import_template'),
   renameTemplate: (name: string, newName: string) => invoke<void>('rename_template', { name, newName }),
@@ -134,6 +139,7 @@ export const api = {
   previewPdf: (plan: ExportPlan) => invoke<string[]>('preview_pdf', { plan }),
   templateStyles: (template: string | null) => invoke<TemplateStyle[]>('template_styles', { template }),
   saveTemplateCopy: (name: string) => invoke<boolean>('save_template_copy', { name }),
+  installerLanguage: () => invoke<string | null>('installer_language'),
   exportFile: (name: string, data: Uint8Array) => invoke<boolean>('export_file', { name, data: Array.from(data) }),
 };
 

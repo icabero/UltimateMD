@@ -50,6 +50,7 @@ re!(PAGE_MARGIN_R, r#"<w:pgMar [^>]*w:right="(\d+)""#);
 re!(ABSTRACT_ID, r#"w:abstractNumId="(\d+)""#);
 re!(NUM_ID, r#"<w:num [^>]*w:numId="(\d+)""#);
 re!(FOOTNOTE_ID, r#"<w:footnote [^>]*w:id="(-?\d+)""#);
+re!(UPDATE_FIELDS, r"<w:updateFields\b[^>]*/>");
 re!(TOC_INSTR, r"(?s)<w:instrText[^>]*>\s*TOC\b(.*?)</w:instrText>");
 re!(TOC_LEVELS, r#"\\o\s+(?:&quot;|")(\d)-(\d)(?:&quot;|")"#);
 re!(WIKI_EMBED, r"!\[\[([^\]|#]+)[^\]]*\]\]");
@@ -83,6 +84,8 @@ pub struct Input<'a> {
     /// Use `title` over anything in the notes, as for a folder or vault.
     pub fixed_title: bool,
     pub date: &'a str,
+    /// The title of the contents, for `{{indice}}` in the language of the app.
+    pub contents: &'a str,
     /// Rendered diagrams as PNG, in the order they appear. Empty if rendering failed.
     pub diagrams: &'a [Vec<u8>],
     /// Loads an image: note path, then the reference written in it.
@@ -832,23 +835,10 @@ fn rebuild_toc(document: &str, headings: &[Heading], styles: &Styles) -> Option<
     Some(format!("{}{generated}{}", &document[..result_start], &document[result_end..]))
 }
 
-/// Asks Word to refresh fields on opening, which fills in the page numbers.
-fn request_field_update(settings: &str) -> String {
-    if settings.contains("<w:updateFields") {
-        return settings.to_string();
-    }
-    // The schema fixes the order of these elements.
-    const FOLLOWING: &[&str] = &[
-        "<w:hdrShapeDefaults", "<w:footnotePr", "<w:endnotePr", "<w:compat", "<w:docVars", "<w:rsids",
-        "<m:mathPr", "<w:attachedSchema", "<w:themeFontLang", "<w:clrSchemeMapping", "<w:doNotIncludeSubdocsInStats",
-        "<w:doNotAutoCompressPictures", "<w:forceUpgrade", "<w:captions", "<w:readModeInkLockDown", "<w:smartTagType",
-        "<sl:schemaLibrary", "<w:shapeDefaults", "<w:doNotEmbedSmartTags", "<w:decimalSymbol", "<w:listSeparator",
-    ];
-    let at = FOLLOWING.iter().filter_map(|tag| settings.find(tag)).min().or_else(|| settings.rfind("</w:settings>"));
-    match at {
-        Some(at) => format!(r#"{}<w:updateFields w:val="true"/>{}"#, &settings[..at], &settings[at..]),
-        None => settings.to_string(),
-    }
+/// Word warns about external files whenever a document asks to refresh its fields
+/// on opening, so that request never goes out, even if a template carries it.
+fn without_field_update(settings: &str) -> String {
+    UPDATE_FIELDS.replace_all(settings, "").into_owned()
 }
 
 fn add_override(types: &mut String, part: &str, content_type: &str) {
@@ -1029,13 +1019,13 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
     let title = if input.fixed_title { input.title.to_string() } else { stated.unwrap_or_else(|| input.title.to_string()) };
     let author = values.get("autor").or(values.get("author")).cloned().unwrap_or_default();
     let date = values.get("fecha").or(values.get("date")).cloned().unwrap_or_else(|| input.date.to_string());
-    for (key, value) in [("titulo", &title), ("title", &title), ("autor", &author), ("author", &author), ("fecha", &date), ("date", &date)] {
+    let contents = input.contents.to_string();
+    for (key, value) in [("titulo", &title), ("title", &title), ("autor", &author), ("author", &author), ("fecha", &date), ("date", &date), ("indice", &contents)] {
         values.insert(key.to_string(), value.clone());
     }
 
     let mut document = insert_body(&fill_placeholders(&document, &values), &writer.out, &styles_xml);
     let toc = rebuild_toc(&document, &writer.headings, &styles);
-    let has_toc = toc.is_some();
     if let Some(rebuilt) = toc {
         document = rebuilt;
     }
@@ -1061,8 +1051,8 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
         }
         parts.insert(name, bytes);
     }
-    if has_toc && let Some(settings) = text_of(&parts, SETTINGS) {
-        parts.insert(SETTINGS.to_string(), request_field_update(&settings).into_bytes());
+    if let Some(settings) = text_of(&parts, SETTINGS) {
+        parts.insert(SETTINGS.to_string(), without_field_update(&settings).into_bytes());
     }
     parts.insert(CONTENT_TYPES.to_string(), types.into_bytes());
     parts.insert(DOC_RELS.to_string(), rels.into_bytes());
@@ -1124,7 +1114,7 @@ pub fn example_template() -> Vec<u8> {
         para("Title", "{{titulo}}"),
         para("Subtitle", "{{autor}}"),
         para("Subtitle", "{{fecha}}"),
-        para("TOCHeading", "Índice"),
+        para("TOCHeading", "{{indice}}"),
         toc_field.to_string(),
         r#"<w:p><w:pPr><w:pageBreakBefore/></w:pPr><w:r><w:t>{{contenido}}</w:t></w:r></w:p>"#.to_string(),
         r#"<w:sectPr><w:headerReference w:type="default" r:id="rIdHeader"/><w:footerReference w:type="default" r:id="rIdFooter"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1701" w:right="1417" w:bottom="1417" w:left="1417" w:header="708" w:footer="708" w:gutter="0"/><w:titlePg/></w:sectPr>"#.to_string(),

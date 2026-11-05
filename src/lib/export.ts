@@ -1,11 +1,13 @@
 // Exports use a fixed print look, whatever theme is on screen.
 import { api, type ExportPlan, type PlanSection, type TreeNode } from './api';
+import { hasStyle, parseStyle, withColors } from './diagramStyle';
 import { renderDiagram, toPng } from './diagrams';
+import { language, tr } from './i18n.svelte';
 import { renderMarkdown } from './markdown';
 import { baseName, extOf, kindOf, stem } from './paths';
 import previewCss from './preview.css?inline';
 import { store, type Tab } from './store.svelte';
-import { themeById, themeVariables } from './themes';
+import { frontmatterValue, themeById, themeKey, themeVariables, type Theme } from './themes';
 
 const PRINT_THEME = themeById('claro')!;
 const CHUNK = 0x8000;
@@ -35,7 +37,7 @@ export interface ExportOptions {
   template: string | null;
 }
 
-const byName = (a: TreeNode, b: TreeNode) => a.name.localeCompare(b.name, 'es', { numeric: true });
+const byName = (a: TreeNode, b: TreeNode) => a.name.localeCompare(b.name, language(), { numeric: true });
 const isNote = (n: TreeNode) => !n.isDir && kindOf(n.path) === 'md';
 const hasNotes = (n: TreeNode): boolean => (n.isDir ? n.children.some(hasNotes) : isNote(n));
 
@@ -128,20 +130,39 @@ function diagramBlocks(tab: Tab, path: string, content: string) {
   return [...fragment.querySelectorAll<HTMLElement>('.diagram')].map((el) => ({
     lang: el.dataset.lang!,
     src: decodeURIComponent(el.dataset.src ?? ''),
+    style: el.dataset.style ?? '',
   }));
+}
+
+interface Look {
+  theme: Theme;
+  sketch: boolean;
+}
+
+/**
+ * The print look, unless someone chose a style for this diagram, note or vault.
+ * Dark themes draw light text meant for a dark page, so on paper only their
+ * shapes and the diagram's own colours carry over.
+ */
+function printLook(tab: Tab, note: string, words: string): Look {
+  const style = parseStyle(words);
+  const chosen = hasStyle(style) || frontmatterValue(note, 'tema-diagramas') || store.vaultThemes[tab.vaultId]?.defaultDiagramTheme;
+  if (!chosen) return { theme: PRINT_THEME, sketch: false };
+  const look = store.diagramLook(tab, style, note, PRINT_THEME);
+  return look.theme.mode === 'dark' ? { theme: withColors(PRINT_THEME, style), sketch: look.sketch } : look;
 }
 
 const pngCache = new Map<string, number[]>();
 
-async function diagramPng(lang: string, src: string) {
-  const key = `${lang}:${src}`;
+async function diagramPng(lang: string, src: string, look: Look) {
+  const key = `${lang}:${look.sketch}:${themeKey(look.theme)}:${src}`;
   const known = pngCache.get(key);
   if (known) return known;
   const stage = document.createElement('div');
   stage.style.cssText = 'position:fixed;left:-99999px;top:0';
   document.body.append(stage);
   try {
-    stage.innerHTML = await renderDiagram(lang, src, PRINT_THEME);
+    stage.innerHTML = await renderDiagram(lang, src, look.theme, look.sketch);
     const png = Array.from(await toPng(stage.querySelector('svg')!));
     pngCache.set(key, png);
     return png;
@@ -160,8 +181,9 @@ export async function buildPlan(tab: Tab, options: ExportOptions): Promise<Expor
   const notes = await readNotes(tab, sections);
   const diagrams: number[][] = [];
   for (const { path } of noteSections(sections)) {
-    for (const { lang, src } of diagramBlocks(tab, path, notes.get(path) ?? '')) {
-      diagrams.push(await diagramPng(lang, src));
+    const note = notes.get(path) ?? '';
+    for (const { lang, src, style } of diagramBlocks(tab, path, note)) {
+      diagrams.push(await diagramPng(lang, src, printLook(tab, note, style)));
     }
   }
   const fixedTitle = options.scope !== 'note';
@@ -169,7 +191,9 @@ export async function buildPlan(tab: Tab, options: ExportOptions): Promise<Expor
     vaultId: tab.vaultId,
     title: fixedTitle ? rootOf(tab, options).name : stem(tab.path),
     fixedTitle,
-    date: new Date().toLocaleDateString('es'),
+    date: new Date().toLocaleDateString(language()),
+    language: language(),
+    contents: tr('export.contents'),
     cover: options.cover,
     template: options.template,
     sections,
@@ -218,14 +242,16 @@ export async function buildContent(tab: Tab, options: ExportOptions) {
     }
     const part = document.createElement('section');
     part.append(renderMarkdown(notes.get(section.path) ?? '', { vaultId: tab.vaultId, path: section.path, files: store.files(tab.vaultId) }));
+    for (const el of part.querySelectorAll<HTMLElement>('.diagram')) el.dataset.note = section.path;
     shiftHeadings(part, section.shift);
     root.append(part);
   }
   for (const el of root.querySelectorAll<HTMLElement>('.diagram')) {
     try {
-      el.innerHTML = await renderDiagram(el.dataset.lang!, decodeURIComponent(el.dataset.src ?? ''), PRINT_THEME);
+      const { theme, sketch } = printLook(tab, notes.get(el.dataset.note ?? '') ?? '', el.dataset.style ?? '');
+      el.innerHTML = await renderDiagram(el.dataset.lang!, decodeURIComponent(el.dataset.src ?? ''), theme, sketch);
     } catch {
-      el.textContent = 'Diagrama no disponible';
+      el.textContent = tr('preview.diagramUnavailable');
     }
   }
   for (const img of root.querySelectorAll<HTMLImageElement>('[data-path]')) {
@@ -240,7 +266,7 @@ export async function exportHtml(tab: Tab, options: ExportOptions) {
   const root = await buildContent(tab, options);
   const title = options.scope === 'note' ? stem(tab.path) : rootOf(tab, options).name;
   const page = document.implementation.createHTMLDocument(title);
-  page.documentElement.lang = 'es';
+  page.documentElement.lang = language();
   const style = page.createElement('style');
   style.textContent = documentCss();
   page.head.append(style);

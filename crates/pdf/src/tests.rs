@@ -51,7 +51,7 @@ fn note(markdown: &str) -> Vec<Section> {
 }
 
 fn input<'a>(sections: &'a [Section], cover: bool, diagrams: &'a [Vec<u8>], image: &'a dyn Fn(&str, &str) -> Option<Vec<u8>>) -> Input<'a> {
-    Input { sections, title: "Título \"raro\"", date: "5/11/2026", cover, diagrams, image }
+    Input { sections, title: "Título \"raro\"", date: "5/11/2026", language: "es", contents: "Índice", cover, diagrams, image }
 }
 
 #[test]

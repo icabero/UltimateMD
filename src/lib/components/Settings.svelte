@@ -2,22 +2,32 @@
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
   import { api, type DefaultAppInfo, type McpAccess, type Vault } from '../api';
+  import { LANGUAGES, language, setLanguage, themeName, tr, type Key, type Language } from '../i18n.svelte';
   import { store } from '../store.svelte';
   import { THEMES, type Theme } from '../themes';
 
   type Client = 'claude-code' | 'claude-desktop' | 'cursor' | 'other';
+  type Section = 'general' | 'appearance' | 'vaults' | 'ai';
 
-  const ACCESS: { value: McpAccess; label: string }[] = [
-    { value: 'off', label: 'Desactivado' },
-    { value: 'read', label: 'Lectura' },
-    { value: 'write', label: 'Lectura y escritura' },
+  const SECTIONS: { id: Section; label: Key }[] = [
+    { id: 'general', label: 'settings.sectionGeneral' },
+    { id: 'appearance', label: 'settings.appearance' },
+    { id: 'vaults', label: 'settings.sectionVaults' },
+    { id: 'ai', label: 'settings.sectionAi' },
   ];
-  const CLIENTS: { id: Client; label: string }[] = [
+  let section = $state<Section>('general');
+
+  const ACCESS: { value: McpAccess; label: Key }[] = [
+    { value: 'off', label: 'settings.accessOff' },
+    { value: 'read', label: 'settings.accessRead' },
+    { value: 'write', label: 'settings.accessWrite' },
+  ];
+  const CLIENTS = $derived<{ id: Client; label: string }[]>([
     { id: 'claude-code', label: 'Claude Code' },
     { id: 'claude-desktop', label: 'Claude Desktop' },
     { id: 'cursor', label: 'Cursor' },
-    { id: 'other', label: 'Otros' },
-  ];
+    { id: 'other', label: tr('settings.clientOther') },
+  ]);
 
   let mcp = $state<{ binary: string; available: boolean } | null>(null);
   let client = $state<Client>('claude-code');
@@ -49,7 +59,7 @@
   const json = $derived(JSON.stringify({ mcpServers: { ultimatemd: { command: mcp?.binary ?? '', args: [] } } }, null, 2));
   const snippet = $derived(client === 'claude-code' ? `claude mcp add --scope user ultimatemd -- "${mcp?.binary ?? ''}"` : json);
   const hint = $derived(
-    { 'claude-code': 'Ejecútalo en una terminal.', 'claude-desktop': `Añádelo a ${desktopConfig} y reinicia Claude Desktop.`, cursor: 'Añádelo a ~/.cursor/mcp.json.', other: 'Cualquier cliente MCP por stdio: usa esta ruta como comando, sin argumentos.' }[client],
+    { 'claude-code': tr('settings.hintCode'), 'claude-desktop': tr('settings.hintDesktop', { path: desktopConfig }), cursor: tr('settings.hintCursor'), other: tr('settings.hintOther') }[client],
   );
 
   const lightThemes = THEMES.filter((t) => t.mode === 'light');
@@ -67,7 +77,7 @@
   }
 
   async function rename(vault: Vault) {
-    const name = await store.prompt('Nombre del vault', vault.name, 'Renombrar');
+    const name = await store.prompt(tr('sidebar.vaultName'), vault.name, tr('common.rename'));
     if (name?.trim() && name.trim() !== vault.name) {
       await api.renameVault(vault.id, name.trim()).catch((e) => store.notify(e));
       await store.loadVaults();
@@ -75,7 +85,7 @@
   }
 
   async function remove(vault: Vault) {
-    if (await store.confirm(`¿Quitar «${vault.name}» de la lista? Sus archivos no se borran.`, 'Quitar')) await store.removeVault(vault.id);
+    if (await store.confirm(tr('settings.removeVault', { name: vault.name }), tr('common.remove'))) await store.removeVault(vault.id);
   }
 
   async function copy() {
@@ -89,19 +99,55 @@
   <button class="swatch" class:selected aria-pressed={selected} onclick={pick} style:background={t.colors.bg} style:color={t.colors.text} style:border-color={selected ? t.colors.accent : t.colors.line}>
     <span class="sample" style:font-family={t.prose === 'serif' ? 'var(--serif)' : 'var(--sans)'}>Aa</span>
     <span class="bar" style:background={t.colors.accent}></span>
-    <span class="tname">{t.name}</span>
+    <span class="tname">{themeName(t)}</span>
   </button>
 {/snippet}
 
-<button class="scrim" aria-label="Cerrar" onclick={() => (store.settings = false)}></button>
-<div class="modal" role="dialog" aria-label="Ajustes">
+<button class="scrim" aria-label={tr('common.close')} onclick={() => (store.settings = false)}></button>
+<div class="modal" role="dialog" aria-label={tr('settings.title')}>
   <header>
-    <h2>Ajustes</h2>
-    <button class="icon" title="Cerrar" onclick={() => (store.settings = false)}><Icon name="close" /></button>
+    <h2>{tr('settings.title')}</h2>
+    <button class="icon" title={tr('common.close')} onclick={() => (store.settings = false)}><Icon name="close" /></button>
   </header>
 
+  <div class="layout">
+  <nav aria-label={tr('settings.title')}>
+    {#each SECTIONS as s (s.id)}
+      <button class:on={section === s.id} aria-current={section === s.id ? 'page' : undefined} onclick={() => (section = s.id)}>{tr(s.label)}</button>
+    {/each}
+  </nav>
+  <div class="content">
+  {#if section === 'general'}
   <section>
-    <h3>Apariencia</h3>
+    <h3>{tr('settings.language')}</h3>
+    <select aria-label={tr('settings.language')} value={language()} onchange={(e) => setLanguage(e.currentTarget.value as Language)}>
+      {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
+    </select>
+  </section>
+  <section>
+    <h3>{tr('tutorial.label')}</h3>
+    <button class="plain" onclick={() => { store.settings = false; store.tutorial = true; }}>{tr('settings.tutorial')}</button>
+  </section>
+  {#if defaultApp}
+    <section>
+      <h3>{tr('settings.defaultApp')}</h3>
+      {#if defaultApp.platform === 'windows'}
+        <p class="muted">{@html tr('settings.defaultWindows')}</p>
+        <button class="plain" onclick={makeDefault}>{tr('settings.defaultWindowsButton')}</button>
+      {:else if defaultApp.platform === 'macos'}
+        <p class="muted">{@html tr('settings.defaultMac')}</p>
+      {:else if defaultApp.appimage}
+        <p class="muted">{@html tr('settings.defaultAppImage')}</p>
+      {:else if defaultApp.isDefault}
+        <p class="muted">{tr('settings.defaultDone')}</p>
+      {:else}
+        <button class="plain" onclick={makeDefault}>{tr('settings.defaultLinuxButton')}</button>
+      {/if}
+    </section>
+  {/if}
+  {:else if section === 'appearance'}
+  <section>
+    <h3>{tr('settings.appearance')}</h3>
     <div class="themes">
       {#each THEMES as t (t.id)}
         {@render swatch(t, store.theme.id === t.id, () => store.setThemeChoice({ fixed: t.id }))}
@@ -109,95 +155,89 @@
     </div>
     <label class="follow">
       <input type="checkbox" checked={following} onchange={(e) => store.setThemeChoice({ fixed: e.currentTarget.checked ? null : store.theme.id })} />
-      Seguir al sistema
+      {tr('settings.followSystem')}
     </label>
     {#if following}
       <div class="modes">
-        <label>Modo claro
+        <label>{tr('settings.lightMode')}
           <select value={store.themeChoice.light} onchange={(e) => store.setThemeChoice({ light: e.currentTarget.value })}>
-            {#each lightThemes as t}<option value={t.id}>{t.name}</option>{/each}
+            {#each lightThemes as t}<option value={t.id}>{themeName(t)}</option>{/each}
           </select>
         </label>
-        <label>Modo oscuro
+        <label>{tr('settings.darkMode')}
           <select value={store.themeChoice.dark} onchange={(e) => store.setThemeChoice({ dark: e.currentTarget.value })}>
-            {#each darkThemes as t}<option value={t.id}>{t.name}</option>{/each}
+            {#each darkThemes as t}<option value={t.id}>{themeName(t)}</option>{/each}
           </select>
         </label>
       </div>
     {/if}
   </section>
 
+  {:else if section === 'vaults'}
   <section>
-    <h3>Vaults</h3>
+    <h3>{tr('settings.sectionVaults')}</h3>
     {#each store.vaults as vault (vault.id)}
       <div class="vault">
         <div class="info">
-          <button class="name" title="Renombrar" onclick={() => rename(vault)}>{vault.name}</button>
+          <button class="name" title={tr('common.rename')} onclick={() => rename(vault)}>{vault.name}</button>
           <span class="path">{vault.path}</span>
         </div>
-        <div class="seg" role="group" aria-label="Acceso MCP de {vault.name}">
+        <div class="seg" role="group" aria-label={tr('settings.mcpAccessOf', { name: vault.name })}>
           {#each ACCESS as a}
-            <button class:on={vault.mcp === a.value} onclick={() => setAccess(vault, a.value)}>{a.label}</button>
+            <button class:on={vault.mcp === a.value} onclick={() => setAccess(vault, a.value)}>{tr(a.label)}</button>
           {/each}
         </div>
         <div class="actions">
-          <label title="Permite que los archivos .html de este vault ejecuten scripts, siempre aislados de la app y sin red">
+          <label title={tr('settings.scriptsHint')}>
             <input type="checkbox" checked={vault.allowScripts} onchange={(e) => setScripts(vault, e.currentTarget.checked)} />
-            Scripts en HTML
+            {tr('settings.scripts')}
           </label>
           <span class="spacer"></span>
-          {#if vault.open}<button onclick={() => (store.themeEditor = vault.id)}>Temas</button>{/if}
-          <button onclick={() => store.setVaultOpen(vault.id, !vault.open)}>{vault.open ? 'Cerrar' : 'Abrir'}</button>
-          <button onclick={() => remove(vault)}>Quitar</button>
+          {#if vault.open}<button onclick={() => (store.themeEditor = vault.id)}>{tr('settings.themes')}</button>{/if}
+          <button onclick={() => store.setVaultOpen(vault.id, !vault.open)}>{tr(vault.open ? 'common.close' : 'common.open')}</button>
+          <button onclick={() => remove(vault)}>{tr('common.remove')}</button>
         </div>
       </div>
     {:else}
-      <p class="muted">Aún no hay vaults.</p>
+      <p class="muted">{tr('settings.noVaults')}</p>
     {/each}
   </section>
 
-  {#if defaultApp}
-    <section>
-      <h3>Programa por defecto</h3>
-      {#if defaultApp.platform === 'windows'}
-        <p class="muted">Windows solo permite elegirlo desde su configuración. Busca <code>.md</code> y selecciona UltimateMD.</p>
-        <button class="plain" onclick={makeDefault}>Abrir aplicaciones predeterminadas</button>
-      {:else if defaultApp.platform === 'macos'}
-        <p class="muted">En el Finder, abre la información de un archivo <code>.md</code>, elige UltimateMD en "Abrir con" y pulsa "Cambiar todo".</p>
-      {:else if defaultApp.appimage}
-        <p class="muted">Un AppImage no se integra en el sistema. Instala el paquete <code>.deb</code> o <code>.rpm</code>, o elige este programa con "Abrir con" en tu explorador de archivos.</p>
-      {:else if defaultApp.isDefault}
-        <p class="muted">UltimateMD ya abre tus archivos Markdown.</p>
-      {:else}
-        <button class="plain" onclick={makeDefault}>Abrir los .md con UltimateMD</button>
-      {/if}
-    </section>
-  {/if}
-
+  {:else}
   <section>
-    <h3>Conectar una IA por MCP</h3>
-    <p class="muted">Funciona aunque la app esté cerrada. Cada vault responde según su nivel de acceso de arriba.</p>
+    <h3>{tr('settings.mcpTitle')}</h3>
+    <p class="muted">{tr('settings.mcpIntro')}</p>
     <div class="clients">
       {#each CLIENTS as c}
         <button class:on={client === c.id} onclick={() => (client = c.id)}>{c.label}</button>
       {/each}
     </div>
     {#if mcp?.available === false}
-      <p class="warn">No se encuentra el servidor MCP en esta instalación.</p>
+      <p class="warn">{tr('settings.mcpMissing')}</p>
     {/if}
     <div class="code">
       <pre>{snippet}</pre>
-      <button onclick={copy}>{copied ? 'Copiado' : 'Copiar'}</button>
+      <button onclick={copy}>{tr(copied ? 'common.copied' : 'common.copy')}</button>
     </div>
     <p class="muted">{hint}</p>
   </section>
+  {/if}
+  </div>
+  </div>
 </div>
 
 <style>
-  .modal { position: fixed; top: 50%; left: 50%; z-index: 31; width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 8px 20px 20px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translate(-50%, -50%); }
-  header { display: flex; align-items: center; justify-content: space-between; }
+  .modal { position: fixed; top: 50%; left: 50%; z-index: 31; display: flex; flex-direction: column; width: min(820px, calc(100vw - 32px)); height: min(600px, calc(100vh - 48px)); padding: 8px 20px 0; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translate(-50%, -50%); }
+  header { display: flex; flex: none; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .layout { display: grid; flex: 1; grid-template-columns: 180px 1fr; min-height: 0; margin: 0 -20px; }
+  nav { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; border-right: 1px solid var(--line); background: var(--panel); }
+  nav button { padding: 7px 10px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 13px; text-align: left; }
+  nav button:hover { background: var(--hover); color: var(--text); }
+  nav .on { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+  .content { min-width: 0; padding: 0 20px 20px; overflow-y: auto; }
+  section + section { margin-top: 22px; padding-top: 2px; border-top: 1px solid var(--line); }
   h2 { margin: 8px 0; font-size: 15px; font-weight: 650; }
-  h3 { margin: 20px 0 8px; font-size: 12.5px; font-weight: 650; }
+  h3 { margin: 16px 0 8px; font-size: 13px; font-weight: 650; }
   .themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 8px; }
   .swatch { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; padding: 8px 10px; border: 1.5px solid; border-radius: 8px; text-align: left; }
   .swatch.selected { box-shadow: 0 0 0 1px currentColor; }
@@ -207,7 +247,7 @@
   .follow { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: var(--text-2); font-size: 12.5px; }
   .modes { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; color: var(--text-2); font-size: 12.5px; }
   .modes label { display: flex; align-items: center; gap: 6px; }
-  select { padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
+  select { min-width: 170px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
   .vault { padding: 10px 0; border-top: 1px solid var(--line); }
   .info { display: flex; align-items: baseline; gap: 10px; min-width: 0; margin-bottom: 8px; }
   .name { flex: none; padding: 0; border: 0; background: none; color: var(--text); font-size: 13.5px; font-weight: 600; }
@@ -225,7 +265,7 @@
   .code button { position: absolute; top: 8px; right: 8px; background: var(--raised); }
   .plain { margin-top: 4px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text); font-size: 12.5px; }
   .plain:hover { background: var(--hover); }
-  code { font: 12px var(--mono); }
+  .muted :global(code) { font: 12px var(--mono); }
   .muted { margin: 4px 0; color: var(--text-2); font-size: 12.5px; }
   .warn { color: var(--danger); font-size: 12.5px; }
 </style>

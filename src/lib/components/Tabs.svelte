@@ -1,12 +1,14 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import { tr, type Key } from '../i18n.svelte';
   import { baseName } from '../paths';
   import { store, type ViewMode } from '../store.svelte';
 
-  const VIEWS: { mode: ViewMode; icon: string; title: string }[] = [
-    { mode: 'edit', icon: 'edit', title: 'Editar' },
-    { mode: 'split', icon: 'split', title: 'Dividido' },
-    { mode: 'preview', icon: 'eye', title: 'Vista previa' },
+  const VIEWS: { mode: ViewMode; icon: string; title: Key }[] = [
+    { mode: 'visual', icon: 'visual', title: 'tabs.visual' },
+    { mode: 'edit', icon: 'edit', title: 'tabs.edit' },
+    { mode: 'split', icon: 'split', title: 'tabs.split' },
+    { mode: 'preview', icon: 'eye', title: 'tabs.preview' },
   ];
   const active = $derived(store.active);
 </script>
@@ -19,20 +21,20 @@
         onkeydown={(e) => { if (e.key === 'Enter') store.activeKey = tab.key; }}
         onauxclick={(e) => { if (e.button === 1) store.close(tab); }}
         title="{store.location(tab)} · {tab.path}">
-        {#if tab.loose}<span class="loose" title="Archivo suelto, fuera de cualquier vault"><Icon name="file" size={12} /></span>{/if}
+        {#if tab.loose}<span class="loose" title={tr('tabs.looseFile')}><Icon name="file" size={12} /></span>{/if}
         <span class="name">{baseName(tab.path).replace(/\.(md|markdown)$/i, '')}</span>
-        {#if tab.dirty}<span class="dirty" title="Sin guardar"></span>{/if}
-        <button class="x" title="Cerrar (Ctrl+W)" onclick={(e) => { e.stopPropagation(); store.close(tab); }}><Icon name="close" size={12} /></button>
+        {#if tab.dirty}<span class="dirty" title={tr('tabs.unsaved')}></span>{/if}
+        <button class="x" title={tr('tabs.close')} onclick={(e) => { e.stopPropagation(); store.close(tab); }}><Icon name="close" size={12} /></button>
       </div>
     {/each}
   </div>
   {#if active && (active.kind === 'md' || active.kind === 'html')}
     <div class="views">
-      {#each VIEWS as v}
-        <button class="icon" class:on={active.view === v.mode} title={v.title} onclick={() => { active.view = v.mode; store.persist(); }}><Icon name={v.icon} /></button>
+      {#each VIEWS.filter((v) => active.kind === 'md' || v.mode !== 'visual') as v}
+        <button class="icon" class:on={active.view === v.mode} title={tr(v.title)} onclick={() => store.setView(active, v.mode)}><Icon name={v.icon} /></button>
       {/each}
       {#if active.kind === 'md'}
-        <button class="icon" title="Exportar (Ctrl+E)" onclick={() => (store.exporting = true)}><Icon name="export" /></button>
+        <button class="icon" title={tr('tabs.export')} onclick={() => (store.exporting = true)}><Icon name="export" /></button>
       {/if}
     </div>
   {/if}

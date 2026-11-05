@@ -1,0 +1,85 @@
+<script lang="ts">
+  import { getVersion } from '@tauri-apps/api/app';
+  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { onMount, untrack } from 'svelte';
+  import Icon from './Icon.svelte';
+  import { tr } from '../i18n.svelte';
+  import { store } from '../store.svelte';
+  import { RELEASES_URL, REPOSITORY_URL, checksAtStart, isNewer, latestVersion, setChecksAtStart } from '../updates';
+
+  type Check = { state: 'idle' | 'checking' | 'current' | 'none' | 'failed' } | { state: 'available'; version: string };
+
+  const known = untrack(() => store.update);
+  let version = $state('');
+  let check = $state<Check>(known ? { state: 'available', version: known } : { state: 'idle' });
+  let auto = $state(checksAtStart());
+
+  onMount(async () => {
+    version = await getVersion().catch(() => '');
+  });
+
+  async function search() {
+    check = { state: 'checking' };
+    try {
+      const latest = await latestVersion();
+      if (latest === null) check = { state: 'none' };
+      else if (isNewer(latest, version)) {
+        check = { state: 'available', version: latest };
+        store.update = latest;
+      } else check = { state: 'current' };
+    } catch {
+      check = { state: 'failed' };
+    }
+  }
+
+  const open = (url: string) => openUrl(url).catch((e) => store.notify(e));
+</script>
+
+<button class="scrim" aria-label={tr('common.close')} onclick={() => (store.about = false)}></button>
+<div class="modal" role="dialog" aria-label={tr('about.title')}>
+  <header>
+    <h2>Ultimate<b>MD</b></h2>
+    <button class="icon" title={tr('common.close')} onclick={() => (store.about = false)}><Icon name="close" /></button>
+  </header>
+  {#if version}<p class="version">{tr('about.version', { version })}</p>{/if}
+  <p>{tr('about.description')}</p>
+
+  <div class="links">
+    <button onclick={() => open(REPOSITORY_URL)}>{tr('about.repository')}</button>
+    <button onclick={() => open(`${REPOSITORY_URL}/blob/main/LICENSE`)}>{tr('about.license')}</button>
+  </div>
+
+  <h3>{tr('about.updates')}</h3>
+  <div class="check">
+    <button class="plain" disabled={check.state === 'checking'} onclick={search}>{tr(check.state === 'checking' ? 'about.checking' : 'about.check')}</button>
+    {#if check.state === 'current'}
+      <span role="status">{tr('about.upToDate')}</span>
+    {:else if check.state === 'none'}
+      <span role="status">{tr('about.noReleases')}</span>
+    {:else if check.state === 'failed'}
+      <span role="status" class="bad">{tr('about.failed')}</span>
+    {:else if check.state === 'available'}
+      <span role="status">{tr('about.available', { version: check.version })}</span>
+      <button class="plain" onclick={() => open(RELEASES_URL)}>{tr('about.download')}</button>
+    {/if}
+  </div>
+  <label><input type="checkbox" bind:checked={auto} onchange={() => setChecksAtStart(auto)} /> {tr('about.auto')}</label>
+</div>
+
+<style>
+  .modal { position: fixed; top: 50%; left: 50%; z-index: 31; width: min(440px, calc(100vw - 32px)); padding: 10px 20px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translate(-50%, -50%); }
+  header { display: flex; align-items: center; justify-content: space-between; }
+  h2 { margin: 6px 0; color: var(--text-2); font-size: 20px; font-weight: 400; letter-spacing: -.02em; }
+  b { color: var(--text); font-weight: 700; }
+  h3 { margin: 18px 0 8px; font-size: 12.5px; font-weight: 650; }
+  p { margin: 0 0 8px; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+  .version { color: var(--text-3); font-size: 12px; }
+  .links { display: flex; gap: 14px; }
+  .links button { padding: 0; border: 0; background: none; color: var(--accent-text); font-size: 12.5px; }
+  .links button:hover { text-decoration: underline; }
+  .check { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-2); font-size: 12.5px; }
+  .bad { color: var(--danger); }
+  .plain { padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text); font-size: 12.5px; }
+  .plain:hover { background: var(--hover); }
+  label { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: var(--text-2); font-size: 12.5px; }
+</style>

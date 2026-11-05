@@ -11,20 +11,23 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/licencia-MIT-blue" alt="Licencia MIT"></a>
 </p>
 
-![UltimateMD con editor, vista previa y diagramas](site/img/claro.png)
+![UltimateMD en modo visual, con una nota formateada, tareas y una tabla](site/img/visual.png)
 
 UltimateMD es un editor libre para Windows, macOS y Linux. Tus notas siguen siendo archivos `.md` en carpetas normales, sin base de datos ni formato propio, así que también puedes abrir un vault de Obsidian tal cual.
 
 ## Qué puedes hacer
 
 - **Trabajar con varios vaults a la vez**, en una sola ventana, con pestañas de cualquiera de ellos.
-- **Editar** con vista dividida, autoguardado, `[[wikilinks]]`, búsqueda global y selector rápido.
-- **Dibujar diagramas** Mermaid y D2 dentro de la nota, sin conexión.
+- **Editar en modo visual**, con formato mientras escribes y barra de herramientas, o en Markdown con vista dividida. El archivo siempre sigue siendo Markdown normal.
+- **Enlazar notas** escribiendo `[[` o con un botón, con sugerencias y un clic para abrirlas.
+- **Moverte rápido** con autoguardado, búsqueda global y selector rápido.
+- **Dibujar diagramas** Mermaid y D2 dentro de la nota, sin conexión: con un creador visual para los más habituales y plantillas para todos los demás.
 - **Exportar** una nota, una carpeta o un vault a PDF, Word o HTML, con vista previa.
 - **Usar tus plantillas de Word**, conservando portada, cabeceras, estilos e índice.
 - **Conectar tu IA** por MCP, con permisos por vault.
-- **Personalizarla** con siete temas y temas propios por vault, nota o diagrama.
+- **Personalizarla** con ocho temas y temas propios por vault, nota o diagrama.
 - **Abrir `.md` sueltos** y usarla como programa por defecto.
+- **Usarla en castellano, euskera o inglés**, con un tutorial la primera vez y aviso de nuevas versiones.
 
 ## Instalación
 
@@ -32,7 +35,7 @@ Descarga el instalador de tu sistema desde [Releases](https://github.com/icabero
 
 | Sistema | Archivo |
 |---|---|
-| Windows | `.exe` o `.msi` |
+| Windows | `.exe`, que deja elegir idioma, o `.msi` |
 | macOS | `.dmg`, para Apple Silicon o Intel |
 | Linux | AppImage, `.deb` o `.rpm` |
 
@@ -49,7 +52,7 @@ Los instaladores aún no están firmados:
 
 ## Conectar una IA por MCP
 
-Abre **Ajustes** en la app: allí tienes la configuración lista para copiar en Claude Code, Claude Desktop, Cursor y otros clientes. El servidor es un programa local que se comunica por stdio y **funciona aunque la app esté cerrada**. Si está abierta, ves los cambios al momento.
+Abre **Ajustes → Inteligencia artificial** en la app: allí tienes la configuración lista para copiar en Claude Code, Claude Desktop, Cursor y otros clientes. El servidor es un programa local que se comunica por stdio y **funciona aunque la app esté cerrada**. Si está abierta, ves los cambios al momento.
 
 | Nivel de acceso | La IA puede |
 |---|---|
@@ -63,7 +66,7 @@ Herramientas: `list_vaults`, `list_notes`, `read_note`, `search_notes`, `get_bac
 
 ![Diálogo de exportación con vista previa](site/img/export.png)
 
-Pulsa `Ctrl+E`. Lo exportado usa siempre un aspecto de documento, sea cual sea el tema activo.
+Pulsa `Ctrl+E`. Lo exportado usa un aspecto de documento, sea cual sea el tema activo. Los diagramas conservan el estilo que les hayas dado, salvo los temas oscuros, pensados para pantalla y no para papel.
 
 - **Alcance:** la nota, una carpeta o el vault. Las notas salen en orden natural: primero las de cada carpeta y luego sus subcarpetas. Usa prefijos como `01-` para fijar el orden.
 - **Carpetas:** cada nivel puede ser un título, un estilo de tu plantilla o no aparecer, con salto de página opcional. Los títulos de las notas bajan de nivel para encajar.
@@ -79,11 +82,17 @@ Marcadores para tu plantilla:
 | `{{autor}}`, `{{fecha}}` | Esos datos del frontmatter. La fecha, si falta, es la de hoy |
 | `{{cualquier-dato}}` | Ese campo del frontmatter |
 
-Al abrir el documento, Word pregunta si quieres actualizar los campos: acepta para que el índice muestre las páginas.
+Si el documento tiene índice, pulsa sobre él y luego `F9` en Word para que muestre los números de página.
 
 ## Diagramas
 
-Usa un bloque de código con el lenguaje `mermaid` o `d2`:
+![Creador de diagramas con el formulario a la izquierda y el dibujo a la derecha](site/img/diagramas.png)
+
+Pulsa **Diagrama** en la barra del editor y créalo con un formulario, viendo el resultado al momento. Hay formularios para flujos, secuencias, estados, mapas mentales, tartas y Gantt; flujos y secuencias pueden guardarse en Mermaid o D2.
+
+**Más tipos** ofrece una plantilla editable para el resto: clases, entidad-relación, líneas de tiempo, Kanban, barras, Sankey, arquitectura y otros, además de tablas de base de datos y rejillas en D2.
+
+En modo visual, pulsa sobre un diagrama para abrirlo. También puedes escribirlo a mano con un bloque `mermaid` o `d2`:
 
 ````markdown
 ```mermaid
@@ -104,7 +113,11 @@ app -> disco: lee y escribe
 
 ![Selector de temas](site/img/temas.png)
 
-Cada vault puede tener temas propios, creados desde **Ajustes → Temas**. Se guardan en `.ultimatemd/temas/` y viajan con él. Gana la capa más específica: nota, vault y aplicación. La interfaz sigue siempre el tema de la aplicación.
+Cada vault puede tener temas propios, creados desde **Ajustes → Vaults → Temas**. Se guardan en `.ultimatemd/temas/` y viajan con él. Gana la capa más específica: nota, vault y aplicación. La interfaz sigue siempre el tema de la aplicación.
+
+Los diagramas tienen su propio estilo, que eliges con el botón **Estilo** de la barra para toda la nota o todo el vault. Un diagrama concreto puede ir por libre desde **Apariencia de este diagrama**, con su tema, sus colores o un aspecto de boceto a mano.
+
+Todo queda en tus archivos, por si prefieres escribirlo a mano:
 
 ```yaml
 ---
@@ -113,49 +126,35 @@ tema-diagramas: boceto
 ---
 ```
 
-`tema-diagramas` elige otro tema solo para los diagramas, o `boceto` para un aspecto dibujado a mano.
+````markdown
+```mermaid tema=sepia relleno=#ffeecc
+flowchart LR
+  A --> B
+```
+````
 
-## Seguridad
+## Privacidad y seguridad
 
+- Tus notas no salen de tu equipo. La app solo se conecta a internet para preguntar a GitHub si hay una versión nueva; puedes desactivarlo en **Acerca de**.
 - La IA y la app solo llegan a archivos dentro del vault. Se bloquean `..`, los enlaces simbólicos que salen de él y las carpetas ocultas como `.git`. El MCP solo accede a notas.
 - Borrar siempre envía a la papelera del sistema.
 - El HTML dentro de una nota se muestra sin scripts. Los archivos `.html` se abren en un marco aislado, sin acceso a la app ni a la red, y sus scripts van desactivados salvo que los permitas en ese vault.
 - Un archivo suelto solo da acceso a ese archivo y a las imágenes de su carpeta.
 - Los temas son datos validados, sin CSS, y una nota nunca se ejecuta como código al exportar.
 
-## Desarrollo
+## Compilar desde el código
 
 Necesitas [Rust](https://rustup.rs), Node.js y las [dependencias de Tauri](https://tauri.app/start/prerequisites/) de tu sistema.
 
 ```sh
 npm install
-npm run dev          # app en modo desarrollo
-npm run build        # instaladores para tu sistema
-cargo test -p ultimatemd-core -p ultimatemd-mcp -p ultimatemd-pdf
-npm run check
-npm run test:e2e
+npm run dev     # abre la app
+npm run build   # crea los instaladores para tu sistema
 ```
 
-| Carpeta | Contenido |
-|---|---|
-| `crates/core` | Vaults, archivos, búsqueda, enlaces, temas y Word |
-| `crates/mcp` | Servidor MCP |
-| `crates/pdf` | Generación de PDF con Typst |
-| `src-tauri` | Aplicación de escritorio |
-| `src` | Interfaz (Svelte) |
-| `site` | Web del proyecto |
+## Contribuir
 
-El proyecto sigue gitflow:
-
-| Rama | Sale de | Se fusiona en | Uso |
-|---|---|---|---|
-| `main` | | | Versiones publicadas |
-| `develop` | `main` | | Integración del siguiente trabajo |
-| `feature/*` | `develop` | `develop` | Funciones y mejoras |
-| `release/x.y.z` | `develop` | `main` y `develop` | Preparar una versión |
-| `hotfix/x.y.z` | `main` | `main` y `develop` | Arreglos urgentes en una versión publicada |
-
-Al fusionar una `release/*` o `hotfix/*` en `main`, etiqueta ese commit como `vx.y.z`. La etiqueta hace que GitHub Actions compile todos los instaladores y cree un borrador de versión.
+El código es abierto y puedes usarlo, estudiarlo o adaptarlo con su licencia. El desarrollo es privado por ahora: no se aceptan pull requests sin acuerdo previo. Si encuentras un fallo o tienes una idea, abre una [issue](https://github.com/icabero/UltimateMD/issues).
 
 ## Licencia
 

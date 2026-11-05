@@ -17,12 +17,12 @@ const MAX_FILE: u64 = 16 * 1024;
 const MAX_NAME: usize = 60;
 const MAX_ID: usize = 40;
 
-const BASES: &[&str] = &["claro", "oscuro", "sepia", "medianoche", "bosque", "grafito", "contraste"];
+const BASES: &[&str] = &["claro", "oscuro", "sepia", "rosa", "medianoche", "bosque", "grafito", "contraste"];
 const COLORS: &[&str] = &[
     "bg", "panel", "raised", "line", "text", "text2", "text3", "accent", "accentText", "onAccent", "danger", "warn",
     "synString", "synKeyword", "synNumber", "synAttr",
 ];
-const DIAGRAM_COLORS: &[&str] = &["surface", "border"];
+const DIAGRAM_COLORS: &[&str] = &["surface", "border", "line", "text"];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -51,12 +51,16 @@ pub struct ThemeFile {
 struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     default_theme: Option<String>,
+    /// A theme for diagrams alone, or `boceto` for the hand-drawn look.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    default_diagram_theme: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultThemes {
     pub default_theme: Option<String>,
+    pub default_diagram_theme: Option<String>,
     pub themes: Vec<ThemeFile>,
     /// Files that were ignored because they are not valid themes.
     pub invalid: Vec<String>,
@@ -122,7 +126,8 @@ fn read_config(root: &Path) -> Config {
 }
 
 pub fn load(root: &Path) -> Result<VaultThemes> {
-    let mut out = VaultThemes { default_theme: read_config(root).default_theme, ..Default::default() };
+    let config = read_config(root);
+    let mut out = VaultThemes { default_theme: config.default_theme, default_diagram_theme: config.default_diagram_theme, ..Default::default() };
     let Ok(entries) = std::fs::read_dir(themes_dir(root)) else {
         return Ok(out);
     };
@@ -152,20 +157,34 @@ pub fn save(root: &Path, theme: &ThemeFile) -> Result<()> {
 
 pub fn delete(root: &Path, id: &str) -> Result<()> {
     check_id(id)?;
-    if read_config(root).default_theme.as_deref() == Some(id) {
+    let config = read_config(root);
+    if config.default_theme.as_deref() == Some(id) {
         set_default(root, None)?;
+    }
+    if config.default_diagram_theme.as_deref() == Some(id) {
+        set_default_diagrams(root, None)?;
     }
     Ok(std::fs::remove_file(themes_dir(root).join(format!("{id}{EXT}")))?)
 }
 
 /// Sets the vault's default theme, a vault theme or built-in. None clears it.
 pub fn set_default(root: &Path, id: Option<String>) -> Result<()> {
-    if let Some(id) = &id {
+    change_config(root, &id, |config| config.default_theme = id.clone())
+}
+
+/// Sets the theme for the vault's diagrams, or `boceto`. None leaves them to each note.
+pub fn set_default_diagrams(root: &Path, id: Option<String>) -> Result<()> {
+    change_config(root, &id, |config| config.default_diagram_theme = id.clone())
+}
+
+fn change_config(root: &Path, id: &Option<String>, change: impl FnOnce(&mut Config)) -> Result<()> {
+    if let Some(id) = id {
         check_id(id)?;
     }
     let dir = root.join(FOLDER);
     std::fs::create_dir_all(&dir)?;
-    let config = Config { default_theme: id };
+    let mut config = read_config(root);
+    change(&mut config);
     atomic_write(&dir.join(CONFIG), serde_json::to_string_pretty(&config)?.as_bytes())
 }
 
@@ -204,6 +223,12 @@ mod tests {
         let loaded = load(d.path()).unwrap();
         assert!(loaded.themes.is_empty());
         assert_eq!(loaded.default_theme, None, "deleting the default clears it");
+
+        set_default(d.path(), Some("corp".into())).unwrap();
+        set_default_diagrams(d.path(), Some("boceto".into())).unwrap();
+        let both = load(d.path()).unwrap();
+        assert_eq!(both.default_theme.as_deref(), Some("corp"), "one setting keeps the other");
+        assert_eq!(both.default_diagram_theme.as_deref(), Some("boceto"));
     }
 
     #[test]

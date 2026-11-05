@@ -4,6 +4,7 @@
   import PagedPreview from './PagedPreview.svelte';
   import { api, type DocxPreview, type TemplateStyle } from '../api';
   import { buildContent, buildPlan, documentCss, exportHtml, foldersOf, levelCount, levelExamples, type ExportOptions, type LevelChoice, type Scope } from '../export';
+  import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
 
   type Format = 'pdf' | 'docx' | 'html';
@@ -119,7 +120,7 @@
   }
 
   async function renameTemplate() {
-    const name = (await store.prompt('Nombre de la plantilla', template, 'Renombrar'))?.trim();
+    const name = (await store.prompt(tr('export.templateName'), template, tr('common.rename')))?.trim();
     if (!name || name === template) return;
     await runAction(() => api.renameTemplate(template, name));
     await loadTemplates();
@@ -127,7 +128,7 @@
   }
 
   async function deleteTemplate() {
-    if (!(await store.confirm(`¿Eliminar la plantilla «${template}»?`, 'Eliminar', true))) return;
+    if (!(await store.confirm(tr('export.templateDelete', { name: template }), tr('common.delete'), true))) return;
     await runAction(() => api.deleteTemplate(template));
     await loadTemplates();
   }
@@ -143,34 +144,34 @@
     busy = false;
     if (done) {
       store.exporting = false;
-      store.notify('Exportado');
+      store.notify(tr('export.done'));
     }
   }
 </script>
 
-<button class="scrim" aria-label="Cerrar" onclick={() => (store.exporting = false)}></button>
-<div class="modal" role="dialog" aria-label="Exportar">
+<button class="scrim" aria-label={tr('common.close')} onclick={() => (store.exporting = false)}></button>
+<div class="modal" role="dialog" aria-label={tr('export.title')}>
   <div class="config">
     <header>
-      <h2>Exportar</h2>
-      <button class="icon" title="Cerrar" onclick={() => (store.exporting = false)}><Icon name="close" /></button>
+      <h2>{tr('export.title')}</h2>
+      <button class="icon" title={tr('common.close')} onclick={() => (store.exporting = false)}><Icon name="close" /></button>
     </header>
 
-    <h3>Formato</h3>
-    <div class="seg" role="group" aria-label="Formato">
+    <h3>{tr('export.format')}</h3>
+    <div class="seg" role="group" aria-label={tr('export.format')}>
       {#each FORMATS as f}
         <button class:on={format === f.id} aria-pressed={format === f.id} onclick={() => (format = f.id)}>{f.label}</button>
       {/each}
     </div>
 
-    <h3>Qué exportar</h3>
-    <div class="seg" role="group" aria-label="Alcance">
-      <button class:on={scope === 'note'} onclick={() => setScope('note')}>Esta nota</button>
-      <button class:on={scope === 'folder'} disabled={!canWiden || !folders.length} onclick={() => setScope('folder')}>Carpeta</button>
+    <h3>{tr('export.what')}</h3>
+    <div class="seg" role="group" aria-label={tr('export.scope')}>
+      <button class:on={scope === 'note'} onclick={() => setScope('note')}>{tr('export.thisNote')}</button>
+      <button class:on={scope === 'folder'} disabled={!canWiden || !folders.length} onclick={() => setScope('folder')}>{tr('export.folder')}</button>
       <button class:on={scope === 'vault'} disabled={!canWiden} onclick={() => setScope('vault')}>Vault</button>
     </div>
     {#if scope === 'folder'}
-      <label class="row">Carpeta
+      <label class="row">{tr('export.folder')}
         <select bind:value={folder}>
           {#each folders as f}<option value={f}>{f}</option>{/each}
         </select>
@@ -178,66 +179,66 @@
     {/if}
 
     {#if scope !== 'note'}
-      <h3>Carpetas en el documento</h3>
+      <h3>{tr('export.foldersInDoc')}</h3>
       {#each levels as level, i}
         <div class="level">
           <label class="row">
-            <span class="name" title={examples[i]}>{i === 0 ? 'Raíz' : `Nivel ${i}`}{examples[i] ? ` · ${examples[i]}` : ''}</span>
-            <select bind:value={level.value} aria-label="Nivel {i}">
-              <option value="">Sin título, contenido seguido</option>
-              {#each HEADINGS as n}<option value="heading:{n}">Título {n}</option>{/each}
+            <span class="name" title={examples[i]}>{i === 0 ? tr('export.root') : tr('export.level', { n: i })}{examples[i] ? ` · ${examples[i]}` : ''}</span>
+            <select bind:value={level.value} aria-label={tr('export.level', { n: i })}>
+              <option value="">{tr('export.noTitle')}</option>
+              {#each HEADINGS as n}<option value="heading:{n}">{tr('export.heading', { n })}</option>{/each}
               {#if format === 'docx' && customStyles.length}
-                <optgroup label="Estilos de la plantilla">
+                <optgroup label={tr('export.templateStyles')}>
                   {#each customStyles as s}<option value="style:{s.id}">{s.name}</option>{/each}
                 </optgroup>
               {/if}
             </select>
           </label>
           {#if level.value}
-            <label class="check"><input type="checkbox" bind:checked={level.pageBreak} /> Empezar en página nueva</label>
+            <label class="check"><input type="checkbox" bind:checked={level.pageBreak} /> {tr('export.pageBreak')}</label>
           {/if}
         </div>
       {/each}
-      <h3>Notas</h3>
-      <label class="check"><input type="checkbox" bind:checked={noteTitles} /> Usar el nombre de cada nota como título</label>
-      <label class="check"><input type="checkbox" bind:checked={noteBreak} /> Empezar cada nota en página nueva</label>
+      <h3>{tr('export.notes')}</h3>
+      <label class="check"><input type="checkbox" bind:checked={noteTitles} /> {tr('export.noteTitles')}</label>
+      <label class="check"><input type="checkbox" bind:checked={noteBreak} /> {tr('export.noteBreak')}</label>
     {/if}
 
     {#if format === 'pdf'}
-      <h3>Documento</h3>
-      <label class="check"><input type="checkbox" bind:checked={cover} /> Portada e índice</label>
+      <h3>{tr('export.document')}</h3>
+      <label class="check"><input type="checkbox" bind:checked={cover} /> {tr('export.cover')}</label>
     {:else if format === 'docx'}
-      <h3>Plantilla</h3>
-      <select class="wide" aria-label="Plantilla" bind:value={template}>
-        <option value="">Sin plantilla</option>
-        {#each templates as t}<option value={t}>{t}{t === EXAMPLE ? ' (incluida)' : ''}</option>{/each}
+      <h3>{tr('export.template')}</h3>
+      <select class="wide" aria-label={tr('export.template')} bind:value={template}>
+        <option value="">{tr('export.noTemplate')}</option>
+        {#each templates as name}<option value={name}>{name === EXAMPLE ? tr('export.exampleTemplate') : name}</option>{/each}
       </select>
       <div class="buttons">
-        <button class="plain" onclick={importTemplate}>Importar .docx</button>
-        {#if template}<button class="plain" onclick={() => runAction(() => api.saveTemplateCopy(template))}>Guardar copia</button>{/if}
+        <button class="plain" onclick={importTemplate}>{tr('export.import')}</button>
+        {#if template}<button class="plain" onclick={() => runAction(() => api.saveTemplateCopy(template))}>{tr('export.saveCopy')}</button>{/if}
         {#if template && template !== EXAMPLE}
-          <button class="plain" onclick={renameTemplate}>Renombrar</button>
-          <button class="plain" onclick={deleteTemplate}>Eliminar</button>
+          <button class="plain" onclick={renameTemplate}>{tr('common.rename')}</button>
+          <button class="plain" onclick={deleteTemplate}>{tr('common.delete')}</button>
         {/if}
       </div>
-      <p>En tu plantilla, escribe <code>{'{{contenido}}'}</code> donde deba ir el texto, y <code>{'{{titulo}}'}</code>, <code>{'{{autor}}'}</code>, <code>{'{{fecha}}'}</code> o cualquier dato del frontmatter.</p>
+      <p>{@html tr('export.templateHelp')}</p>
     {/if}
 
     <footer>
-      <button class="main" disabled={busy} onclick={submit}>{busy ? 'Exportando…' : 'Exportar'}</button>
+      <button class="main" disabled={busy} onclick={submit}>{tr(busy ? 'export.exporting' : 'export.title')}</button>
     </footer>
   </div>
 
-  <div class="preview" aria-label="Vista previa" aria-busy={previewing}>
+  <div class="preview" aria-label={tr('export.preview')} aria-busy={previewing}>
     {#if previewError}
       <p class="error" role="alert">{previewError}</p>
     {:else if format === 'pdf'}
       {#each pages as page, i}
-        <img class="page" src={page} alt="Página {i + 1}" />
+        <img class="page" src={page} alt={tr('export.page', { n: i + 1 })} />
       {/each}
     {:else if format === 'docx'}
       {#if docx}<PagedPreview preview={docx} />{/if}
-      <p class="note">Aproximación: Word puede variar fuentes y saltos de página.</p>
+      <p class="note">{tr('export.wordNote')}</p>
     {:else}
       <div class="html" bind:this={htmlHost}></div>
     {/if}
@@ -265,7 +266,7 @@
   .plain { padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text-2); font-size: 12px; }
   .plain:hover { background: var(--hover); color: var(--text); }
   p { margin: 8px 0 0; color: var(--text-2); font-size: 12px; line-height: 1.5; }
-  code { font: 11px var(--mono); }
+  p :global(code) { font: 11px var(--mono); }
   footer { display: flex; justify-content: flex-end; margin-top: auto; padding-top: 14px; }
   .main { padding: 6px 16px; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent); color: var(--on-accent); font-size: 13px; }
   .main:disabled { opacity: .6; }

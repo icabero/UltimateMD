@@ -2,9 +2,10 @@
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { onMount } from 'svelte';
   import { api, fileUrl } from '../api';
+  import { parseStyle } from '../diagramStyle';
   import { renderDiagram, toPng, toSvgBytes } from '../diagrams';
+  import { tr } from '../i18n.svelte';
   import { renderMarkdown } from '../markdown';
-  import { dirName } from '../paths';
   import { store, type Tab } from '../store.svelte';
   import { themeKey, themeVariables } from '../themes';
   import previewCss from '../preview.css?inline';
@@ -27,11 +28,11 @@
 
   function saveDiagram(svg: SVGSVGElement, format: 'svg' | 'png', index: number) {
     return async () => {
-      const name = `diagrama-${index + 1}.${format}`;
+      const name = `${tr('preview.diagramFile', { n: index + 1 })}.${format}`;
       try {
         await api.exportFile(name, format === 'svg' ? toSvgBytes(svg) : await toPng(svg));
       } catch (e) {
-        store.notify(format === 'png' ? 'No se pudo generar el PNG. Prueba a exportar en SVG.' : e);
+        store.notify(format === 'png' ? tr('preview.pngFailed') : e);
       }
     };
   }
@@ -44,11 +45,11 @@
   }
 
   async function hydrate(id: number) {
-    const { theme, sketch } = store.diagramLook(tab);
     const blocks = [...body.querySelectorAll<HTMLElement>('.diagram')];
     await Promise.all(blocks.map(async (el, index) => {
       const src = decodeURIComponent(el.dataset.src ?? '');
       try {
+        const { theme, sketch } = store.diagramLook(tab, parseStyle(el.dataset.style ?? ''));
         const svg = await renderDiagram(el.dataset.lang!, src, theme, sketch);
         if (id !== run) return;
         el.innerHTML = svg;
@@ -80,10 +81,10 @@
     const look = store.diagramLook(tab);
     const lookKey = `${look.sketch}:${themeKey(look.theme)}`;
     const kept = drawnWith === lookKey ? [...body.querySelectorAll<HTMLElement>('.diagram')] : [];
-    const old = new Map(kept.map((e) => [`${e.dataset.lang}:${e.dataset.src}`, e]));
+    const old = new Map(kept.map((e) => [`${e.dataset.lang}:${e.dataset.style}:${e.dataset.src}`, e]));
     drawnWith = lookKey;
     for (const el of fragment.querySelectorAll<HTMLElement>('.diagram')) {
-      const previous = old.get(`${el.dataset.lang}:${el.dataset.src}`);
+      const previous = old.get(`${el.dataset.lang}:${el.dataset.style}:${el.dataset.src}`);
       if (previous) el.innerHTML = previous.innerHTML;
     }
     body.replaceChildren(fragment);
@@ -103,8 +104,7 @@
     if (a.dataset.note) return store.openFile(tab.vaultId, a.dataset.note);
     if (a.dataset.external && /^(https?|mailto):/i.test(a.dataset.external)) return openUrl(a.dataset.external);
     if (a.dataset.wikilink) {
-      const name = a.dataset.wikilink;
-      if (await store.confirm(`La nota «${name}» no existe. ¿Crearla?`, 'Crear')) await store.createNote(tab.vaultId, dirName(tab.path), name);
+      await store.followLink(tab, a.dataset.wikilink);
     }
   }
 
@@ -144,7 +144,7 @@
       <iframe title={tab.path} src={htmlSrc} sandbox={scripts ? 'allow-scripts' : ''}></iframe>
     {/key}
     {#if !scripts}
-      <p class="note">Scripts desactivados. Se activan por vault en Ajustes.</p>
+      <p class="note">{tr('preview.scriptsOff')}</p>
     {/if}
   </div>
 {:else}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
   import { store } from '../store.svelte';
 
   const MAX = 40;
@@ -48,17 +49,17 @@
   }
 </script>
 
-<button class="scrim" aria-label="Cerrar" onclick={() => (store.palette = false)}></button>
-<div class="box" role="dialog" aria-label="Abrir nota">
+<button class="scrim" aria-label={tr('common.close')} onclick={() => (store.palette = false)}></button>
+<div class="box" role="dialog" aria-label={tr('palette.title')}>
   <!-- svelte-ignore a11y_autofocus -->
-  <input autofocus bind:value={query} oninput={() => (index = 0)} onkeydown={onKey} placeholder="Abrir nota…" />
+  <input autofocus bind:value={query} oninput={() => (index = 0)} onkeydown={onKey} placeholder={tr('palette.placeholder')} />
   <div class="list">
     {#each results as f, i}
       <button class:on={i === index} onclick={() => pick(i)} onmousemove={() => (index = i)}>
         <span class="path">{f.path}</span><span class="vault">{f.vault.name}</span>
       </button>
     {:else}
-      <p>Nada coincide</p>
+      <p>{tr('palette.empty')}</p>
     {/each}
   </div>
 </div>

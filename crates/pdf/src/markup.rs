@@ -288,8 +288,8 @@ fn resolve_footnotes(content: &str, notes: &HashMap<String, String>) -> String {
     out
 }
 
-fn cover(title: &str, date: &str) -> String {
-    let (title, date) = (quoted(title), quoted(date));
+fn cover(title: &str, date: &str, contents: &str) -> String {
+    let (title, date, contents) = (quoted(title), quoted(date), quoted(contents));
     format!(
         r#"#page(footer: none)[
   #v(1fr)
@@ -298,7 +298,7 @@ fn cover(title: &str, date: &str) -> String {
   #align(center)[#text(12pt, fill: luma(90), {date})]
   #v(1.3fr)
 ]
-#outline(title: "Índice", depth: 3)
+#outline(title: {contents}, depth: 3)
 #pagebreak()
 "#
     )
@@ -306,9 +306,9 @@ fn cover(title: &str, date: &str) -> String {
 
 /// Returns the Typst source and the images it refers to.
 pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
-    let mut source = format!("#set document(title: {})\n{PREAMBLE}\n", quoted(input.title));
+    let mut source = format!("#set document(title: {})\n{PREAMBLE}\n#set text(lang: {})\n", quoted(input.title), quoted(input.language));
     if input.cover {
-        source.push_str(&cover(input.title, input.date));
+        source.push_str(&cover(input.title, input.date, input.contents));
     }
     let options = Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
     let mut writer = Writer {

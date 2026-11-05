@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Editor from './lib/components/Editor.svelte';
+  import About from './lib/components/About.svelte';
   import Export from './lib/components/Export.svelte';
   import Modal from './lib/components/Modal.svelte';
   import Palette from './lib/components/Palette.svelte';
@@ -8,14 +9,16 @@
   import Settings from './lib/components/Settings.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
   import ThemeEditor from './lib/components/ThemeEditor.svelte';
+  import Tutorial from './lib/components/Tutorial.svelte';
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
+  import { applyInstallerLanguage, tr } from './lib/i18n.svelte';
   import { dirName } from './lib/paths';
   import { store, type ViewMode } from './lib/store.svelte';
   import { applyTheme } from './lib/themes';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
-  const VIEWS: ViewMode[] = ['edit', 'split', 'preview'];
+  const VIEWS: ViewMode[] = ['visual', 'edit', 'split', 'preview'];
   const SIDEBAR_KEY = 'ultimatemd.sidebar';
 
   let preview = $state<Preview>();
@@ -23,7 +26,7 @@
   const tab = $derived(store.active);
   const words = $derived(tab?.content.trim() ? tab.content.trim().split(/\s+/).length : 0);
   const status = $derived(
-    !tab ? '' : tab.missing ? 'Eliminada en disco' : tab.conflict ? 'Conflicto' : tab.saving ? 'Guardando…' : tab.dirty ? 'Sin guardar' : 'Guardado',
+    !tab ? '' : tr(tab.missing ? 'app.statusDeleted' : tab.conflict ? 'app.statusConflict' : tab.saving ? 'app.statusSaving' : tab.dirty ? 'app.statusUnsaved' : 'app.statusSaved'),
   );
 
   $effect(() => {
@@ -38,25 +41,28 @@
       // Keeps the default width.
     }
     store.init().catch((e) => store.notify(e));
-    // The window starts hidden so it first appears with the right theme.
-    try {
-      void getCurrentWindow().show();
-    } catch {
-      // Outside the app, in the interface tests.
-    }
+    // The window starts hidden so it first appears with the right theme and language.
+    void applyInstallerLanguage().finally(() => {
+      try {
+        void getCurrentWindow().show();
+      } catch {
+        // Outside the app, in the interface tests.
+      }
+    });
   });
 
   async function newNote() {
     const vaultId = tab?.vaultId ?? store.openVaults[0]?.id;
-    if (!vaultId) return store.notify('Abre un vault primero');
-    const name = await store.prompt('Nombre de la nota', '', 'Crear');
+    if (!vaultId) return store.notify(tr('app.openVaultFirst'));
+    const name = await store.prompt(tr('sidebar.noteName'), '', tr('common.create'));
     if (name?.trim()) await store.createNote(vaultId, tab ? dirName(tab.path) : '', name.trim());
   }
 
   function onKey(e: KeyboardEvent) {
     const key = e.key.toLowerCase();
     if (key === 'escape') {
-      store.palette = store.settings = store.exporting = false;
+      if (store.tutorial) store.closeTutorial();
+      store.palette = store.settings = store.exporting = store.about = false;
       store.themeEditor = null;
       return;
     }
@@ -70,7 +76,7 @@
       s: () => void store.saveAll(),
       w: () => tab && void store.close(tab),
       '\\': () => {
-        if (tab) tab.view = VIEWS[(VIEWS.indexOf(tab.view) + 1) % VIEWS.length];
+        if (tab) store.setView(tab, VIEWS[(VIEWS.indexOf(tab.view) + 1) % VIEWS.length]);
       },
       tab: () => store.cycleTab(e.shiftKey ? -1 : 1),
     };
@@ -104,17 +110,17 @@
 
 <div class="app" style:grid-template-columns="{sidebarWidth}px 1fr">
   <Sidebar />
-  <button class="grip" aria-label="Cambiar ancho" style:left="{sidebarWidth - 3}px" onpointerdown={resize}></button>
+  <button class="grip" aria-label={tr('app.resize')} style:left="{sidebarWidth - 3}px" onpointerdown={resize}></button>
   <main>
     <Tabs />
     {#if tab?.conflict}
       <div class="banner" role="alert">
-        <span>Esta nota ha cambiado fuera de la app mientras la editabas.</span>
-        <button onclick={() => store.acceptDisk(tab)}>Usar la del disco</button>
-        <button onclick={() => store.keepMine(tab)}>Mantener la mía</button>
+        <span>{tr('app.conflictBanner')}</span>
+        <button onclick={() => store.acceptDisk(tab)}>{tr('app.useDisk')}</button>
+        <button onclick={() => store.keepMine(tab)}>{tr('app.keepMine')}</button>
       </div>
     {:else if tab?.missing}
-      <div class="banner" role="alert"><span>Este archivo ya no existe en disco. Sus cambios no se guardarán.</span></div>
+      <div class="banner" role="alert"><span>{tr('app.missingBanner')}</span></div>
     {/if}
     <div class="content">
       {#if !tab}
@@ -125,7 +131,7 @@
         <div class="pane" class:hidden={tab.view === 'preview'}>
           <Editor {tab} onscroll={(ratio) => preview?.scrollTo(ratio)} />
         </div>
-        {#if tab.view !== 'edit'}
+        {#if tab.view === 'split' || tab.view === 'preview'}
           <div class="pane preview">
             {#key tab.key}<Preview bind:this={preview} {tab} />{/key}
           </div>
@@ -136,11 +142,14 @@
       {#if tab}
         <span class="where">{store.location(tab)} / {tab.path}</span>
         {#if tab.loose}
-          <button class="adopt" onclick={() => store.adoptFolder(tab)}>Abrir la carpeta como vault</button>
+          <button class="adopt" onclick={() => store.adoptFolder(tab)}>{tr('app.adoptFolder')}</button>
         {/if}
         <span class="spacer"></span>
-        {#if tab.kind === 'md' || tab.kind === 'html'}<span>{words} palabras</span>{/if}
+        {#if tab.kind === 'md' || tab.kind === 'html'}<span>{tr('app.words', { n: words })}</span>{/if}
         <span>{status}</span>
+      {/if}
+      {#if store.update}
+        <button class="adopt" onclick={() => (store.about = true)}>{tr('app.updateAvailable', { version: store.update })}</button>
       {/if}
     </footer>
   </main>
@@ -148,11 +157,13 @@
 
 {#if store.palette}<Palette />{/if}
 {#if store.settings}<Settings />{/if}
+{#if store.about}<About />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
 {#if store.exporting && tab}<Export {tab} />{/if}
 {#if store.dialog}
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}
 {/if}
+{#if store.tutorial}<Tutorial />{/if}
 {#if store.toast}<div class="toast" role="status">{store.toast}</div>{/if}
 
 <style>

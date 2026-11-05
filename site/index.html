@@ -7,7 +7,7 @@
   <meta name="description" content="Editor de Markdown libre para Windows, macOS y Linux. Varios vaults a la vez, diagramas, exportación a PDF y Word con tus plantillas, y conexión con tu IA por MCP.">
   <meta property="og:title" content="UltimateMD">
   <meta property="og:description" content="Notas en Markdown, diagramas, documentos de verdad y tu IA, sobre archivos normales.">
-  <meta property="og:image" content="https://icabero.github.io/UltimateMD/img/claro.png">
+  <meta property="og:image" content="https://icabero.github.io/UltimateMD/img/visual.png">
   <link rel="icon" href="img/icon.png">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -26,28 +26,41 @@
   <main id="contenido">
     <section class="hero">
       <h1>Tus notas en Markdown, convertidas en documentos de verdad.</h1>
-      <p class="lead">Un editor libre para Windows, macOS y Linux. Trabaja con varios vaults a la vez, dibuja diagramas, exporta a PDF y Word con tus plantillas y conecta tu IA por MCP. Todo sobre archivos normales.</p>
+      <p class="lead">Un editor libre para Windows, macOS y Linux. Escribe con formato, dibuja diagramas sin saber código, exporta a PDF y Word con tus plantillas y conecta tu IA por MCP. Todo sobre archivos normales.</p>
       <div class="actions">
         <a class="button primary" href="#descargar">Descargar</a>
         <a class="button" href="https://github.com/icabero/UltimateMD">Ver el código</a>
       </div>
-      <img class="shot" src="img/claro.png" width="1282" height="821" alt="UltimateMD con el editor a la izquierda y la vista previa a la derecha, mostrando una nota con dos diagramas.">
+      <img class="shot" src="img/visual.png" width="1280" height="820" alt="UltimateMD en modo visual: una nota con títulos, tareas, enlaces y una tabla, y dos vaults en la barra lateral.">
     </section>
 
     <section id="funciones" class="feature">
+      <div>
+        <h2>Escribe como en un procesador de textos</h2>
+        <p>El modo visual muestra el formato mientras escribes, y la barra te da títulos, listas, tablas y enlaces sin saber Markdown. Por debajo, tu archivo sigue siendo Markdown normal.</p>
+        <ul>
+          <li>Tablas de verdad, que se editan celda a celda.</li>
+          <li>Enlaza notas escribiendo <code>[[</code>, con sugerencias, y ábrelas con un clic.</li>
+          <li>Si lo prefieres, edita el Markdown con vista dividida.</li>
+        </ul>
+      </div>
+      <img class="shot" loading="lazy" src="img/claro.png" width="1280" height="820" alt="Editor de Markdown a la izquierda y vista previa a la derecha, con un diagrama de ruta y uno de secuencia.">
+    </section>
+
+    <section class="feature flip">
       <div>
         <h2>Una carpeta es un vault</h2>
         <p>Tus notas son archivos <code>.md</code> en carpetas normales, sin base de datos ni formato propio. Puedes abrir un vault de Obsidian tal cual, sincronizarlo como quieras y seguir usándolo con cualquier otro programa.</p>
         <ul>
           <li>Varios vaults abiertos a la vez, con pestañas de cualquiera de ellos.</li>
-          <li><code>[[Wikilinks]]</code>, búsqueda global y selector rápido.</li>
+          <li>Búsqueda global y selector rápido.</li>
           <li>Abre también archivos <code>.md</code> sueltos, sin vault.</li>
         </ul>
       </div>
-      <img class="shot" loading="lazy" src="img/oscuro.png" width="1282" height="821" alt="Vista previa de una nota en el tema oscuro, con dos vaults en la barra lateral.">
+      <img class="shot" loading="lazy" src="img/oscuro.png" width="1280" height="820" alt="Vista previa de una nota con un calendario Gantt en el tema oscuro, con dos vaults en la barra lateral.">
     </section>
 
-    <section class="feature flip">
+    <section class="feature">
       <div>
         <h2>Documentos que parecen documentos</h2>
         <p>Exporta una nota, una carpeta o el vault completo. El PDF se compone con un motor tipográfico real, sobre fondo blanco, con portada, índice y páginas numeradas.</p>
@@ -57,16 +70,20 @@
           <li><strong>Vista previa</strong> página a página antes de guardar.</li>
         </ul>
       </div>
-      <img class="shot" loading="lazy" src="img/export.png" width="1282" height="821" alt="Diálogo de exportación con opciones por nivel de carpeta y la vista previa del documento.">
+      <img class="shot" loading="lazy" src="img/export.png" width="1280" height="820" alt="Diálogo de exportación con las opciones a la izquierda y la vista previa del documento a la derecha.">
     </section>
 
-    <section class="feature">
+    <section class="feature flip">
       <div>
-        <h2>Diagramas dentro de la nota</h2>
-        <p>Escribe un bloque <code>mermaid</code> o <code>d2</code> y aparece dibujado con los colores de tu tema. También funcionan sin conexión, y se exportan a SVG y PNG.</p>
-        <p>¿Prefieres otro aspecto? Con <code>tema-diagramas: boceto</code> una nota los dibuja a mano.</p>
+        <h2>Diagramas sin escribir código</h2>
+        <p>Crea flujos, secuencias, estados, mapas mentales, tartas y Gantt con un formulario, viendo el resultado al momento. Para todo lo demás hay plantillas editables de Mermaid y D2.</p>
+        <ul>
+          <li><strong>A tu estilo:</strong> elige tema, colores o aspecto de boceto para un diagrama, una nota o todo el vault.</li>
+          <li><strong>Sin conexión:</strong> se dibujan en tu equipo, y se exportan a SVG y PNG.</li>
+          <li><strong>También a mano:</strong> escribe un bloque <code>mermaid</code> o <code>d2</code> si lo prefieres.</li>
+        </ul>
       </div>
-      <img class="shot" loading="lazy" src="img/bosque.png" width="1282" height="821" alt="Editor y vista previa en el tema Bosque, con diagramas en tonos verdes.">
+      <img class="shot" loading="lazy" src="img/diagramas.png" width="1280" height="820" alt="Creador de diagramas con el formulario de pasos a la izquierda y el dibujo a la derecha.">
     </section>
 
     <section id="ia" class="band">
@@ -84,18 +101,20 @@
     </section>
 
     <section class="themes">
-      <h2>Siete temas, y los tuyos</h2>
-      <p>Cada tema cubre la interfaz, el editor, la vista previa y los diagramas. Además, cada vault puede tener temas propios, y una nota puede elegir el suyo.</p>
-      <img class="swatches" loading="lazy" src="img/temas.png" width="718" height="265" alt="Selector de temas: Claro, Oscuro, Sepia, Medianoche, Bosque, Grafito y Alto contraste.">
+      <h2>Ocho temas, y los tuyos</h2>
+      <p>Cada tema cubre la interfaz, el editor, la vista previa y los diagramas. Además, cada vault puede tener temas propios, y una nota puede elegir el suyo. La app está en castellano, euskera e inglés.</p>
+      <img class="swatches" loading="lazy" src="img/temas.png" width="598" height="131" alt="Selector de temas: Claro, Oscuro, Sepia, Rosa pastel, Medianoche, Bosque, Grafito y Alto contraste.">
       <div class="gallery">
-        <img class="shot" loading="lazy" src="img/sepia.png" width="1282" height="821" alt="Tema Sepia.">
-        <img class="shot" loading="lazy" src="img/medianoche.png" width="1282" height="821" alt="Tema Medianoche.">
+        <img class="shot" loading="lazy" src="img/rosa.png" width="1280" height="820" alt="Tema Rosa pastel.">
+        <img class="shot" loading="lazy" src="img/medianoche.png" width="1280" height="820" alt="Tema Medianoche.">
+        <img class="shot" loading="lazy" src="img/bosque.png" width="1280" height="820" alt="Tema Bosque, con un mapa mental.">
+        <img class="shot" loading="lazy" src="img/sepia.png" width="1280" height="820" alt="Tema Sepia.">
       </div>
     </section>
 
     <section id="descargar" class="download">
       <h2>Descargar</h2>
-      <p>Libre y gratuito, con licencia MIT.</p>
+      <p>Libre y gratuito, con licencia MIT. Tus notas no salen de tu equipo.</p>
       <div class="platforms">
         <a href="https://github.com/icabero/UltimateMD/releases/latest"><strong>Windows</strong><span>Instalador .exe o .msi</span></a>
         <a href="https://github.com/icabero/UltimateMD/releases/latest"><strong>macOS</strong><span>Apple Silicon e Intel, .dmg</span></a>

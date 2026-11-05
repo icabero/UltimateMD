@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { tr } from '../i18n.svelte';
   import { store, type Dialog } from '../store.svelte';
 
   let { dialog }: { dialog: Dialog } = $props();
@@ -19,14 +20,14 @@
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape') store.dialog?.resolve(null); }} />
 
-<button class="scrim top" aria-label="Cancelar" onclick={() => dialog.resolve(null)}></button>
+<button class="scrim top" aria-label={tr('common.cancel')} onclick={() => dialog.resolve(null)}></button>
 <form class="dialog" aria-label={dialog.title} {onsubmit}>
   <p>{dialog.title}</p>
   {#if dialog.value !== null}
     <input bind:value use:select />
   {/if}
   <div class="buttons">
-    <button type="button" onclick={() => dialog.resolve(null)}>Cancelar</button>
+    <button type="button" onclick={() => dialog.resolve(null)}>{tr('common.cancel')}</button>
     <button type="submit" class="main" class:danger={dialog.danger}>{dialog.action}</button>
   </div>
 </form>

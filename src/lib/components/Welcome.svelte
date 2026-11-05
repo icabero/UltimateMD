@@ -1,12 +1,13 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
   import { store } from '../store.svelte';
-  const keys = [['Ctrl P', 'Abrir nota'], ['Ctrl Mayús F', 'Buscar en todo'], ['Ctrl N', 'Nueva nota'], ['Ctrl \\', 'Cambiar vista']];
+  const keys = $derived([['Ctrl P', tr('welcome.openNote')], [tr('keys.searchAll'), tr('welcome.searchAll')], ['Ctrl N', tr('welcome.newNote')], ['Ctrl \\', tr('welcome.changeView')]]);
 </script>
 
 <div class="wrap">
   <h1>Ultimate<b>MD</b></h1>
   {#if store.openVaults.length === 0}
-    <p>Crea un vault o abre una carpeta desde la barra lateral. Un vault es una carpeta normal con tus notas.</p>
+    <p>{tr('welcome.intro')}</p>
   {:else}
     <dl>
       {#each keys as [key, label]}

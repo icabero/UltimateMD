@@ -1,6 +1,9 @@
 // Stands in for the Rust backend with an in-memory vault, so interface tests
 // run in any browser. The backend has its own tests in crates/.
 (() => {
+  // Most tests are not about the first run. Tests that are set `fresh` first.
+  if (!sessionStorage.getItem('fresh')) localStorage.setItem('ultimatemd.tutorial', '1');
+
   const files = {
     a: {
       'Inicio.md': '# Inicio\n\nVer [[Destino]] y [[Falta]].\n\n<script>window.pwned = true</script><img src=x onerror="window.pwned=true"><b style="color:red">fuerte</b>\n\n```mermaid\nflowchart LR\n  A --> B\n```\n',
@@ -23,6 +26,7 @@
   const vaultThemes = {
     b: {
       defaultTheme: 'mar',
+      defaultDiagramTheme: null,
       themes: [{ id: 'mar', name: 'Mar', base: 'claro', colors: { bg: '#e0f0ff' }, diagram: {} }],
       invalid: [],
     },
@@ -90,7 +94,7 @@
       files.c = { 'nota.md': '# Suelto\n' };
       return vaults.at(-1);
     },
-    vault_themes: ({ id }) => vaultThemes[id] ?? { defaultTheme: null, themes: [], invalid: [] },
+    vault_themes: ({ id }) => vaultThemes[id] ?? { defaultTheme: null, defaultDiagramTheme: null, themes: [], invalid: [] },
     save_vault_theme: ({ id, theme }) => {
       vaultThemes[id] ??= { defaultTheme: null, themes: [], invalid: [] };
       vaultThemes[id].themes = vaultThemes[id].themes.filter((t) => t.id !== theme.id).concat(theme);
@@ -101,6 +105,10 @@
     set_vault_default_theme: ({ id, theme }) => {
       vaultThemes[id] ??= { defaultTheme: null, themes: [], invalid: [] };
       vaultThemes[id].defaultTheme = theme;
+    },
+    set_vault_diagram_theme: ({ id, theme }) => {
+      vaultThemes[id] ??= { defaultTheme: null, defaultDiagramTheme: null, themes: [], invalid: [] };
+      vaultThemes[id].defaultDiagramTheme = theme;
     },
     list_templates: () => ['Ejemplo', 'Corporativa'],
     export_file: ({ name, data }) => {
@@ -122,7 +130,12 @@
       blocks: [{ html: '<p>Bloque uno</p>', breakBefore: false }, { html: '<p>Bloque dos</p>', breakBefore: true }],
     }),
     template_styles: () => [{ id: 'Destacado', name: 'Destacado' }, { id: 'Heading1', name: 'heading 1' }],
+    'plugin:app|version': () => '0.1.0',
+    'plugin:opener|open_url': ({ url }) => {
+      window.__opened = url;
+    },
     take_pending_files: () => window.__pending ?? [],
+    installer_language: () => window.__installerLanguage ?? null,
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),
   };
 

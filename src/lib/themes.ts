@@ -27,8 +27,8 @@ export interface Theme {
     synNumber: string;
     synAttr: string;
   };
-  /** Diagram node fill and outline. The other diagram colours come from `colors`. */
-  diagram: { surface: string; border: string };
+  /** Diagram node fill and outline. Lines and text default to the theme's own. */
+  diagram: { surface: string; border: string; line?: string; text?: string };
 }
 
 export const THEMES: Theme[] = [
@@ -64,6 +64,17 @@ export const THEMES: Theme[] = [
       synString: '#3f6133', synKeyword: '#7d4019', synNumber: '#74500a', synAttr: '#2f5a70',
     },
     diagram: { surface: '#ead9b8', border: '#b99a6b' },
+  },
+  {
+    id: 'rosa', name: 'Rosa pastel', mode: 'light', prose: 'sans',
+    colors: {
+      bg: '#fff5f7', panel: '#fde8ee', raised: '#ffffff', line: '#f5cdd9',
+      text: '#33202a', text2: '#6b4552', text3: '#7a4f5f',
+      accent: '#b8426f', accentText: '#962c52', onAccent: '#ffffff',
+      danger: '#b3201c', warn: '#fdeccb',
+      synString: '#2f6b4f', synKeyword: '#9c2f66', synNumber: '#7f5300', synAttr: '#1f5f8b',
+    },
+    diagram: { surface: '#fde3ec', border: '#e8a6bd' },
   },
   {
     id: 'medianoche', name: 'Medianoche', mode: 'dark', prose: 'sans',
@@ -126,6 +137,14 @@ export function resolveTheme(file: ThemeFile): Theme {
   };
 }
 
+/** The four colours a person can choose for a diagram. */
+export const diagramColors = ({ colors, diagram }: Theme) => ({
+  surface: diagram.surface,
+  border: diagram.border,
+  line: diagram.line ?? colors.text3,
+  text: diagram.text ?? colors.text,
+});
+
 /** Identifies a theme's look, for caching what was drawn with it. */
 export const themeKey = (theme: Theme) => JSON.stringify([theme.colors, theme.diagram]);
 
@@ -137,6 +156,20 @@ export function frontmatterValue(note: string, key: string) {
   if (!block) return null;
   const line = block.split(/\r?\n/).find((l) => l.startsWith(`${key}:`));
   return line?.slice(key.length + 1).trim().replace(/^['"]|['"]$/g, '') || null;
+}
+
+/** The edit that sets a frontmatter key, or clears it with null. Null if nothing changes. */
+export function frontmatterChange(note: string, key: string, value: string | null) {
+  const block = FRONTMATTER.exec(note);
+  if (!block) return value ? { from: 0, to: 0, insert: `---\n${key}: ${value}\n---\n` } : null;
+  const from = block[0].indexOf('\n') + 1;
+  const lines = block[1].split(/\r?\n/);
+  const at = lines.findIndex((l) => l.startsWith(`${key}:`));
+  if (value === null && at < 0) return null;
+  const next = value === null ? lines.filter((_, i) => i !== at) : lines.map((l, i) => (i === at ? `${key}: ${value}` : l));
+  if (value !== null && at < 0) next.push(`${key}: ${value}`);
+  if (next.length === 0) return { from: 0, to: Math.min(note.length, block[0].length + 1), insert: '' };
+  return { from, to: from + block[1].length, insert: next.join('\n') };
 }
 
 const kebab = (name: string) => name.replace(/[A-Z0-9]/g, (c) => `-${c.toLowerCase()}`);

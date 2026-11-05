@@ -18,7 +18,7 @@
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' data: blob: umd: http://umd.localhost",
         "font-src": "'self' data:",
-        "connect-src": "'self' ipc: http://ipc.localhost data: blob:",
+        "connect-src": "'self' ipc: http://ipc.localhost data: blob: https://api.github.com",
         "worker-src": "'self' blob:",
         "frame-src": "umd: http://umd.localhost",
         "object-src": "'none'",
@@ -46,6 +46,12 @@
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "languages": ["English", "Spanish", "Basque"],
+        "displayLanguageSelector": true,
+        "customLanguageFiles": { "Basque": "windows/Basque.nsh" },
+        "installerHooks": "windows/hooks.nsh"
       }
     },
     "fileAssociations": [

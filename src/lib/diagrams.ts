@@ -1,20 +1,16 @@
 // Diagram engines are large, so each one loads the first time it is needed.
 import DOMPurify from 'dompurify';
-import { themeKey, type Theme } from './themes';
+import { diagramColors, themeKey, type Theme } from './themes';
 
-function palette({ colors, diagram }: Theme) {
-  return {
-    bg: colors.bg,
-    fg: colors.text,
-    line: colors.text3,
-    accent: colors.accentText,
-    muted: colors.text2,
-    surface: diagram.surface,
-    border: diagram.border,
-  };
+function palette(theme: Theme) {
+  const { surface, border, line, text } = diagramColors(theme);
+  const { bg, accentText, text2 } = theme.colors;
+  return { bg, fg: text, line, accent: accentText, muted: text2, surface, border };
 }
 
 // Types beautiful-mermaid draws. Anything else goes to the official renderer.
+// ELK cannot lay these out; they bring their own layout.
+const OWN_LAYOUT = /^\s*(?:%%.*\n\s*)*(?:---[\s\S]*?---\s*)?(mindmap|kanban|architecture)/;
 const BEAUTIFUL = /^\s*(?:%%.*\n\s*)*(?:---[\s\S]*?---\s*)?(graph|flowchart|stateDiagram|sequenceDiagram|classDiagram|erDiagram|xychart)/;
 
 let officialReady: Promise<typeof import('mermaid').default> | null = null;
@@ -35,7 +31,7 @@ async function renderOfficial(src: string, theme: Theme, sketch: boolean) {
     startOnLoad: false,
     securityLevel: 'strict',
     theme: 'base',
-    layout: 'elk',
+    layout: OWN_LAYOUT.test(src) ? undefined : 'elk',
     look: sketch ? 'handDrawn' : 'classic',
     // SVG text, not HTML labels, so diagrams can be exported to PNG.
     htmlLabels: false,
@@ -79,7 +75,7 @@ const d2Pending = new Map<number, { ok: (svg: string) => void; fail: (e: Error) 
 function d2Config(theme: Theme) {
   const p = palette(theme);
   const overrides = {
-    N1: p.fg, N2: p.muted, N3: p.line, N4: p.line, N5: p.border, N6: p.surface, N7: p.bg,
+    N1: p.fg, N2: p.muted, N3: p.line, N4: p.surface, N5: p.border, N6: p.surface, N7: p.bg,
     B1: p.accent, B2: p.accent, B3: p.border, B4: p.surface, B5: p.surface, B6: p.surface,
     AA2: p.accent, AA4: p.border, AA5: p.surface, AB4: p.border, AB5: p.surface,
   };

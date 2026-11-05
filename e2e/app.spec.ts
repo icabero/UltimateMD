@@ -1,7 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
-import { THEMES, contrast, mix } from '../src/lib/themes';
+import { parseSource, toSource, type Diagram, type Engine } from '../src/lib/diagramBuilder';
+import { fenceLine, parseStyle } from '../src/lib/diagramStyle';
+import { TEMPLATES } from '../src/lib/diagramTemplates';
+import { THEMES, contrast, frontmatterChange, mix } from '../src/lib/themes';
+import { isNewer } from '../src/lib/updates';
 
 test.beforeEach(async ({ page }) => {
+  // The app asks GitHub about new versions at startup; tests never reach it.
+  await page.route('https://api.github.com/**', (route) => route.fulfill({ status: 404 }));
   await page.addInitScript({ path: 'e2e/mock.js' });
   await page.goto('/');
 });
@@ -13,7 +19,7 @@ const disk = (page: Page, vault: string, path: string) =>
 
 async function typeInEditor(page: Page, text: string) {
   await page.locator('.cm-content').click();
-  await page.keyboard.press('Control+End');
+  await page.keyboard.press('ControlOrMeta+End');
   await page.keyboard.type(text);
 }
 
@@ -114,10 +120,12 @@ test('global search covers every vault', async ({ page }) => {
 
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
+  await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();
   const group = page.getByRole('group', { name: 'Acceso MCP de Trabajo' });
   await group.getByRole('button', { name: 'Lectura y escritura' }).click();
   await expect(group.getByRole('button', { name: 'Lectura y escritura' })).toHaveClass(/on/);
 
+  await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Inteligencia artificial' }).click();
   await page.getByRole('button', { name: 'Claude Desktop' }).click();
   const config = JSON.parse((await page.locator('.code pre').textContent())!);
   expect(config.mcpServers.ultimatemd.command).toBe('C:\\Program Files\\UltimateMD\\ultimatemd-mcp.exe');
@@ -149,6 +157,7 @@ test('changing theme restyles the app and keeps the edit in progress', async ({ 
   await typeInEditor(page, 'en curso');
   await expect(prose(page).locator('.diagram > svg')).toBeVisible();
   await page.getByTitle('Ajustes y MCP').click();
+  await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
   await page.getByRole('button', { name: /Medianoche/ }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'medianoche');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(15, 22, 38)');
@@ -166,6 +175,7 @@ test('following the system uses the theme chosen for each mode', async ({ page }
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'oscuro');
   await page.getByTitle('Ajustes y MCP').click();
+  await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
   await page.getByLabel('Modo oscuro').selectOption('bosque');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'bosque');
 });
@@ -223,6 +233,7 @@ async function exportAs(page: Page, format: string) {
 
 test('export to HTML gives a self-contained page in the print look', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
+  await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
   await page.getByRole('button', { name: /Medianoche/ }).click();
   await page.getByTitle('Cerrar', { exact: true }).click();
   await open(page, 'Inicio');
@@ -388,6 +399,7 @@ test('diagrams can use their own theme and are redrawn when it changes', async (
 test('a theme can be created, edited and made the vault default', async ({ page }) => {
   await open(page, 'Inicio');
   await page.getByTitle('Ajustes y MCP').click();
+  await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();
   await page.getByRole('button', { name: 'Temas' }).first().click();
   const editor = page.getByRole('dialog', { name: /Temas de Trabajo/ });
   await editor.getByRole('button', { name: 'Nuevo tema' }).click();
@@ -407,6 +419,7 @@ test('a theme can be created, edited and made the vault default', async ({ page 
 
 test('a theme can be edited as JSON and bad JSON is refused', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
+  await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();
   await page.getByRole('button', { name: 'Temas' }).nth(1).click();
   const editor = page.getByRole('dialog', { name: /Temas de Personal/ });
   await editor.getByRole('button', { name: 'Mar' }).click();
@@ -414,4 +427,654 @@ test('a theme can be edited as JSON and bad JSON is refused', async ({ page }) =
   await editor.getByRole('textbox', { name: 'JSON del tema' }).fill('{ roto');
   await editor.getByRole('button', { name: 'Guardar' }).click();
   await expect(page.getByRole('status')).toContainText('JSON');
+});
+
+async function firstRun(page: Page) {
+  await page.evaluate(() => {
+    sessionStorage.setItem('fresh', '1');
+    localStorage.removeItem('ultimatemd.tutorial');
+  });
+  await page.reload();
+}
+
+const tutorial = (page: Page) => page.getByRole('dialog', { name: 'Tutorial' });
+const openSettings = (page: Page) => page.getByTitle('Ajustes y MCP').click();
+
+test('the tutorial appears on the first run and only then', async ({ page }) => {
+  await expect(tutorial(page)).toHaveCount(0);
+  await firstRun(page);
+  await expect(tutorial(page)).toContainText('Paso 1 de 8');
+  for (let i = 0; i < 7; i++) await page.getByRole('button', { name: 'Siguiente' }).click();
+  await expect(tutorial(page)).toContainText('Paso 8 de 8');
+  await page.getByRole('button', { name: 'Empezar' }).click();
+  await expect(tutorial(page)).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Crear vault' })).toBeVisible();
+  await expect(tutorial(page)).toHaveCount(0);
+});
+
+test('the tutorial can be skipped, walked back and reopened', async ({ page }) => {
+  await firstRun(page);
+  await page.getByRole('button', { name: 'Siguiente' }).click();
+  await page.getByRole('button', { name: 'Atrás' }).click();
+  await expect(tutorial(page)).toContainText('Paso 1 de 8');
+  await page.keyboard.press('Escape');
+  await expect(tutorial(page)).toHaveCount(0);
+  await openSettings(page);
+  await page.getByRole('button', { name: 'Ver el tutorial' }).click();
+  await expect(tutorial(page)).toContainText('Paso 1 de 8');
+});
+
+test('the language changes at once and is remembered', async ({ page }) => {
+  await openSettings(page);
+  await page.getByLabel('Idioma').selectOption({ label: 'Euskara' });
+  await expect(page.getByRole('heading', { name: 'Ezarpenak' })).toBeVisible();
+  await page.getByLabel('Hizkuntza').selectOption({ label: 'English' });
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Create vault' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.lang)).toBe('en');
+});
+
+test('the tutorial lets you pick the language on its first step', async ({ page }) => {
+  await firstRun(page);
+  await page.getByLabel('Idioma').selectOption({ label: 'Euskara' });
+  await expect(page.getByRole('dialog', { name: 'Tutoriala' })).toContainText('1. urratsa / 8');
+});
+
+test('the installer language applies until the user chooses another', async ({ page }) => {
+  await page.addInitScript(() => ((window as any).__installerLanguage = 'eu'));
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Sortu vaulta' })).toBeVisible();
+  await page.evaluate(() => localStorage.setItem('ultimatemd.language', 'en'));
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Create vault' })).toBeVisible();
+});
+
+test.describe('in a Basque system', () => {
+  test.use({ locale: 'eu-ES' });
+  test('the interface starts in Basque', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Sortu vaulta' })).toBeVisible();
+  });
+});
+
+test.describe('in a system with an unsupported language', () => {
+  test.use({ locale: 'fr-FR' });
+  test('the interface starts in English', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Create vault' })).toBeVisible();
+  });
+});
+
+test('exports follow the language of the interface', async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem('ultimatemd.language', 'en'));
+  await page.reload();
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+e');
+  await page.getByRole('dialog', { name: 'Export' }).getByRole('button', { name: 'Export', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exported');
+  const plan = await page.evaluate(() => (window as any).__pdf);
+  expect(plan).toMatchObject({ language: 'en', contents: 'Contents' });
+});
+
+const editorText = (page: Page) => page.locator('.cm-content');
+
+test('the toolbar formats the selection and undoes it', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\nhola');
+  await page.keyboard.press('Shift+Home');
+  await page.getByRole('button', { name: 'Negrita' }).click();
+  await expect(editorText(page)).toContainText('**hola**');
+  await page.getByRole('button', { name: 'Negrita' }).click();
+  await expect(editorText(page)).not.toContainText('**hola**');
+  await page.getByRole('button', { name: 'Título 2' }).click();
+  await expect(editorText(page)).toContainText('## hola');
+  await page.getByRole('button', { name: 'Lista', exact: true }).click();
+  await expect(editorText(page)).toContainText('- hola');
+  await expect(editorText(page)).not.toContainText('## hola');
+});
+
+test('keyboard shortcuts format too', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\nhola');
+  await page.keyboard.press('Shift+Home');
+  await page.keyboard.press('ControlOrMeta+b');
+  await expect(editorText(page)).toContainText('**hola**');
+});
+
+test('a table is inserted as Markdown', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.locator('.cm-content').click();
+  await page.getByRole('button', { name: 'Tabla' }).click();
+  await expect(editorText(page)).toContainText('| Columna 1 | Columna 2 |');
+});
+
+test('visual mode hides the marks without touching the file', async ({ page }) => {
+  await open(page, 'Inicio');
+  const before = await disk(page, 'a', 'Inicio.md');
+  await page.getByTitle('Visual', { exact: true }).click();
+  await page.locator('.cm-line', { hasText: 'Ver' }).click();
+  await expect(page.locator('.cm-v-h1')).toHaveText('Inicio');
+  await expect(page.locator('.cm-v-diagram svg')).toBeVisible();
+  await expect(editorText(page)).not.toContainText('```mermaid');
+  await page.locator('.cm-v-h1').click();
+  await expect(page.locator('.cm-v-h1')).toHaveText('# Inicio');
+  await page.waitForTimeout(900);
+  expect(await disk(page, 'a', 'Inicio.md')).toBe(before);
+});
+
+test('visual mode reads like a document, not like code', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Visual', { exact: true }).click();
+  const line = page.locator('.cm-line', { hasText: 'Ver' });
+  await line.click();
+  await expect(page.locator('.cm-scroller')).toHaveCSS('font-family', /Inter/);
+  await expect(page.locator('.cm-gutters')).toBeHidden();
+  await expect(line).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+});
+
+test('clicking a diagram in visual mode opens it, and it stays drawn afterwards', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Visual', { exact: true }).click();
+  await page.locator('.cm-line', { hasText: 'Ver' }).click();
+  await page.locator('.cm-v-diagram').click();
+  const dialog = page.getByRole('dialog', { name: 'Editar diagrama' });
+  await expect(dialog.locator('.drawing svg')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('.cm-v-diagram svg')).toBeVisible();
+});
+
+test('a task can be ticked in visual mode', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\n- [ ] tarea\n\nfin');
+  await page.getByTitle('Visual', { exact: true }).click();
+  await page.locator('.cm-v-check').click();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('- [x] tarea');
+});
+
+test('new tabs open in the last view chosen', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Visual', { exact: true }).click();
+  await open(page, 'D2');
+  await expect(page.locator('.cm-v-diagram').first()).toBeVisible();
+});
+
+const builder = (page: Page, name: string) => page.getByRole('dialog', { name });
+
+test('a diagram is built with a form and reopened to change it', async ({ page }) => {
+  await open(page, 'D2');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.getByRole('button', { name: 'Diagrama', exact: true }).click();
+  const dialog = builder(page, 'Crear diagrama');
+  await dialog.getByRole('button', { name: 'Añadir paso' }).click();
+  await dialog.getByLabel('Nombre del paso').nth(2).fill('Revisar; "ya"');
+  await dialog.getByLabel('Forma', { exact: true }).nth(2).selectOption('diamond');
+  await dialog.getByRole('button', { name: 'Vertical' }).click();
+  await expect(dialog.locator('.drawing svg')).toContainText('Revisar');
+  await dialog.getByRole('button', { name: 'Insertar' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(editorText(page)).toContainText('flowchart TD');
+  await page.locator('.cm-line', { hasText: 'flowchart TD' }).click();
+  await page.getByRole('button', { name: 'Diagrama', exact: true }).click();
+  const again = builder(page, 'Editar diagrama');
+  await expect(again.getByLabel('Nombre del paso').nth(2)).toHaveValue('Revisar; "ya"');
+  await again.getByRole('button', { name: 'Añadir paso' }).click();
+  await again.getByRole('button', { name: 'Actualizar' }).click();
+  await expect(editorText(page)).toContainText('Paso 4');
+  await expect.poll(async () => ((await disk(page, 'a', 'D2.md')) as string).split('flowchart').length - 1).toBe(1);
+});
+
+test('a sequence diagram can be built', async ({ page }) => {
+  await open(page, 'D2');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.getByRole('button', { name: 'Diagrama', exact: true }).click();
+  const dialog = builder(page, 'Crear diagrama');
+  await dialog.getByRole('button', { name: 'Secuencia' }).click();
+  await dialog.getByRole('button', { name: 'Añadir mensaje' }).click();
+  await dialog.getByLabel('Respuesta').nth(1).check();
+  await expect(dialog.locator('.drawing svg')).toContainText('Participante 1');
+  await dialog.getByRole('button', { name: 'Insertar' }).click();
+  await expect(editorText(page)).toContainText('sequenceDiagram');
+  await expect(editorText(page)).toContainText('p1 -->> p2: Mensaje');
+  await expect.poll(() => disk(page, 'a', 'D2.md')).toContain('```\n\n```mermaid\nsequenceDiagram');
+});
+
+test('the builder reads back what it writes, and refuses what it cannot show', () => {
+  const flow: Diagram = { kind: 'flow', direction: 'TD', nodes: [{ id: 'n1', label: 'a; "b" #c', shape: 'circle', fill: '#ff0000' }, { id: 'n2', label: '¿Sí?', shape: 'diamond' }, { id: 'n3', label: 'r', shape: 'round' }], edges: [{ from: 'n1', to: 'n2', label: 'va; ya' }, { from: 'n2', to: 'n3', label: '' }] };
+  const sequence: Diagram = { kind: 'sequence', actors: [{ id: 'p1', name: 'Ana' }, { id: 'p2', name: 'Web; "app"' }], messages: [{ from: 'p1', to: 'p2', text: 'hola: qué tal', reply: false }, { from: 'p2', to: 'p1', text: 'bien', reply: true }] };
+  const samples: [Diagram, Engine][] = [
+    [flow, 'mermaid'],
+    [flow, 'd2'],
+    [sequence, 'mermaid'],
+    [sequence, 'd2'],
+    [{ kind: 'state', direction: 'LR', initial: 's1', final: 's2', nodes: [{ id: 's1', label: 'Uno', shape: 'rect' }, { id: 's2', label: 'Dos', shape: 'rect' }], edges: [{ from: 's1', to: 's2', label: 'pasa' }] }, 'mermaid'],
+    [{ kind: 'pie', title: 'Gastos', slices: [{ label: 'Casa', value: 60.5 }, { label: 'Otros', value: 39.5 }] }, 'mermaid'],
+    [{ kind: 'gantt', tasks: [{ name: 'Diseño', start: '2026-11-05', days: 5 }] }, 'mermaid'],
+    [{ kind: 'mindmap', items: [{ text: 'Raíz', level: 0 }, { text: 'Rama', level: 1 }, { text: 'Hoja', level: 2 }, { text: 'Otra', level: 1 }] }, 'mermaid'],
+  ];
+  for (const [sample, engine] of samples) expect(parseSource(engine, toSource(sample, engine))).toEqual(sample);
+  expect(parseSource('mermaid', 'flowchart LR\n  A --> B --> C')).toBeNull();
+  expect(parseSource('mermaid', 'pie\n  "a": 1')).toBeNull();
+  expect(parseSource('d2', 'a -> b')).toBeNull();
+});
+
+test('a diagram style survives its fence line, and bad values are dropped', () => {
+  const style = { theme: 'sepia', sketch: true, surface: '#00ff00', text: '#112233' };
+  const line = fenceLine('d2', style);
+  expect(line).toBe('```d2 tema=sepia boceto relleno=#00ff00 texto=#112233');
+  expect(parseStyle(line.replace('```d2 ', ''))).toEqual(style);
+  expect(parseStyle('relleno=red tema=../x otra=1')).toEqual({});
+});
+
+test('frontmatter edits touch only their own line', () => {
+  const apply = (note: string, key: string, value: string | null) => {
+    const change = frontmatterChange(note, key, value);
+    return change ? note.slice(0, change.from) + change.insert + note.slice(change.to) : note;
+  };
+  expect(apply('# Hola\n', 'a', '1')).toBe('---\na: 1\n---\n# Hola\n');
+  expect(apply('---\nb: 2\n---\n# Hola\n', 'a', '1')).toBe('---\nb: 2\na: 1\n---\n# Hola\n');
+  expect(apply('---\na: 0\nb: 2\n---\n# Hola\n', 'a', '1')).toBe('---\na: 1\nb: 2\n---\n# Hola\n');
+  expect(apply('---\na: 0\nb: 2\n---\n# Hola\n', 'a', null)).toBe('---\nb: 2\n---\n# Hola\n');
+  expect(apply('---\na: 0\n---\n# Hola\n', 'a', null)).toBe('# Hola\n');
+  expect(apply('# Hola\n', 'a', null)).toBe('# Hola\n');
+});
+
+test('versions compare as numbers', () => {
+  expect(isNewer('0.10.0', '0.9.0')).toBe(true);
+  expect(isNewer('v1.0.0', '0.9.9')).toBe(true);
+  expect(isNewer('0.1.0', '0.1.0')).toBe(false);
+  expect(isNewer('0.1.0', '0.2.0')).toBe(false);
+  expect(isNewer('0.1', '0.1.1')).toBe(false);
+});
+
+const about = (page: Page) => page.getByTitle('Acerca de').click();
+const release = (page: Page, tag: string) =>
+  page.route('https://api.github.com/**', (route) =>
+    route.fulfill({ json: { tag_name: tag }, headers: { 'access-control-allow-origin': '*' } }));
+
+test('about shows the version and says when nothing is published', async ({ page }) => {
+  await about(page);
+  const dialog = page.getByRole('dialog', { name: 'Acerca de' });
+  await expect(dialog).toContainText('Versión 0.1.0');
+  await dialog.getByRole('button', { name: 'Buscar actualizaciones' }).click();
+  await expect(dialog.getByRole('status')).toHaveText('Aún no hay versiones publicadas.');
+});
+
+test('about reports being up to date, a new version and a failure', async ({ page }) => {
+  await about(page);
+  const dialog = page.getByRole('dialog', { name: 'Acerca de' });
+  const check = dialog.getByRole('button', { name: 'Buscar actualizaciones' });
+  await release(page, 'v0.1.0');
+  await check.click();
+  await expect(dialog.getByRole('status')).toHaveText('Tienes la última versión.');
+  await release(page, 'v0.2.0');
+  await check.click();
+  await expect(dialog.getByRole('status')).toHaveText('Disponible la versión 0.2.0.');
+  await dialog.getByRole('button', { name: 'Ir a descargas' }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__opened)).toBe('https://github.com/icabero/UltimateMD/releases');
+  await page.route('https://api.github.com/**', (route) => route.abort());
+  await check.click();
+  await expect(dialog.getByRole('status')).toContainText('No se pudo comprobar');
+});
+
+test('a new version is announced at startup unless turned off', async ({ page }) => {
+  await release(page, 'v0.2.0');
+  await page.reload();
+  const notice = page.getByRole('button', { name: 'Nueva versión 0.2.0' });
+  await notice.click();
+  const dialog = page.getByRole('dialog', { name: 'Acerca de' });
+  await expect(dialog.getByRole('status')).toHaveText('Disponible la versión 0.2.0.');
+  await dialog.getByLabel('Comprobar al iniciar').uncheck();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Crear vault' })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+});
+
+const settingsSection = (page: Page, name: string) => page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name }).click();
+const newDiagram = async (page: Page) => {
+  await open(page, 'D2');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.getByRole('button', { name: 'Diagrama', exact: true }).click();
+  return builder(page, 'Crear diagrama');
+};
+const typeButton = (dialog: ReturnType<Page['getByRole']>, name: string) => dialog.getByRole('group', { name: 'Tipo de diagrama' }).getByRole('button', { name, exact: true });
+
+test('a table in visual mode is a table, and its cells can be edited', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\n\n| Nombre | Edad |\n| --- | --- |\n| Ana | 30 |\n\nfin');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('fin');
+  await page.getByTitle('Visual', { exact: true }).click();
+  const table = page.locator('.cm-v-table table');
+  await expect(table.locator('th input').first()).toHaveValue('Nombre');
+  await expect(table.locator('th input')).toHaveCount(2);
+  await expect(editorText(page)).not.toContainText('| --- |');
+
+  // Ctrl+A belongs to the cell. Reaching the editor, it would replace the whole note.
+  await table.locator('td input').first().click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('Bea');
+  await expect(table.locator('td input').first()).toHaveValue('Bea');
+  await page.locator('.cm-line', { hasText: 'fin' }).click();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| Bea | 30 |');
+  expect(await disk(page, 'a', 'Inicio.md')).toContain('# Inicio');
+
+  await table.hover();
+  await page.getByRole('button', { name: 'Añadir fila' }).click();
+  await expect(page.locator('.cm-v-table tr')).toHaveCount(3);
+  await page.getByRole('button', { name: 'Añadir columna' }).click();
+  await expect(page.locator('.cm-v-table th')).toHaveCount(3);
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| Nombre | Edad | Columna 3 |\n| --- | --- | --- |\n| Bea | 30 |  |');
+});
+
+test('tables and diagrams stay drawn wherever you click in visual mode', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\nen medio\n\n| C | D |\n| --- | --- |\n| 3 | 4 |\n\nfin');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('fin');
+  await page.getByTitle('Visual', { exact: true }).click();
+  const tables = page.locator('.cm-v-table table');
+  await expect(tables).toHaveCount(2);
+
+  await tables.first().locator('td input').first().click();
+  await page.keyboard.type('9');
+  for (const target of ['en medio', 'fin']) {
+    await page.locator('.cm-line', { hasText: target }).click();
+    await expect(tables).toHaveCount(2);
+    await expect(editorText(page)).not.toContainText('| --- |');
+  }
+  // Beside a table, in the margin of the page.
+  const box = (await tables.first().boundingBox())!;
+  await page.mouse.click(box.x + box.width + 150, box.y + box.height / 2);
+  await expect(tables).toHaveCount(2);
+  await tables.first().locator('td input').first().click();
+  await tables.nth(1).locator('td input').first().click();
+  await page.keyboard.type('8');
+  await expect(tables).toHaveCount(2);
+  await expect(page.locator('.cm-v-diagram svg')).toBeVisible();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| 19 | 2 |');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| 38 | 4 |');
+});
+
+test('a cell saves as you type and keeps your place', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\nfin');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('fin');
+  await page.getByTitle('Visual', { exact: true }).click();
+  const cell = page.locator('.cm-v-table td input').first();
+  await cell.click();
+  await page.keyboard.type(' dos tres');
+  await expect(cell).toHaveValue('1 dos tres');
+  await expect(cell).toBeFocused();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| 1 dos tres | 2 |');
+});
+
+test('text typed below a block at the end of a note stays out of it', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\n\n| A | B |\n| --- | --- |\n| 1 | 2 |');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| 1 | 2 |');
+  await page.getByTitle('Visual', { exact: true }).click();
+  await page.locator('.cm-line', { hasText: 'Ver' }).click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('hola');
+  await expect(page.locator('.cm-v-table table')).toBeVisible();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| 1 | 2 |\n\nhola');
+});
+
+test('a table can still be typed by hand in visual mode', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Visual', { exact: true }).click();
+  await page.locator('.cm-line', { hasText: 'Ver' }).click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('\n| Uno | Dos |\n| --- | --- |\n| a | b |');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| Uno | Dos |\n| --- | --- |\n| a | b |');
+});
+
+test('settings show one section at a time', async ({ page }) => {
+  await openSettings(page);
+  const dialog = page.getByRole('dialog', { name: 'Ajustes' });
+  await expect(dialog.getByLabel('Idioma')).toBeVisible();
+  await expect(dialog.getByText('Conectar una IA por MCP')).toHaveCount(0);
+  await settingsSection(page, 'Inteligencia artificial');
+  await expect(dialog.getByText('Conectar una IA por MCP')).toBeVisible();
+  await expect(dialog.getByLabel('Idioma')).toHaveCount(0);
+});
+
+for (const [name, code, drawn] of [
+  ['Estados', 'stateDiagram-v2', 'Inicio'],
+  ['Mapa mental', 'mindmap', 'Tema'],
+  ['Tarta', 'pie showData', 'Parte 1'],
+  ['Gantt', 'gantt', 'Tarea 1'],
+]) {
+  test(`a ${code} diagram can be built, drawn and reopened`, async ({ page }) => {
+    const dialog = await newDiagram(page);
+    await typeButton(dialog, name).click();
+    await expect(dialog.locator('.drawing svg')).toContainText(drawn, { timeout: 15_000 });
+    await dialog.getByRole('button', { name: 'Insertar' }).click();
+    await expect(editorText(page)).toContainText(code);
+    await page.locator('.cm-line', { hasText: code }).click();
+    await page.getByRole('button', { name: 'Diagrama', exact: true }).click();
+    const again = builder(page, 'Editar diagrama');
+    await expect(typeButton(again, name)).toHaveAttribute('aria-pressed', 'true');
+  });
+}
+
+test('trying another type of diagram does not lose the work', async ({ page }) => {
+  const dialog = await newDiagram(page);
+  await dialog.getByLabel('Nombre del paso').first().fill('Mi paso');
+  await typeButton(dialog, 'Tarta').click();
+  await typeButton(dialog, 'Flujo').click();
+  await expect(dialog.getByLabel('Nombre del paso').first()).toHaveValue('Mi paso');
+});
+
+test('a flow can be made in D2 and reopened as D2', async ({ page }) => {
+  const dialog = await newDiagram(page);
+  await dialog.getByRole('group', { name: 'Formato' }).getByRole('button', { name: 'D2' }).click();
+  await dialog.getByLabel('Forma', { exact: true }).first().selectOption('circle');
+  await expect(dialog.locator('.drawing svg').first()).toContainText('Inicio', { timeout: 15_000 });
+  await dialog.getByRole('button', { name: 'Insertar' }).click();
+  await expect.poll(() => disk(page, 'a', 'D2.md')).toContain('```d2\ndirection: right\nn1: "Inicio" {shape: circle}');
+  await page.locator('.cm-line', { hasText: 'direction: right' }).click();
+  await page.getByRole('button', { name: 'Diagrama', exact: true }).click();
+  const again = builder(page, 'Editar diagrama');
+  await expect(again.getByRole('group', { name: 'Formato' }).getByRole('button', { name: 'D2' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(again.getByLabel('Forma', { exact: true }).first()).toHaveValue('circle');
+});
+
+for (const engine of ['Mermaid', 'D2']) {
+  test(`a connection with a label is drawn in ${engine}`, async ({ page }) => {
+    const dialog = await newDiagram(page);
+    await dialog.getByRole('group', { name: 'Formato' }).getByRole('button', { name: engine }).click();
+    await dialog.getByLabel('Etiqueta').first().fill('Sí, seguir');
+    await expect(dialog.locator('.drawing svg').first()).toContainText('Sí, seguir', { timeout: 15_000 });
+    await dialog.getByRole('button', { name: 'Insertar' }).click();
+    await page.locator('.cm-line', { hasText: 'Sí, seguir' }).click();
+    await page.getByRole('button', { name: 'Diagrama', exact: true }).click();
+    await expect(builder(page, 'Editar diagrama').getByLabel('Etiqueta').first()).toHaveValue('Sí, seguir');
+  });
+}
+
+test('D2 sequences are drawn', async ({ page }) => {
+  const dialog = await newDiagram(page);
+  await typeButton(dialog, 'Secuencia').click();
+  await dialog.getByRole('group', { name: 'Formato' }).getByRole('button', { name: 'D2' }).click();
+  await expect(dialog.locator('.drawing svg').first()).toContainText('Participante 1', { timeout: 15_000 });
+});
+
+for (const engine of ['Mermaid', 'D2']) {
+  test(`a step can have its own colour in ${engine}`, async ({ page }) => {
+    const dialog = await newDiagram(page);
+    await dialog.getByRole('group', { name: 'Formato' }).getByRole('button', { name: engine }).click();
+    await dialog.getByLabel('Color de este paso').first().fill('#ff0000');
+    await expect.poll(() => dialog.locator('.drawing').innerHTML(), { timeout: 15_000 }).toMatch(/#ff0000/i);
+  });
+}
+
+test('a single diagram keeps its own look on its fence line', async ({ page }) => {
+  const dialog = await newDiagram(page);
+  await dialog.getByText('Apariencia de este diagrama').click();
+  await dialog.getByLabel(/^Tema/).selectOption('sepia');
+  await dialog.getByLabel('Aspecto de boceto a mano').check();
+  await dialog.getByLabel('Relleno').fill('#00ff00');
+  await expect.poll(() => dialog.locator('.drawing').innerHTML(), { timeout: 15_000 }).toMatch(/#00ff00/i);
+  await dialog.getByRole('button', { name: 'Insertar' }).click();
+  await expect.poll(() => disk(page, 'a', 'D2.md')).toContain('```mermaid tema=sepia boceto relleno=#00ff00\nflowchart LR');
+  await expect.poll(() => prose(page).locator('.diagram').last().innerHTML(), { timeout: 15_000 }).toMatch(/#00ff00/i);
+});
+
+test('a hand-written diagram can be edited and restyled in the same place', async ({ page }) => {
+  await open(page, 'D2');
+  await page.locator('.cm-line', { hasText: 'uno -> dos' }).click();
+  await page.getByRole('button', { name: 'Diagrama', exact: true }).click();
+  const dialog = builder(page, 'Editar diagrama');
+  await expect(dialog.getByRole('group', { name: 'Tipo de diagrama' })).toHaveCount(0);
+  await dialog.getByLabel('Código del diagrama').fill('uno -> tres');
+  await dialog.getByText('Apariencia de este diagrama').click();
+  await dialog.getByLabel(/^Tema/).selectOption('sepia');
+  await dialog.getByRole('button', { name: 'Actualizar' }).click();
+  await expect.poll(() => disk(page, 'a', 'D2.md')).toContain('```d2 tema=sepia\nuno -> tres\n```');
+});
+
+const svgOf = (page: Page) => prose(page).locator('.diagram').first();
+const fillOf = (id: string) => THEMES.find((t) => t.id === id)!.diagram.surface;
+
+test('a diagram goes by its own style, then its note, then its vault', async ({ page }) => {
+  await open(page, 'Inicio');
+  await expect(svgOf(page).locator('svg').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Estilo', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Estilo de los diagramas' });
+
+  await dialog.getByLabel('En todo «Trabajo»').selectOption('bosque');
+  await expect.poll(() => svgOf(page).innerHTML()).toContain(fillOf('bosque'));
+
+  await dialog.getByLabel('En esta nota').selectOption('sepia');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('---\ntema-diagramas: sepia\n---\n');
+  await expect.poll(() => svgOf(page).innerHTML()).toContain(fillOf('sepia'));
+
+  await dialog.getByLabel('En esta nota').selectOption('');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).not.toContain('tema-diagramas');
+  await expect.poll(() => svgOf(page).innerHTML()).toContain(fillOf('bosque'));
+  await page.keyboard.press('Escape');
+
+  await page.locator('.cm-line', { hasText: 'flowchart' }).click();
+  await page.getByRole('button', { name: 'Diagrama', exact: true }).click();
+  const own = builder(page, 'Editar diagrama');
+  await own.getByText('Apariencia de este diagrama').click();
+  await own.getByLabel(/^Tema/).selectOption('medianoche');
+  await own.getByRole('button', { name: 'Actualizar' }).click();
+  await expect.poll(() => svgOf(page).innerHTML()).toContain(fillOf('medianoche'));
+});
+
+test('the style dialog sends you to make your own theme', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByRole('button', { name: 'Estilo', exact: true }).click();
+  await page.getByRole('button', { name: 'Crear un tema con mis colores' }).click();
+  await expect(page.getByRole('dialog', { name: /Temas de Trabajo/ })).toBeVisible();
+});
+
+test('a chosen diagram style reaches the export, a plain one stays in the print look', async ({ page }) => {
+  await page.evaluate(() => {
+    const test = (window as any).__test;
+    test.externalWrite('a', 'Inicio.md', '```mermaid relleno=#00ff00\nflowchart LR\n  A --> B\n```\n\n```mermaid\nflowchart LR\n  C --> D\n```\n');
+  });
+  await open(page, 'Inicio');
+  await exportAs(page, 'HTML');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+  const { text } = await page.evaluate(() => (window as any).__exported);
+  expect(text).toMatch(/#00ff00/i);
+  expect(text).toContain(fillOf('claro'));
+});
+
+const completion = (page: Page) => page.locator('.cm-tooltip-autocomplete');
+
+test('typing [[ suggests notes and completes the link', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\n[[Dest');
+  await expect(completion(page)).toContainText('Destino');
+  await page.keyboard.press('Enter');
+  await expect(editorText(page)).toContainText('[[Destino]]');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('[[Destino]]');
+});
+
+test('the toolbar links the selected text to a note', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\nmira esto');
+  await page.keyboard.press('Shift+Home');
+  await page.getByRole('button', { name: 'Enlazar nota' }).click();
+  await expect(completion(page)).toContainText('Destino');
+  await completion(page).getByText('Destino').click();
+  await expect(editorText(page)).toContainText('[[Destino|mira esto]]');
+});
+
+test('ctrl+click on a link in the editor opens the note', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Editar', { exact: true }).click();
+  await page.locator('.cm-wikilink', { hasText: 'Destino' }).click({ modifiers: ['ControlOrMeta'] });
+  await expect(page.locator('.tab.active')).toContainText('Destino');
+});
+
+test('in visual mode a link reads as text and a click opens it', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Visual', { exact: true }).click();
+  const link = page.locator('.cm-wikilink', { hasText: 'Destino' });
+  await page.locator('.cm-v-h1').click();
+  await expect(link).toHaveText('Destino');
+  await link.click();
+  await expect(page.locator('.tab.active')).toContainText('Destino');
+});
+
+test('a link to a missing note looks different and offers to create it', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Editar', { exact: true }).click();
+  const link = page.locator('.cm-wikilink-missing');
+  await expect(link).toContainText('Falta');
+  await link.click({ modifiers: ['ControlOrMeta'] });
+  await expect(page.locator('form.dialog')).toContainText('«Falta» no existe');
+});
+
+test('every diagram type without a form draws from its template', async ({ page }) => {
+  test.setTimeout(120_000);
+  const dialog = await newDiagram(page);
+  await dialog.getByRole('group', { name: 'Tipo de diagrama' }).getByRole('button', { name: 'Más tipos' }).click();
+  for (const template of TEMPLATES) {
+    await dialog.getByLabel('Elige el tipo').selectOption(template.id);
+    await page.waitForTimeout(template.lang === 'd2' ? 2500 : 1500);
+    await expect(dialog.locator('.error'), template.id).toHaveCount(0);
+    await expect(dialog.locator('.drawing svg').first(), template.id).toBeVisible();
+  }
+});
+
+test('a template is edited as code and inserted in its own language', async ({ page }) => {
+  const dialog = await newDiagram(page);
+  await dialog.getByRole('group', { name: 'Tipo de diagrama' }).getByRole('button', { name: 'Más tipos' }).click();
+  await dialog.getByLabel('Elige el tipo').selectOption('d2-grid');
+  await dialog.getByLabel('Código del diagrama').fill('grid-columns: 1\nuno\ndos');
+  await dialog.getByLabel('Elige el tipo').selectOption('er');
+  await dialog.getByLabel('Elige el tipo').selectOption('d2-grid');
+  await expect(dialog.getByLabel('Código del diagrama'), 'trying another type keeps the code').toHaveValue('grid-columns: 1\nuno\ndos');
+  await dialog.getByRole('button', { name: 'Insertar' }).click();
+  await expect.poll(() => disk(page, 'a', 'D2.md')).toContain('```d2\ngrid-columns: 1\nuno\ndos\n```');
+});
+
+test('broken code keeps the last drawing and shows why', async ({ page }) => {
+  const dialog = await newDiagram(page);
+  await dialog.getByRole('group', { name: 'Tipo de diagrama' }).getByRole('button', { name: 'Más tipos' }).click();
+  await expect(dialog.locator('.drawing svg').first()).toBeVisible();
+  await dialog.getByLabel('Elige el tipo').selectOption('d2-grid');
+  await expect(dialog.locator('.drawing svg').first()).toBeVisible({ timeout: 15_000 });
+  await dialog.getByLabel('Código del diagrama').fill('esto no vale -> {');
+  await expect(dialog.locator('.error')).toBeVisible({ timeout: 15_000 });
+  await expect(dialog.locator('.drawing svg').first()).toBeVisible();
+});
+
+test('the pastel pink theme can be chosen for the whole app', async ({ page }) => {
+  await openSettings(page);
+  await settingsSection(page, 'Apariencia');
+  await page.getByRole('button', { name: /Rosa pastel/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'rosa');
+  await page.getByLabel('Seguir al sistema').check();
+  await page.getByLabel('Modo claro').selectOption('rosa');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'rosa');
 });

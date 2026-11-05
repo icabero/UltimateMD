@@ -1,25 +1,28 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import { api, type ThemeFile } from '../api';
+  import { themeName, tr, type Key } from '../i18n.svelte';
   import { store } from '../store.svelte';
-  import { THEMES, contrast, resolveTheme, type Theme } from '../themes';
+  import { THEMES, contrast, diagramColors, resolveTheme, type Theme } from '../themes';
 
   let { vaultId }: { vaultId: string } = $props();
 
   type ColorKey = keyof Theme['colors'];
 
-  const FIELDS: { key: ColorKey; label: string }[] = [
-    { key: 'bg', label: 'Fondo' },
-    { key: 'panel', label: 'Bloques' },
-    { key: 'line', label: 'Líneas' },
-    { key: 'text', label: 'Texto' },
-    { key: 'text2', label: 'Secundario' },
-    { key: 'accent', label: 'Acento' },
-    { key: 'accentText', label: 'Enlaces' },
+  const FIELDS: { key: ColorKey; label: Key }[] = [
+    { key: 'bg', label: 'themes.fieldBg' },
+    { key: 'panel', label: 'themes.fieldPanel' },
+    { key: 'line', label: 'themes.fieldLine' },
+    { key: 'text', label: 'themes.fieldText' },
+    { key: 'text2', label: 'themes.fieldText2' },
+    { key: 'accent', label: 'themes.fieldAccent' },
+    { key: 'accentText', label: 'themes.fieldLinks' },
   ];
-  const DIAGRAM_FIELDS: { key: keyof Theme['diagram']; label: string }[] = [
-    { key: 'surface', label: 'Nodos' },
-    { key: 'border', label: 'Bordes' },
+  const DIAGRAM_FIELDS: { key: keyof Theme['diagram']; label: Key }[] = [
+    { key: 'surface', label: 'themes.fieldNodes' },
+    { key: 'border', label: 'themes.fieldBorders' },
+    { key: 'line', label: 'themes.fieldDiagramLine' },
+    { key: 'text', label: 'themes.fieldDiagramText' },
   ];
   const AA = 4.5;
 
@@ -34,7 +37,7 @@
   const warnings = $derived.by(() => {
     if (!look) return [];
     const { bg, text, text2, accentText } = look.colors;
-    const pairs: [string, string][] = [['el texto', text], ['el texto secundario', text2], ['los enlaces', accentText]];
+    const pairs: [string, string][] = [[tr('themes.warnText'), text], [tr('themes.warnText2'), text2], [tr('themes.warnLinks'), accentText]];
     return pairs.filter(([, color]) => contrast(color, bg) < AA).map(([name]) => name);
   });
 
@@ -48,10 +51,10 @@
     name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
 
   async function create() {
-    const name = (await store.prompt('Nombre del tema', '', 'Crear'))?.trim();
+    const name = (await store.prompt(tr('themes.name'), '', tr('common.create')))?.trim();
     if (!name) return;
     const id = slug(name);
-    if (!id || themes.some((t) => t.id === id)) return store.notify('Ya existe un tema con ese nombre');
+    if (!id || themes.some((t) => t.id === id)) return store.notify(tr('themes.exists'));
     draft = { id, name, base: store.theme.mode === 'dark' ? 'oscuro' : 'claro', colors: {}, diagram: {} };
     selected = id;
     json = null;
@@ -62,7 +65,7 @@
     try {
       return JSON.parse(json) as ThemeFile;
     } catch {
-      store.notify('El JSON no es válido');
+      store.notify(tr('themes.badJson'));
       return null;
     }
   }
@@ -75,17 +78,22 @@
       await store.loadVaultThemes(vaultId);
       draft = theme;
       selected = theme.id;
-      store.notify('Tema guardado');
+      store.notify(tr('themes.saved'));
     } catch (e) {
       store.notify(e);
     }
   }
 
   async function remove() {
-    if (!draft || !(await store.confirm(`¿Eliminar el tema «${draft.name}»?`, 'Eliminar', true))) return;
+    if (!draft || !(await store.confirm(tr('themes.deleteConfirm', { name: draft.name }), tr('common.delete'), true))) return;
     await api.deleteVaultTheme(vaultId, draft.id).catch((e) => store.notify(e));
     await store.loadVaultThemes(vaultId);
     draft = selected = null;
+  }
+
+  async function setDiagramDefault(id: string) {
+    await api.setVaultDiagramTheme(vaultId, id || null).catch((e) => store.notify(e));
+    await store.loadVaultThemes(vaultId);
   }
 
   async function setDefault(id: string) {
@@ -102,21 +110,34 @@
   }
 </script>
 
-<button class="scrim top" aria-label="Cerrar" onclick={() => (store.themeEditor = null)}></button>
-<div class="modal" role="dialog" aria-label="Temas de {vaultName}">
+<button class="scrim top" aria-label={tr('common.close')} onclick={() => (store.themeEditor = null)}></button>
+<div class="modal" role="dialog" aria-label={tr('themes.of', { name: vaultName })}>
   <header>
-    <h2>Temas de {vaultName}</h2>
-    <button class="icon" title="Cerrar" onclick={() => (store.themeEditor = null)}><Icon name="close" /></button>
+    <h2>{tr('themes.of', { name: vaultName })}</h2>
+    <button class="icon" title={tr('common.close')} onclick={() => (store.themeEditor = null)}><Icon name="close" /></button>
   </header>
 
-  <label class="default">Tema por defecto del vault
+  <label class="default">{tr('themes.vaultDefault')}
     <select value={data?.defaultTheme ?? ''} onchange={(e) => setDefault(e.currentTarget.value)}>
-      <option value="">El de la aplicación</option>
-      <optgroup label="Del vault">
+      <option value="">{tr('themes.appDefault')}</option>
+      <optgroup label={tr('themes.fromVault')}>
         {#each themes as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
       </optgroup>
-      <optgroup label="Incluidos">
-        {#each THEMES as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
+      <optgroup label={tr('themes.included')}>
+        {#each THEMES as t (t.id)}<option value={t.id}>{themeName(t)}</option>{/each}
+      </optgroup>
+    </select>
+  </label>
+
+  <label class="default">{tr('themes.vaultDiagrams')}
+    <select value={data?.defaultDiagramTheme ?? ''} onchange={(e) => setDiagramDefault(e.currentTarget.value)}>
+      <option value="">{tr('noteStyle.inheritNote')}</option>
+      <option value="boceto">{tr('noteStyle.sketch')}</option>
+      <optgroup label={tr('themes.fromVault')}>
+        {#each themes as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
+      </optgroup>
+      <optgroup label={tr('themes.included')}>
+        {#each THEMES as t (t.id)}<option value={t.id}>{themeName(t)}</option>{/each}
       </optgroup>
     </select>
   </label>
@@ -126,55 +147,55 @@
       {#each themes as t (t.id)}
         <button class:on={selected === t.id} onclick={() => pick(t)}>{t.name}</button>
       {/each}
-      <button class="new" onclick={create}><Icon name="plus" size={13} /> Nuevo tema</button>
+      <button class="new" onclick={create}><Icon name="plus" size={13} /> {tr('themes.new')}</button>
     </nav>
 
     {#if draft && look}
       <div class="form">
         {#if json === null}
-          <label class="row">Base
+          <label class="row">{tr('themes.base')}
             <select bind:value={draft.base}>
-              {#each THEMES as t}<option value={t.id}>{t.name}</option>{/each}
+              {#each THEMES as t}<option value={t.id}>{themeName(t)}</option>{/each}
             </select>
           </label>
-          <label class="row">Lectura
+          <label class="row">{tr('themes.reading')}
             <select bind:value={draft.prose}>
-              <option value={undefined}>Como la base</option>
+              <option value={undefined}>{tr('themes.likeBase')}</option>
               <option value="serif">Serif</option>
               <option value="sans">Sans</option>
             </select>
           </label>
-          <h3>Colores</h3>
+          <h3>{tr('themes.colors')}</h3>
           <div class="grid">
             {#each FIELDS as f}
-              <label class="color">{f.label}<input type="color" value={look.colors[f.key]} oninput={(e) => setColor(f.key, e.currentTarget.value)} /></label>
+              <label class="color">{tr(f.label)}<input type="color" value={look.colors[f.key]} oninput={(e) => setColor(f.key, e.currentTarget.value)} /></label>
             {/each}
           </div>
-          <h3>Diagramas</h3>
+          <h3>{tr('themes.diagrams')}</h3>
           <div class="grid">
             {#each DIAGRAM_FIELDS as f}
-              <label class="color">{f.label}<input type="color" value={look.diagram[f.key]} oninput={(e) => setDiagramColor(f.key, e.currentTarget.value)} /></label>
+              <label class="color">{tr(f.label)}<input type="color" value={diagramColors(look)[f.key]} oninput={(e) => setDiagramColor(f.key, e.currentTarget.value)} /></label>
             {/each}
           </div>
           <div class="sample" style:background={look.colors.bg} style:color={look.colors.text}>
-            <strong>Vista previa</strong> del tema con <span style:color={look.colors.text2}>texto secundario</span> y <span style:color={look.colors.accentText}>un enlace</span>.
-            <div class="node" style:background={look.diagram.surface} style:border-color={look.diagram.border}>Nodo de diagrama</div>
+            <strong>{tr('themes.sampleTitle')}</strong>{tr('themes.sampleOf')}<span style:color={look.colors.text2}>{tr('themes.sampleSecondary')}</span>{tr('themes.sampleAnd')}<span style:color={look.colors.accentText}>{tr('themes.sampleLink')}</span>{tr('themes.sampleEnd')}
+            <div class="node" style:background={look.diagram.surface} style:border-color={look.diagram.border}>{tr('themes.sampleNode')}</div>
           </div>
           {#if warnings.length}
-            <p class="warn" role="alert">Poco contraste con el fondo en {warnings.join(', ')}.</p>
+            <p class="warn" role="alert">{tr('themes.lowContrast', { list: warnings.join(', ') })}</p>
           {/if}
         {:else}
-          <textarea aria-label="JSON del tema" spellcheck="false" bind:value={json}></textarea>
+          <textarea aria-label={tr('themes.jsonLabel')} spellcheck="false" bind:value={json}></textarea>
         {/if}
         <div class="actions">
-          <button onclick={() => (json = json === null ? JSON.stringify(draft, null, 2) : null)}>{json === null ? 'Editar JSON' : 'Editar con controles'}</button>
+          <button onclick={() => (json = json === null ? JSON.stringify(draft, null, 2) : null)}>{tr(json === null ? 'themes.editJson' : 'themes.editControls')}</button>
           <span class="spacer"></span>
-          {#if themes.some((t) => t.id === draft?.id)}<button onclick={remove}>Eliminar</button>{/if}
-          <button class="main" onclick={save}>Guardar</button>
+          {#if themes.some((t) => t.id === draft?.id)}<button onclick={remove}>{tr('common.delete')}</button>{/if}
+          <button class="main" onclick={save}>{tr('common.save')}</button>
         </div>
       </div>
     {:else}
-      <p class="empty">Crea un tema o elige uno. Se guarda dentro del vault y viaja con él. Úsalo en una nota con <code>tema: id</code> en el frontmatter, o solo en sus diagramas con <code>tema-diagramas: id</code>.</p>
+      <p class="empty">{@html tr('themes.empty')}</p>
     {/if}
   </div>
 </div>
@@ -206,5 +227,5 @@
   .actions .main { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
   .spacer { flex: 1; }
   .empty { margin: 0; color: var(--text-2); font-size: 12.5px; line-height: 1.5; }
-  code { font: 11.5px var(--mono); }
+  .empty :global(code) { font: 11.5px var(--mono); }
 </style>

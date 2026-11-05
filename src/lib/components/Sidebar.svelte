@@ -4,6 +4,7 @@
   import TreeItem from './TreeItem.svelte';
   import SearchPanel from './SearchPanel.svelte';
   import { api, type TreeNode, type Vault } from '../api';
+  import { tr } from '../i18n.svelte';
   import { baseName, dirName, join } from '../paths';
   import { store } from '../store.svelte';
 
@@ -22,11 +23,11 @@
   let dropVault = $state<string | null>(null);
 
   const newNote = async (id: string, dir: string) => {
-    const name = await store.prompt('Nombre de la nota', '', 'Crear');
+    const name = await store.prompt(tr('sidebar.noteName'), '', tr('common.create'));
     if (name?.trim()) await store.createNote(id, dir, name.trim());
   };
   const newFolder = async (id: string, dir: string) => {
-    const name = await store.prompt('Nombre de la carpeta', '', 'Crear');
+    const name = await store.prompt(tr('sidebar.folderName'), '', tr('common.create'));
     if (name?.trim()) await store.createFolder(id, dir, name.trim());
   };
 
@@ -37,20 +38,20 @@
       x: e.clientX,
       y: e.clientY,
       items: [
-        { label: 'Nueva nota', run: () => newNote(id, dir) },
-        { label: 'Nueva carpeta', run: () => newFolder(id, dir) },
+        { label: tr('sidebar.newNote'), run: () => newNote(id, dir) },
+        { label: tr('sidebar.newFolder'), run: () => newFolder(id, dir) },
         {
-          label: 'Renombrar',
+          label: tr('common.rename'),
           run: async () => {
-            const name = await store.prompt('Nuevo nombre', node.name, 'Renombrar');
+            const name = await store.prompt(tr('sidebar.newName'), node.name, tr('common.rename'));
             if (name?.trim()) await store.renameEntry(id, node.path, name.trim());
           },
         },
         {
-          label: 'Enviar a la papelera',
+          label: tr('sidebar.trash'),
           danger: true,
           run: async () => {
-            if (await store.confirm(`¿Enviar «${node.name}» a la papelera?`, 'Enviar a la papelera', true)) await store.trash(id, node.path);
+            if (await store.confirm(tr('sidebar.trashConfirm', { name: node.name }), tr('sidebar.trash'), true)) await store.trash(id, node.path);
           },
         },
       ],
@@ -63,22 +64,22 @@
       x: e.clientX,
       y: e.clientY,
       items: [
-        { label: 'Nueva nota', run: () => newNote(vault.id, '') },
-        { label: 'Nueva carpeta', run: () => newFolder(vault.id, '') },
-        { label: 'Cerrar vault', run: () => store.setVaultOpen(vault.id, false) },
+        { label: tr('sidebar.newNote'), run: () => newNote(vault.id, '') },
+        { label: tr('sidebar.newFolder'), run: () => newFolder(vault.id, '') },
+        { label: tr('sidebar.closeVault'), run: () => store.setVaultOpen(vault.id, false) },
       ],
     };
   }
 
   async function createVault() {
-    const parent = await openDialog({ directory: true, title: 'Carpeta donde crear el vault' });
+    const parent = await openDialog({ directory: true, title: tr('sidebar.createVaultWhere') });
     if (typeof parent !== 'string') return;
-    const name = await store.prompt('Nombre del vault', '', 'Crear');
+    const name = await store.prompt(tr('sidebar.vaultName'), '', tr('common.create'));
     if (name?.trim()) await store.addVault(() => api.createVault(parent, name.trim()));
   }
 
   async function openVault() {
-    const path = await openDialog({ directory: true, title: 'Abrir carpeta como vault' });
+    const path = await openDialog({ directory: true, title: tr('sidebar.openAsVault') });
     if (typeof path === 'string') await store.addVault(() => api.openVault(path));
   }
 
@@ -88,7 +89,7 @@
     const raw = e.dataTransfer!.getData('application/x-umd');
     if (!raw) return;
     const from = JSON.parse(raw) as { vaultId: string; path: string };
-    if (from.vaultId !== id) return store.notify('Solo se puede mover dentro del mismo vault');
+    if (from.vaultId !== id) return store.notify(tr('sidebar.sameVaultOnly'));
     void store.move(id, from.path, join('', baseName(from.path)));
   }
 </script>
@@ -98,8 +99,9 @@
 <aside>
   <header>
     <span class="brand">Ultimate<b>MD</b></span>
-    <button class="icon" title="Buscar en todos los vaults (Ctrl+Mayús+F)" class:on={store.searching} onclick={() => (store.searching = !store.searching)}><Icon name="search" /></button>
-    <button class="icon" title="Ajustes y MCP" onclick={() => (store.settings = true)}><Icon name="settings" /></button>
+    <button class="icon" title={tr('sidebar.searchTitle')} class:on={store.searching} onclick={() => (store.searching = !store.searching)}><Icon name="search" /></button>
+    <button class="icon" title={tr('sidebar.settingsTitle')} onclick={() => (store.settings = true)}><Icon name="settings" /></button>
+    <button class="icon" title={tr('about.title')} onclick={() => (store.about = true)}><Icon name="info" /></button>
   </header>
 
   {#if store.searching}
@@ -121,14 +123,14 @@
               <span class="dot" style:background={colorOf(vault.id)}></span>
               <span class="label">{vault.name}</span>
             </button>
-            <button class="icon small" title="Nueva nota" onclick={() => newNote(vault.id, '')}><Icon name="plus" size={14} /></button>
-            <button class="icon small" title="Nueva carpeta" onclick={() => newFolder(vault.id, '')}><Icon name="folderPlus" size={14} /></button>
+            <button class="icon small" title={tr('sidebar.newNote')} onclick={() => newNote(vault.id, '')}><Icon name="plus" size={14} /></button>
+            <button class="icon small" title={tr('sidebar.newFolder')} onclick={() => newFolder(vault.id, '')}><Icon name="folderPlus" size={14} /></button>
           </div>
           {#if !collapsed[vault.id]}
             {#each store.trees[vault.id] ?? [] as node (node.path)}
               <TreeItem vaultId={vault.id} {node} depth={1} onmenu={entryMenu} />
             {:else}
-              <p class="empty">Vault vacío</p>
+              <p class="empty">{tr('sidebar.emptyVault')}</p>
             {/each}
           {/if}
         </section>
@@ -137,8 +139,8 @@
   {/if}
 
   <footer>
-    <button onclick={createVault}><Icon name="plus" size={14} /> Crear vault</button>
-    <button onclick={openVault}><Icon name="folder" size={14} /> Abrir carpeta</button>
+    <button onclick={createVault}><Icon name="plus" size={14} /> {tr('sidebar.createVault')}</button>
+    <button onclick={openVault}><Icon name="folder" size={14} /> {tr('sidebar.openFolder')}</button>
   </footer>
 </aside>
 
