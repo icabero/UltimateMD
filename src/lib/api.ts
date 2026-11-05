@@ -35,6 +35,16 @@ export interface LinkInfo {
   backlinks: string[];
 }
 
+export type Opened =
+  | { kind: 'vault'; vaultId: string; path: string }
+  | { kind: 'loose'; id: string; name: string; absolute: string; dir: string };
+
+export interface DefaultAppInfo {
+  platform: string;
+  appimage: boolean;
+  isDefault: boolean;
+}
+
 export const api = {
   listVaults: () => invoke<Vault[]>('list_vaults'),
   createVault: (parent: string, name: string) => invoke<Vault>('create_vault', { parent, name }),
@@ -56,6 +66,11 @@ export const api = {
   links: (id: string, path: string) => invoke<LinkInfo>('note_links', { id, path }),
   openWithSystem: (id: string, path: string) => invoke<void>('open_with_system', { id, path }),
   mcpInfo: () => invoke<{ binary: string; available: boolean }>('mcp_info'),
+  openPath: (path: string) => invoke<Opened>('open_path', { path }),
+  closeLoose: (id: string) => invoke<void>('close_loose', { id }),
+  takePendingFiles: () => invoke<string[]>('take_pending_files'),
+  defaultAppInfo: () => invoke<DefaultAppInfo>('default_app_info'),
+  setDefaultApp: () => invoke<void>('set_default_app'),
   exportFile: (name: string, data: Uint8Array) => invoke<boolean>('export_file', { name, data: Array.from(data) }),
 };
 

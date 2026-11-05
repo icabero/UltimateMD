@@ -1,7 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod loose;
 mod protocol;
+mod startup;
 mod watcher;
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
@@ -31,15 +33,17 @@ fn main() {
     }
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
+            startup::deliver(app, startup::files_in_args(args.into_iter().skip(1), cwd.as_ref()));
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(commands::RegistryLock::default())
+        .manage(startup::Pending::from_args())
         .manage(watcher::Watchers::default())
         .register_asynchronous_uri_scheme_protocol("umd", |_ctx, request, responder| {
             std::thread::spawn(move || responder.respond(protocol::handle(request)));
@@ -90,7 +94,20 @@ fn main() {
             commands::open_with_system,
             commands::mcp_info,
             commands::export_file,
+            commands::open_path,
+            commands::close_loose,
+            commands::take_pending_files,
+            commands::default_app_info,
+            commands::set_default_app,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running UltimateMD");
+        .build(tauri::generate_context!())
+        .expect("error while building UltimateMD")
+        .run(|_app, _event| {
+            // macOS delivers files as an event rather than as arguments.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = _event {
+                let files = urls.into_iter().filter_map(|u| u.to_file_path().ok()).collect();
+                startup::deliver(_app, files);
+            }
+        });
 }

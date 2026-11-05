@@ -53,11 +53,32 @@ fn empty(status: StatusCode) -> Response<Vec<u8>> {
     Response::builder().status(status).body(Vec::new()).expect("static response")
 }
 
+/// A loose file may show images beside it, but nothing else from its folder.
+fn serve_loose_image(dir: &std::path::Path, rel: &str) -> Response<Vec<u8>> {
+    let content_type = mime(rel);
+    if !content_type.starts_with("image/") {
+        return empty(StatusCode::FORBIDDEN);
+    }
+    let bytes = VaultFs::new(dir).resolve_file(rel).ok().and_then(|f| std::fs::read(f).ok());
+    let Some(bytes) = bytes else {
+        return empty(StatusCode::NOT_FOUND);
+    };
+    Response::builder()
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff")
+        .header(header::CACHE_CONTROL, "no-store")
+        .body(bytes)
+        .unwrap_or_else(|_| empty(StatusCode::INTERNAL_SERVER_ERROR))
+}
+
 pub fn handle(request: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let path = percent_decode_str(request.uri().path()).decode_utf8_lossy().into_owned();
     let Some((id, rel)) = path.trim_start_matches('/').split_once('/') else {
         return empty(StatusCode::BAD_REQUEST);
     };
+    if let Some(dir) = crate::loose::dir_of(id) {
+        return serve_loose_image(&dir, rel);
+    }
     let Ok(registry) = Registry::load() else {
         return empty(StatusCode::INTERNAL_SERVER_ERROR);
     };

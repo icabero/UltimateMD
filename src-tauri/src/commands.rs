@@ -1,7 +1,7 @@
 //! Commands called from the frontend. All of them run off the main thread, so
 //! a slow disk or a large search cannot freeze the window.
 
-use crate::watcher;
+use crate::{loose, startup, watcher};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -27,6 +27,14 @@ fn edit<T>(lock: &RegistryLock, change: impl FnOnce(&mut Registry) -> Result<T>)
 
 fn fs(id: &str) -> Result<VaultFs> {
     Ok(VaultFs::new(&Registry::load()?.find(id)?.path))
+}
+
+/// A vault, or for a loose file its folder limited to that one file.
+fn file_fs(id: &str, path: &str) -> Result<VaultFs> {
+    match loose::folder_for(id, path) {
+        Some(result) => result,
+        None => fs(id),
+    }
 }
 
 #[tauri::command(async)]
@@ -97,12 +105,12 @@ pub fn vault_tree(id: String) -> Result<Vec<TreeNode>> {
 
 #[tauri::command(async)]
 pub fn read_note(id: String, path: String) -> Result<Note> {
-    fs(&id)?.read(&path)
+    file_fs(&id, &path)?.read(&path)
 }
 
 #[tauri::command(async)]
 pub fn write_note(id: String, path: String, content: String, expected: Option<String>) -> Result<String> {
-    fs(&id)?.write(&path, &content, WriteMode::Replace(expected.as_deref()))
+    file_fs(&id, &path)?.write(&path, &content, WriteMode::Replace(expected.as_deref()))
 }
 
 #[tauri::command(async)]
@@ -155,6 +163,110 @@ pub fn open_with_system(app: AppHandle, id: String, path: String) -> Result<()> 
     app.opener()
         .open_path(file.to_string_lossy(), None::<&str>)
         .map_err(|e| Error::Vault(e.to_string()))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum Opened {
+    Vault { vault_id: String, path: String },
+    Loose { id: String, name: String, absolute: String, dir: String },
+}
+
+/// Decides how to open a file handed over by the operating system: as part of
+/// its vault when it has one, which also reopens a closed vault.
+#[tauri::command(async)]
+pub fn open_path(app: AppHandle, lock: State<RegistryLock>, path: PathBuf) -> Result<Opened> {
+    if !path.is_file() {
+        return Err(Error::NotFound(path.display().to_string()));
+    }
+    let registry = Registry::load()?;
+    if let Some((vault, rel)) = registry.locate(&path) {
+        let vault_id = vault.id.clone();
+        if !vault.open {
+            set_vault_open(app, lock, vault_id.clone(), true)?;
+        }
+        return Ok(Opened::Vault { vault_id, path: rel });
+    }
+    let file = path.canonicalize()?;
+    let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if !ultimatemd_core::paths::is_note(&name) {
+        return Err(Error::PathNotAllowed(name));
+    }
+    let id = loose::register(&file);
+    watcher::watch_file(&app, &id, &file);
+    let plain = |p: &Path| p.to_string_lossy().trim_start_matches(r"\\?\").to_string();
+    Ok(Opened::Loose {
+        id,
+        name,
+        dir: file.parent().map(plain).unwrap_or_default(),
+        absolute: plain(&file),
+    })
+}
+
+#[tauri::command(async)]
+pub fn close_loose(app: AppHandle, id: String) {
+    watcher::unwatch(&app, &id);
+    loose::remove(&id);
+}
+
+/// Files the system asked to open before the frontend was ready.
+#[tauri::command(async)]
+pub fn take_pending_files(state: State<startup::Pending>) -> Vec<PathBuf> {
+    state.take()
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DefaultAppInfo {
+    platform: &'static str,
+    /// Linux only: an AppImage has no desktop entry to associate.
+    appimage: bool,
+    /// Linux only: whether this app already opens Markdown files.
+    is_default: bool,
+}
+
+#[cfg(target_os = "linux")]
+const DESKTOP_FILE: &str = "UltimateMD.desktop";
+#[cfg(target_os = "linux")]
+const MARKDOWN_MIME: &str = "text/markdown";
+
+#[tauri::command(async)]
+pub fn default_app_info() -> DefaultAppInfo {
+    #[cfg(target_os = "linux")]
+    let is_default = std::process::Command::new("xdg-mime")
+        .args(["query", "default", MARKDOWN_MIME])
+        .output()
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == DESKTOP_FILE);
+    #[cfg(not(target_os = "linux"))]
+    let is_default = false;
+    DefaultAppInfo {
+        platform: std::env::consts::OS,
+        appimage: std::env::var_os("APPIMAGE").is_some(),
+        is_default,
+    }
+}
+
+/// Windows lets only the user pick default apps, so this opens that screen. On
+/// Linux the choice can be made directly; macOS does it from the Finder.
+#[tauri::command(async)]
+pub fn set_default_app(app: AppHandle) -> Result<()> {
+    #[cfg(target_os = "windows")]
+    app.opener()
+        .open_url("ms-settings:defaultapps", None::<&str>)
+        .map_err(|e| Error::Vault(e.to_string()))?;
+    #[cfg(target_os = "linux")]
+    {
+        let _ = &app;
+        let status = std::process::Command::new("xdg-mime")
+            .args(["default", DESKTOP_FILE, MARKDOWN_MIME])
+            .status()?;
+        if !status.success() {
+            return Err(Error::Vault("xdg-mime could not set the default app".into()));
+        }
+    }
+    #[cfg(target_os = "macos")]
+    let _ = &app;
+    Ok(())
 }
 
 #[derive(Serialize)]

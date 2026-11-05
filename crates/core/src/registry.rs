@@ -139,6 +139,18 @@ impl Registry {
         self.add(&path)
     }
 
+    /// Finds the vault holding a file, with its vault-relative path. Files in
+    /// hidden folders do not count: they are not reachable through the vault.
+    pub fn locate(&self, file: &Path) -> Option<(&Vault, String)> {
+        let file = file.canonicalize().ok()?;
+        self.vaults.iter().find_map(|vault| {
+            let root = vault.path.canonicalize().ok()?;
+            let rel = crate::paths::to_rel(&root, &file)?;
+            crate::paths::normalize(&rel).ok()?;
+            Some((vault, rel))
+        })
+    }
+
     /// Forgets a vault. Its files are left untouched.
     pub fn remove(&mut self, id: &str) -> Result<()> {
         self.find_mut(id)?;
@@ -196,6 +208,23 @@ mod tests {
         loaded.remove(&a.id).unwrap();
         assert!(a.path.is_dir(), "removing a vault keeps its files");
         assert!(matches!(loaded.find(&a.id), Err(Error::UnknownVault(_))));
+    }
+
+    #[test]
+    fn locates_files_inside_vaults_only() {
+        let d = tempfile::tempdir().unwrap();
+        let mut r = Registry::default();
+        let v = r.create(d.path(), "V").unwrap();
+        std::fs::create_dir_all(v.path.join("a/.git")).unwrap();
+        std::fs::write(v.path.join("a/n.md"), "").unwrap();
+        std::fs::write(v.path.join("a/.git/h.md"), "").unwrap();
+        std::fs::write(d.path().join("fuera.md"), "").unwrap();
+
+        let (found, rel) = r.locate(&v.path.join("a/n.md")).unwrap();
+        assert_eq!((found.id.as_str(), rel.as_str()), (v.id.as_str(), "a/n.md"));
+        assert!(r.locate(&d.path().join("fuera.md")).is_none());
+        assert!(r.locate(&v.path.join("a/.git/h.md")).is_none());
+        assert!(r.locate(&d.path().join("no-existe.md")).is_none());
     }
 
     #[test]
