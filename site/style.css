@@ -71,10 +71,10 @@ pre { margin: 1.2em 0 .5em; padding: 14px 16px; overflow-x: auto; border: 1px so
 
 .download { border-top: 1px solid var(--line); text-align: center; }
 .platforms { display: grid; grid-template-columns: repeat(3, minmax(0, 220px)); justify-content: center; gap: 12px; margin: 24px auto; }
-.platforms a { display: block; padding: 18px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); text-decoration: none; }
-.platforms a:hover { border-color: var(--accent); }
-.platforms strong { display: block; }
-.platforms span { color: var(--text-2); font-size: .85rem; }
+.platform { display: flex; flex-direction: column; gap: 8px; padding: 18px; border: 1px solid var(--line); border-radius: 8px; }
+.platform a { padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--text); font-size: .9rem; text-decoration: none; }
+.platform a:hover { border-color: var(--accent); }
+.platform strong { display: block; margin-bottom: 4px; }
 
 .bottom { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; padding: 24px 16px; border-top: 1px solid var(--line); color: var(--text-2); font-size: .88rem; }
 
