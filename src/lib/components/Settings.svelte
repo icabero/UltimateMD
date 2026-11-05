@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
-  import { api, type McpAccess, type Vault } from '../api';
+  import { api, type DefaultAppInfo, type McpAccess, type Vault } from '../api';
   import { store } from '../store.svelte';
   import { THEMES, type Theme } from '../themes';
 
@@ -23,9 +23,21 @@
   let client = $state<Client>('claude-code');
   let copied = $state(false);
 
+  let defaultApp = $state<DefaultAppInfo | null>(null);
+
   onMount(async () => {
     mcp = await api.mcpInfo().catch(() => null);
+    defaultApp = await api.defaultAppInfo().catch(() => null);
   });
+
+  async function makeDefault() {
+    try {
+      await api.setDefaultApp();
+      defaultApp = await api.defaultAppInfo();
+    } catch (e) {
+      store.notify(e);
+    }
+  }
 
   const ua = navigator.userAgent;
   const desktopConfig = ua.includes('Windows')
@@ -143,6 +155,24 @@
     {/each}
   </section>
 
+  {#if defaultApp}
+    <section>
+      <h3>Programa por defecto</h3>
+      {#if defaultApp.platform === 'windows'}
+        <p class="muted">Windows solo permite elegirlo desde su configuración. Busca <code>.md</code> y selecciona UltimateMD.</p>
+        <button class="plain" onclick={makeDefault}>Abrir aplicaciones predeterminadas</button>
+      {:else if defaultApp.platform === 'macos'}
+        <p class="muted">En el Finder, abre la información de un archivo <code>.md</code>, elige UltimateMD en "Abrir con" y pulsa "Cambiar todo".</p>
+      {:else if defaultApp.appimage}
+        <p class="muted">Un AppImage no se integra en el sistema. Instala el paquete <code>.deb</code> o <code>.rpm</code>, o elige este programa con "Abrir con" en tu explorador de archivos.</p>
+      {:else if defaultApp.isDefault}
+        <p class="muted">UltimateMD ya abre tus archivos Markdown.</p>
+      {:else}
+        <button class="plain" onclick={makeDefault}>Abrir los .md con UltimateMD</button>
+      {/if}
+    </section>
+  {/if}
+
   <section>
     <h3>Conectar una IA por MCP</h3>
     <p class="muted">Funciona aunque la app esté cerrada. Cada vault responde según su nivel de acceso de arriba.</p>
@@ -192,6 +222,9 @@
   .code { position: relative; margin: 10px 0 6px; }
   pre { margin: 0; padding: 12px 76px 12px 12px; overflow-x: auto; border-radius: 8px; background: var(--panel); font: 12.5px/1.5 var(--mono); }
   .code button { position: absolute; top: 8px; right: 8px; background: var(--raised); }
+  .plain { margin-top: 4px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text); font-size: 12.5px; }
+  .plain:hover { background: var(--hover); }
+  code { font: 12px var(--mono); }
   .muted { margin: 4px 0; color: var(--text-2); font-size: 12.5px; }
   .warn { color: var(--danger); font-size: 12.5px; }
 </style>

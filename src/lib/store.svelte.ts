@@ -20,6 +20,8 @@ export interface Tab {
   /** A different version on disk while this tab has unsaved edits. */
   conflict: { content: string; version: string } | null;
   missing: boolean;
+  /** Set for a file outside any vault: its location on disk. */
+  loose: { absolute: string; dir: string } | null;
 }
 
 export interface Dialog {
@@ -144,8 +146,10 @@ class Store {
   async init() {
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => (this.systemDark = e.matches));
     await listen<{ vaultId: string; paths: string[] }>('vault-changed', (e) => this.onChanged(e.payload));
+    await listen<string[]>('open-files', (e) => this.openPaths(e.payload));
     await this.loadVaults();
     await this.restore();
+    await this.openPaths(await api.takePendingFiles());
   }
 
   async loadVaults() {
@@ -186,7 +190,38 @@ class Store {
     await this.loadVaults();
   }
 
-  async openFile(vaultId: string, path: string) {
+  /** Opens files by absolute path, as handed over by the operating system. */
+  async openPaths(paths: string[]) {
+    for (const path of paths) {
+      try {
+        const opened = await api.openPath(path);
+        if (opened.kind === 'vault') {
+          await this.loadVaults();
+          await this.openFile(opened.vaultId, opened.path);
+        } else {
+          await this.openFile(opened.id, opened.name, { absolute: opened.absolute, dir: opened.dir });
+        }
+      } catch (e) {
+        this.notify(`No se pudo abrir ${path}: ${e}`);
+      }
+    }
+  }
+
+  /** Turns the folder of a loose file into a vault and reopens the file there. */
+  async adoptFolder(tab: Tab) {
+    if (!tab.loose) return;
+    const { absolute, dir } = tab.loose;
+    await this.addVault(() => api.openVault(dir));
+    await this.close(tab);
+    await this.openPaths([absolute]);
+  }
+
+  /** Where a tab's file lives, for display. */
+  location(tab: Tab) {
+    return tab.loose ? tab.loose.dir : (this.vault(tab.vaultId)?.name ?? '');
+  }
+
+  async openFile(vaultId: string, path: string, loose: Tab['loose'] = null) {
     const key = tabKey(vaultId, path);
     if (this.tabs.some((t) => t.key === key)) {
       this.activeKey = key;
@@ -211,7 +246,7 @@ class Store {
     }
     this.tabs.push({
       key, vaultId, path, kind, content, version,
-      dirty: false, saving: false, view: 'split', revision: 0, conflict: null, missing: false,
+      dirty: false, saving: false, view: 'split', revision: 0, conflict: null, missing: false, loose,
     });
     this.activeKey = key;
     this.persist();
@@ -279,6 +314,7 @@ class Store {
     const i = this.tabs.findIndex((t) => t.key === tab.key);
     if (i < 0) return;
     this.tabs.splice(i, 1);
+    if (tab.loose) await api.closeLoose(tab.vaultId);
     if (this.activeKey === tab.key) this.activeKey = this.tabs[Math.min(i, this.tabs.length - 1)]?.key ?? null;
     this.persist();
   }
@@ -290,11 +326,13 @@ class Store {
   }
 
   async onChanged({ vaultId, paths }: { vaultId: string; paths: string[] }) {
-    await this.refreshTree(vaultId);
+    const inVault = this.tabs.every((t) => t.vaultId !== vaultId || !t.loose);
+    if (inVault) await this.refreshTree(vaultId);
     const known = new Set(this.files(vaultId));
     for (const tab of this.tabs) {
       if (tab.vaultId !== vaultId || !paths.includes(tab.path)) continue;
-      tab.missing = !known.has(tab.path);
+      if (tab.loose) tab.missing = !(await api.read(vaultId, tab.path).catch(() => null));
+      else tab.missing = !known.has(tab.path);
       if (tab.missing) continue;
       if (!isText(tab.kind)) {
         tab.revision++;
@@ -377,7 +415,7 @@ class Store {
 
   persist() {
     try {
-      const open = this.tabs.map(({ vaultId, path, view }) => ({ vaultId, path, view }));
+      const open = this.tabs.map(({ vaultId, path, view, loose }) => ({ vaultId, path, view, file: loose?.absolute }));
       localStorage.setItem(SESSION_KEY, JSON.stringify({ open, active: this.activeKey }));
     } catch {
       // The session is a convenience; the app works without it.
@@ -389,12 +427,19 @@ class Store {
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) return;
       const { open, active } = JSON.parse(raw) as {
-        open: { vaultId: string; path: string; view: ViewMode }[];
+        open: { vaultId: string; path: string; view: ViewMode; file?: string }[];
         active: string | null;
       };
-      for (const { vaultId, path, view } of open) {
-        if (!this.vault(vaultId)?.open || !this.files(vaultId).includes(path)) continue;
-        await this.openFile(vaultId, path);
+      for (const { vaultId, path, view, file } of open) {
+        if (file) {
+          // A loose file gets a new id each run, and may no longer exist.
+          const opened = await api.openPath(file).catch(() => null);
+          if (opened?.kind === 'loose') await this.openFile(opened.id, opened.name, opened);
+          else continue;
+        } else {
+          if (!this.vault(vaultId)?.open || !this.files(vaultId).includes(path)) continue;
+          await this.openFile(vaultId, path);
+        }
         if (this.active) this.active.view = view;
       }
       if (active && this.tabs.some((t) => t.key === active)) this.activeKey = active;

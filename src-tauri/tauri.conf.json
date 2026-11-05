@@ -40,9 +40,33 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/ultimatemd-mcp"],
+    "externalBin": [
+      "binaries/ultimatemd-mcp"
+    ],
     "windows": {
-      "webviewInstallMode": { "type": "downloadBootstrapper" }
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "md",
+          "markdown"
+        ],
+        "name": "Markdown",
+        "description": "Documento Markdown",
+        "role": "Editor",
+        "mimeType": "text/markdown"
+      }
+    ],
+    "linux": {
+      "deb": {
+        "desktopTemplate": "ultimatemd.desktop"
+      },
+      "rpm": {
+        "desktopTemplate": "ultimatemd.desktop"
+      }
     }
   }
 }

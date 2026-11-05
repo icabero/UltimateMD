@@ -9,6 +9,7 @@ Un vault es una carpeta normal con tus archivos, sin base de datos ni formato pr
 - **Varios vaults abiertos a la vez** en una sola ventana, con pestañas de cualquiera de ellos.
 - Edición, vista previa o vista dividida, con autoguardado.
 - `[[wikilinks]]`, frontmatter, tablas, tareas, notas al pie e imágenes relativas.
+- Abre archivos `.md` sueltos, sin vault, y se puede usar como programa por defecto.
 - Selector rápido (`Ctrl+P`) y búsqueda en todos los vaults (`Ctrl+Mayús+F`).
 - Archivos `.html` con vista previa, y HTML dentro de las notas.
 - Diagramas Mermaid y D2, exportables a SVG y PNG.
@@ -59,6 +60,12 @@ Herramientas: `list_vaults`, `list_notes`, `read_note`, `search_notes`, `get_bac
 ## Instalación
 
 Descarga el instalador desde [Releases](https://github.com/icabero/UltimateMD/releases).
+
+Para usarla como programa por defecto:
+
+- **Windows:** en Ajustes, abre las aplicaciones predeterminadas y elige UltimateMD para `.md`. Windows no permite que una app se asigne sola.
+- **macOS:** en el Finder, abre la información de un `.md`, elige UltimateMD en "Abrir con" y pulsa "Cambiar todo".
+- **Linux:** con el paquete `.deb` o `.rpm`, usa el botón de Ajustes. Un AppImage no se integra en el sistema.
 
 Los instaladores aún no están firmados. En Windows, SmartScreen mostrará un aviso: pulsa **Más información → Ejecutar de todas formas**. En macOS, abre la app con clic derecho → **Abrir**.
 

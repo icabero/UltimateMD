@@ -128,7 +128,10 @@
     </div>
     <footer>
       {#if tab}
-        <span>{store.vault(tab.vaultId)?.name} / {tab.path}</span>
+        <span class="where">{store.location(tab)} / {tab.path}</span>
+        {#if tab.loose}
+          <button class="adopt" onclick={() => store.adoptFolder(tab)}>Abrir la carpeta como vault</button>
+        {/if}
         <span class="spacer"></span>
         {#if tab.kind === 'md' || tab.kind === 'html'}<span>{words} palabras</span>{/if}
         <span>{status}</span>
@@ -158,5 +161,8 @@
   .banner button { padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--raised); color: var(--text); font-size: 12.5px; }
   footer { display: flex; gap: 16px; align-items: center; height: 24px; flex: none; padding: 0 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
   .spacer { flex: 1; }
+  .where { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .adopt { flex: none; padding: 0; border: 0; background: none; color: var(--accent-text); font-size: inherit; }
+  .adopt:hover { text-decoration: underline; }
   .toast { position: fixed; bottom: 36px; left: 50%; z-index: 60; max-width: min(560px, calc(100vw - 32px)); padding: 9px 14px; border-radius: 8px; background: var(--text); color: var(--bg); box-shadow: var(--shadow); font-size: 13px; transform: translateX(-50%); }
 </style>

@@ -169,3 +169,49 @@ test('following the system uses the theme chosen for each mode', async ({ page }
   await page.getByLabel('Modo oscuro').selectOption('bosque');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'bosque');
 });
+
+const openFiles = (page: Page, ...paths: string[]) => page.evaluate((p) => (window as any).__test.openFiles(p), paths);
+
+test('a file outside any vault opens as a loose file and can be edited', async ({ page }) => {
+  await openFiles(page, '/fuera/nota.md');
+  await expect(page.locator('main footer')).toContainText('/fuera / nota.md');
+  await expect(prose(page).locator('h1')).toHaveText('Suelto');
+  await typeInEditor(page, 'más');
+  await expect.poll(() => disk(page, 'loose-nota.md', 'nota.md')).toContain('más');
+});
+
+test('opening the same file twice keeps one tab', async ({ page }) => {
+  await openFiles(page, '/fuera/nota.md');
+  await expect(page.locator('[role=tab]')).toHaveCount(1);
+  await openFiles(page, '/fuera/nota.md');
+  await page.waitForTimeout(100);
+  await expect(page.locator('[role=tab]')).toHaveCount(1);
+});
+
+test('a file inside a vault opens as part of that vault', async ({ page }) => {
+  await openFiles(page, '/v/Trabajo/Inicio.md');
+  await expect(page.locator('main footer')).toContainText('Trabajo / Inicio.md');
+});
+
+test('a missing file reports an error without leaving a broken tab', async ({ page }) => {
+  await openFiles(page, '/fuera/borrado.md');
+  await expect(page.getByRole('status')).toContainText('No se pudo abrir');
+  await expect(page.locator('[role=tab]')).toHaveCount(0);
+});
+
+test('files passed at startup are opened', async ({ page }) => {
+  await page.addInitScript(() => ((window as any).__pending = ['/fuera/inicio.md']));
+  await page.reload();
+  await expect(page.locator('main footer')).toContainText('/fuera / inicio.md');
+});
+
+test('a loose file can become part of a vault', async ({ page }) => {
+  await openFiles(page, '/fuera/nota.md');
+  await page.getByRole('button', { name: 'Abrir la carpeta como vault' }).click();
+  await expect(page.locator('aside')).toContainText('fuera');
+});
+
+test('settings explain how to set the default app on Windows', async ({ page }) => {
+  await page.getByTitle('Ajustes y MCP').click();
+  await expect(page.getByRole('button', { name: 'Abrir aplicaciones predeterminadas' })).toBeVisible();
+});

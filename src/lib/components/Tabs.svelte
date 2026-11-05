@@ -18,7 +18,8 @@
         onclick={() => { store.activeKey = tab.key; store.persist(); }}
         onkeydown={(e) => { if (e.key === 'Enter') store.activeKey = tab.key; }}
         onauxclick={(e) => { if (e.button === 1) store.close(tab); }}
-        title="{store.vault(tab.vaultId)?.name} · {tab.path}">
+        title="{store.location(tab)} · {tab.path}">
+        {#if tab.loose}<span class="loose" title="Archivo suelto, fuera de cualquier vault"><Icon name="file" size={12} /></span>{/if}
         <span class="name">{baseName(tab.path).replace(/\.(md|markdown)$/i, '')}</span>
         {#if tab.dirty}<span class="dirty" title="Sin guardar"></span>{/if}
         <button class="x" title="Cerrar (Ctrl+W)" onclick={(e) => { e.stopPropagation(); store.close(tab); }}><Icon name="close" size={12} /></button>
@@ -41,6 +42,7 @@
   .tab:hover { color: var(--text); }
   .tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
   .name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .loose { display: flex; flex: none; color: var(--text-3); }
   .dirty { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
   .x { display: flex; flex: none; padding: 3px; border: 0; border-radius: 4px; background: none; color: inherit; opacity: 0; }
   .tab:hover .x, .tab.active .x { opacity: .7; }

@@ -16,7 +16,7 @@
   const versions = {};
   const versionOf = (id, path) => (versions[`${id}:${path}`] ??= 'v0');
   const bump = (id, path) => (versions[`${id}:${path}`] = `v${Date.now()}${Math.random()}`);
-  let listener = null;
+  const listeners = {};
 
   function tree(id) {
     const root = [];
@@ -57,10 +57,28 @@
           .filter(([, text]) => text.includes(query))
           .map(([path]) => ({ vaultId, hit: { path, line: 1, text: query } })),
       ),
-    'plugin:event|listen': ({ handler }) => {
-      listener = handler;
+    'plugin:event|listen': ({ event, handler }) => {
+      listeners[event] = handler;
       return 1;
     },
+    open_path: ({ path }) => {
+      if (path === '/fuera/borrado.md') throw `not found: ${path}`;
+      if (path.startsWith('/v/Trabajo/')) return { kind: 'vault', vaultId: 'a', path: path.slice('/v/Trabajo/'.length) };
+      const name = path.split('/').pop();
+      const id = `loose-${name}`;
+      files[id] ??= { [name]: '# Suelto\n' };
+      return { kind: 'loose', id, name, absolute: path, dir: path.slice(0, path.lastIndexOf('/')) };
+    },
+    close_loose: ({ id }) => {
+      delete files[id];
+    },
+    open_vault: ({ path }) => {
+      vaults.push({ id: 'c', name: 'fuera', path, open: true, mcp: 'read', allowScripts: false });
+      files.c = { 'nota.md': '# Suelto\n' };
+      return vaults.at(-1);
+    },
+    take_pending_files: () => window.__pending ?? [],
+    default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),
   };
 
   window.__TAURI_INTERNALS__ = {
@@ -83,7 +101,11 @@
     externalWrite(id, path, content) {
       files[id][path] = content;
       bump(id, path);
-      window[`_${listener}`]?.({ payload: { vaultId: id, paths: [path] } });
+      window[`_${listeners['vault-changed']}`]?.({ payload: { vaultId: id, paths: [path] } });
+    },
+    /** Simulates the operating system opening files in the running app. */
+    openFiles(paths) {
+      window[`_${listeners['open-files']}`]?.({ payload: paths });
     },
   };
 })();
