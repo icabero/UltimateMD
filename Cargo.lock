@@ -4286,6 +4286,7 @@ name = "ultimatemd-core"
 version = "0.1.0"
 dependencies = [
  "directories",
+ "dunce",
  "serde",
  "serde_json",
  "sha2",
