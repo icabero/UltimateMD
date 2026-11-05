@@ -3,6 +3,8 @@
 //! parts that new content needs, so cover pages, headers, fonts and styles
 //! survive untouched.
 
+mod detect;
+
 use crate::{Error, Result};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use regex::{Captures, Regex};
@@ -30,6 +32,8 @@ const DEFAULT_TEXT_WIDTH: u64 = 9026;
 const DIAGRAM_SCALE: u64 = 2;
 const CODE_FONT: &str = "Consolas";
 const MAX_LEVELS: usize = 6;
+/// Word's space around the text of a table cell, in twentieths of a point.
+const CELL_SPACING: &str = r#"<w:spacing w:before="40" w:after="40"/>"#;
 
 macro_rules! re {
     ($name:ident, $pattern:literal) => {
@@ -257,9 +261,22 @@ struct Writer<'a> {
     table: Option<Table>,
     /// The table style formats its first row, so the header needs no bold of its own.
     styled_header: bool,
+    /// The template's own styles.
+    detected: detect::Detected,
 }
 
 impl Writer<'_> {
+    /// The style id for a heading level: the template's own, or the standard one.
+    fn heading_style(&self, level: usize) -> Option<String> {
+        let own = self.detected.headings.get(level.wrapping_sub(1)).cloned().flatten();
+        own.or_else(|| self.styles.get(&format!("heading {level}")).map(String::from))
+    }
+
+    /// The paragraph properties of the template's body text, if it has its own.
+    fn body_style(&self) -> String {
+        self.detected.body.as_ref().map_or(String::new(), |id| format!(r#"<w:pStyle w:val="{id}"/>"#))
+    }
+
     fn open(&mut self, properties: String) {
         self.flush();
         let properties = if std::mem::take(&mut self.page_break) {
@@ -286,7 +303,7 @@ impl Writer<'_> {
 
     fn body_properties(&mut self) -> String {
         if let Some((num, level)) = self.item_marker.take() {
-            let style = self.styles.paragraph("list paragraph");
+            let style = self.list_style();
             return format!(r#"{style}<w:numPr><w:ilvl w:val="{level}"/><w:numId w:val="{num}"/></w:numPr>"#);
         }
         if self.quote > 0 {
@@ -295,12 +312,17 @@ impl Writer<'_> {
         }
         if !self.lists.is_empty() {
             let indent = 360 * (self.lists.len() + 1);
-            return format!(r#"{}<w:ind w:left="{indent}"/>"#, self.styles.paragraph("list paragraph"));
+            return format!(r#"{}<w:ind w:left="{indent}"/>"#, self.list_style());
         }
         if self.footnote_start {
             return self.styles.paragraph("footnote text");
         }
-        String::new()
+        self.body_style()
+    }
+
+    fn list_style(&self) -> String {
+        let body = self.body_style();
+        if body.is_empty() { self.styles.paragraph("list paragraph") } else { body }
     }
 
     fn push_raw(&mut self, xml: &str) {
@@ -432,8 +454,7 @@ impl Writer<'_> {
         self.flush();
         self.page_break = page_break;
         let level = level.clamp(1, MAX_LEVELS);
-        let standard = self.styles.get(&format!("heading {level}")).map(String::from);
-        let id = style.map(String::from).or(standard);
+        let id = style.map(String::from).or_else(|| self.heading_style(level));
         let is_heading = id.as_deref().is_some_and(|id| self.styles.0.iter().any(|(name, v)| v == id && name.starts_with("heading ")));
         let outline = if is_heading { String::new() } else { format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1) };
         let style = id.as_ref().map_or(String::new(), |id| format!(r#"<w:pStyle w:val="{id}"/>"#));
@@ -505,7 +526,8 @@ impl Writer<'_> {
 
     fn end_cell(&mut self) {
         if self.para.is_none() {
-            self.open(String::new());
+            let body = self.body_style();
+            self.open(body);
         }
         self.flush();
         let cell = std::mem::take(&mut self.out);
@@ -568,12 +590,11 @@ impl Writer<'_> {
             }
             Tag::Heading { level, .. } => {
                 let level = (heading_number(level) + self.shift).min(MAX_LEVELS);
-                let name = format!("heading {level}");
-                let style = self.styles.paragraph(&name);
+                let style = self.heading_style(level);
                 // Without the style, the outline level keeps it in the contents.
-                let properties = if style.is_empty() { format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1) } else { style };
+                let properties = style.as_ref().map_or(format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1), |id| format!(r#"<w:pStyle w:val="{id}"/>"#));
                 self.open(properties);
-                self.format.bold = self.styles.get(&name).is_none();
+                self.format.bold = style.is_none();
                 self.heading = Some(Heading { level, text: String::new() });
             }
             Tag::BlockQuote(_) => {
@@ -596,7 +617,10 @@ impl Writer<'_> {
                 }
                 self.format.bold = !self.styled_header;
             }
-            Tag::TableCell => self.open(String::new()),
+            Tag::TableCell => {
+                let body = self.body_style();
+                self.open(if body.is_empty() { body } else { format!("{body}{CELL_SPACING}") });
+            }
             Tag::Emphasis => self.format.italic = true,
             Tag::Strong => self.format.bold = true,
             Tag::Strikethrough => self.format.strike = true,
@@ -1014,6 +1038,7 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
         shift: 0,
         table: None,
         styled_header: styles.get("table grid").is_some_and(|id| formats_first_row(&styles_xml, id)),
+        detected: detect::detect(&styles_xml, &text_of(&parts, NUMBERING).unwrap_or_default(), &text_of(&parts, DOCUMENT).unwrap_or_default()),
     };
     let mut saved = Vec::new();
     let mut values: HashMap<String, String> = HashMap::new();
