@@ -16,6 +16,7 @@
   import { parseSource } from '../diagramBuilder';
   import { fenceLine, parseStyle, splitFence } from '../diagramStyle';
   import { findTerms } from '../fold';
+  import { htmlToMarkdown } from '../paste';
   import { fenceAt, insertBlock, insertLink, wrap } from '../formatting';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
@@ -109,6 +110,26 @@
     },
   });
 
+  // Ctrl+Shift+V pastes plain text; the paste event itself does not say so.
+  let plainPaste = false;
+  const pasteMarkdown = EditorView.domEventHandlers({
+    keydown(event) {
+      plainPaste = (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'v';
+      return false;
+    },
+    paste(event, target) {
+      const plain = plainPaste;
+      plainPaste = false;
+      const html = event.clipboardData?.getData('text/html');
+      if (plain || !html) return false;
+      const markdown = htmlToMarkdown(html);
+      if (markdown === null) return false;
+      event.preventDefault();
+      target.dispatch(target.state.replaceSelection(markdown), { scrollIntoView: true, userEvent: 'input.paste' });
+      return true;
+    },
+  });
+
   function makeState(current: Tab) {
     return EditorState.create({
       doc: current.content,
@@ -120,7 +141,7 @@
         language.of(languageFor(current.kind)),
         mode.of(PLAIN),
         found,
-        ...(current.kind === 'md' ? [wikilinks, followWithCtrl, autocompletion({ override: [noteCompletions, headingCompletions], icons: false })] : []),
+        ...(current.kind === 'md' ? [wikilinks, followWithCtrl, pasteMarkdown, autocompletion({ override: [noteCompletions, headingCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
           if (u.docChanged || u.selectionSet) publishPosition(u.state);

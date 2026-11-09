@@ -674,6 +674,56 @@ test('an HTML export keeps callouts and opens folded ones', async ({ page }) => 
   expect(html).toContain('.callout[data-callout');
 });
 
+/** Pastes into the editor as the system would, with HTML and plain text. `plain` first presses Ctrl+Shift+V. */
+async function paste(page: Page, html: string, text: string, plain = false) {
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.evaluate(([html, text, plain]) => {
+    const content = document.querySelector('.cm-content')!;
+    if (plain) content.dispatchEvent(new KeyboardEvent('keydown', { key: 'V', ctrlKey: true, shiftKey: true, bubbles: true }));
+    const data = new DataTransfer();
+    data.setData('text/html', html as string);
+    data.setData('text/plain', text as string);
+    content.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  }, [html, text, plain] as const);
+}
+
+/** What the pasted note holds once it has been saved. */
+async function editorDoc(page: Page) {
+  await expect(page.locator('main footer')).toContainText('Guardado', { timeout: 3000 });
+  return disk(page, 'b', 'Otra.md');
+}
+
+test('pasting from a web page gives clean Markdown', async ({ page }) => {
+  await open(page, 'Otra');
+  const html = '<h2>Ruta</h2><p>Texto <strong>fuerte</strong> y <a href="https://e.com">enlace</a>.</p><ul><li>uno</li><li>dos</li></ul><table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table><script>window.pwned=1</script>';
+  await paste(page, html, 'Ruta Texto fuerte y enlace. uno dos A B 1 2');
+  const text = await editorDoc(page);
+  expect(text).toContain('## Ruta\n\nTexto **fuerte** y [enlace](https://e.com).');
+  expect(text).toContain('- uno\n- dos');
+  expect(text).toMatch(/\| A +\| B +\|/);
+  expect(text).not.toContain('pwned');
+  expect(await page.evaluate(() => (window as any).pwned)).toBeUndefined();
+});
+
+test('Google Docs bold and italics survive, and code pastes as it is', async ({ page }) => {
+  await open(page, 'Otra');
+  const docs = '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-1"><span style="font-weight:700">negrita</span><span> y </span><span style="font-style:italic">cursiva</span></b>';
+  await paste(page, docs, 'negrita y cursiva');
+  expect(await editorDoc(page)).toContain('**negrita** y *cursiva*');
+  const code = '<div style="color:#ccc"><span style="color:#569cd6">const</span> a = 1 * 2_000;</div>';
+  await paste(page, code, '\nconst a = 1 * 2_000;');
+  expect(await editorDoc(page)).toContain('const a = 1 * 2_000;');
+});
+
+test('Ctrl+Shift+V pastes plain text', async ({ page }) => {
+  await open(page, 'Otra');
+  await paste(page, '<p><strong>fuerte</strong></p>', 'fuerte', true);
+  const text = await editorDoc(page);
+  expect(text).toContain('fuerte');
+  expect(text).not.toContain('**');
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();
