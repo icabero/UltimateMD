@@ -79,4 +79,27 @@ mod tests {
         remove(&id);
         assert!(folder_for(&id, "nota.md").unwrap().is_err());
     }
+
+    #[test]
+    fn ids_are_reused_only_for_the_same_file() {
+        let d = tempfile::tempdir().unwrap();
+        let a = d.path().canonicalize().unwrap().join("a.md");
+        let b = a.with_file_name("b.md");
+        let (id_a, id_b) = (register(&a), register(&b));
+        assert_ne!(id_a, id_b);
+        assert_eq!(dir_of(&id_a).unwrap(), a.parent().unwrap());
+        // After one closes, a new file never takes an id still in use.
+        remove(&id_a);
+        let id_c = register(&a.with_file_name("c.md"));
+        assert_ne!(id_c, id_b);
+        remove(&id_b);
+        remove(&id_c);
+    }
+
+    #[test]
+    fn a_vault_id_never_counts_as_loose() {
+        assert!(folder_for("1234-abcd", "x.md").is_none());
+        assert!(dir_of("no-registrado").is_none());
+        assert!(matches!(folder_for("loose-9999", "x.md"), Some(Err(_))));
+    }
 }

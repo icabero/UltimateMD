@@ -30,6 +30,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
+          components: rustfmt, clippy
       - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           # Branches start from the cache of main and develop, the only ones to save it.
@@ -40,14 +41,29 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev librsvg2-dev
+      # Style and lints do not depend on the system, so one runner checks them.
+      - name: Check Rust formatting
+        if: runner.os == 'Linux'
+        run: cargo fmt --all -- --check
       - run: npm ci
       - run: npm run check
+      - name: Lint TypeScript and Svelte
+        if: runner.os == 'Linux'
+        run: npm run lint
       - run: npm run build:web
       - run: npm run sidecar -- --debug
       - run: cargo test -p ultimatemd-core -p ultimatemd-mcp -p ultimatemd-pdf
-      # The app crate has no tests, and its test binary cannot start on Windows
-      # without the manifest that a real build embeds.
-      - run: cargo check -p ultimatemd
+      - name: Lint Rust
+        if: runner.os == 'Linux'
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      # The app's test binary cannot start on Windows without the manifest
+      # that a real build embeds, so there it is only checked.
+      - name: Test the app crate
+        if: runner.os != 'Windows'
+        run: cargo test -p ultimatemd
+      - name: Check the app crate
+        if: runner.os == 'Windows'
+        run: cargo check -p ultimatemd
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
