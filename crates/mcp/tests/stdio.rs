@@ -25,11 +25,14 @@ impl Client {
         let stdin = child.stdin.take().unwrap();
         let stdout = BufReader::new(child.stdout.take().unwrap());
         let mut c = Self { child, stdin, stdout, id: 0 };
-        let init = c.request("initialize", json!({
-            "protocolVersion": "2025-06-18",
-            "capabilities": {},
-            "clientInfo": { "name": "test", "version": "1" }
-        }));
+        let init = c.request(
+            "initialize",
+            json!({
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": { "name": "test", "version": "1" }
+            }),
+        );
         assert_eq!(init["serverInfo"]["name"], "ultimatemd");
         assert!(init["instructions"].as_str().unwrap().contains("mermaid"));
         c.send(json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }));
@@ -93,7 +96,18 @@ fn lists_every_tool_with_a_schema() {
     let (_d, mut c) = setup();
     let tools = c.request("tools/list", json!({}));
     let names: Vec<&str> = tools["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-    for name in ["list_vaults", "list_notes", "read_note", "search_notes", "get_backlinks", "create_note", "update_note", "append_note", "move_note", "delete_note"] {
+    for name in [
+        "list_vaults",
+        "list_notes",
+        "read_note",
+        "search_notes",
+        "get_backlinks",
+        "create_note",
+        "update_note",
+        "append_note",
+        "move_note",
+        "delete_note",
+    ] {
         assert!(names.contains(&name), "{name} missing from {names:?}");
     }
     let read = tools["tools"].as_array().unwrap().iter().find(|t| t["name"] == "read_note").unwrap();
@@ -112,9 +126,12 @@ fn full_note_lifecycle() {
     c.ok("append_note", json!({ "vault": "rw", "path": "dir/nueva.md", "content": "dos" }));
     assert_eq!(std::fs::read_to_string(d.path().join("rw/dir/nueva.md")).unwrap(), "uno\ndos");
 
-    let (err, text) = c.call("update_note", json!({
-        "vault": "rw", "path": "dir/nueva.md", "content": "x", "expected_version": note["version"]
-    }));
+    let (err, text) = c.call(
+        "update_note",
+        json!({
+            "vault": "rw", "path": "dir/nueva.md", "content": "x", "expected_version": note["version"]
+        }),
+    );
     assert!(err && text.contains("changed"), "{text}");
 
     c.ok("move_note", json!({ "vault": "rw", "from": "dir/nueva.md", "to": "otra.md" }));

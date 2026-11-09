@@ -50,8 +50,22 @@ fn note(markdown: &str) -> Vec<Section> {
     vec![Section::Note { path: "n.md".into(), markdown: markdown.into(), shift: 0, page_break: false }]
 }
 
-fn input<'a>(sections: &'a [Section], cover: bool, diagrams: &'a [Vec<u8>], image: &'a dyn Fn(&str, &str) -> Option<Vec<u8>>) -> Input<'a> {
-    Input { sections, title: "Título \"raro\"", date: "5/11/2026", language: "es", contents: "Índice", cover, diagrams, image }
+fn input<'a>(
+    sections: &'a [Section],
+    cover: bool,
+    diagrams: &'a [Vec<u8>],
+    image: &'a dyn Fn(&str, &str) -> Option<Vec<u8>>,
+) -> Input<'a> {
+    Input {
+        sections,
+        title: "Título \"raro\"",
+        date: "5/11/2026",
+        language: "es",
+        contents: "Índice",
+        cover,
+        diagrams,
+        image,
+    }
 }
 
 #[test]
@@ -65,7 +79,9 @@ fn writes_a_real_pdf_with_every_element() {
 
 #[test]
 fn note_text_cannot_run_as_typst_code() {
-    let sections = note("#panic(\"boom\")\n\n[#panic()] `#panic()` $panic$\n\n# #panic()\n\n```\n#panic()\n```\n\n| #panic() |\n|---|\n| x |\n\n[a#panic()](https://e.com/\"#panic())\n");
+    let sections = note(
+        "#panic(\"boom\")\n\n[#panic()] `#panic()` $panic$\n\n# #panic()\n\n```\n#panic()\n```\n\n| #panic() |\n|---|\n| x |\n\n[a#panic()](https://e.com/\"#panic())\n",
+    );
     let image = |_: &str, _: &str| None;
     let pdf = render(&input(&sections, false, &[], &image));
     assert!(pdf.is_ok(), "{:?}", pdf.err().map(|e| e.to_string()));
@@ -91,8 +107,18 @@ fn a_damaged_image_costs_only_that_image() {
 fn sections_paginate_and_preview_as_images() {
     let sections = vec![
         Section::Heading { text: "Carpeta".into(), style: None, level: 1, page_break: false },
-        Section::Note { path: "a.md".into(), markdown: "# Una\n\nx[^n]\n\n[^n]: pie\n".into(), shift: 1, page_break: false },
-        Section::Note { path: "b.md".into(), markdown: "# Dos\n\ny[^n]\n\n[^n]: otro\n".into(), shift: 1, page_break: true },
+        Section::Note {
+            path: "a.md".into(),
+            markdown: "# Una\n\nx[^n]\n\n[^n]: pie\n".into(),
+            shift: 1,
+            page_break: false,
+        },
+        Section::Note {
+            path: "b.md".into(),
+            markdown: "# Dos\n\ny[^n]\n\n[^n]: otro\n".into(),
+            shift: 1,
+            page_break: true,
+        },
     ];
     let image = |_: &str, _: &str| None;
     let pages = preview(&input(&sections, false, &[], &image), 1.0).unwrap();

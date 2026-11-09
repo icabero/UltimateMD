@@ -291,7 +291,9 @@ impl Writer<'_> {
         } else {
             None
         };
-        list.map_or(String::new(), |list| format!(r#"<w:numPr><w:ilvl w:val="{slot}"/><w:numId w:val="{list}"/></w:numPr>"#))
+        list.map_or(String::new(), |list| {
+            format!(r#"<w:numPr><w:ilvl w:val="{slot}"/><w:numId w:val="{list}"/></w:numPr>"#)
+        })
     }
 
     /// The paragraph properties of the template's body text, if it has its own.
@@ -393,7 +395,8 @@ impl Writer<'_> {
         if let Some(h) = &mut self.heading {
             h.text.push_str(text);
         }
-        let run = format!(r#"<w:r>{}<w:t xml:space="preserve">{}</w:t></w:r>"#, self.run_properties(code), escape(text));
+        let run =
+            format!(r#"<w:r>{}<w:t xml:space="preserve">{}</w:t></w:r>"#, self.run_properties(code), escape(text));
         match &self.link {
             Some(rel) => {
                 let wrapped = format!(r#"<w:hyperlink r:id="{rel}">{run}</w:hyperlink>"#);
@@ -406,10 +409,8 @@ impl Writer<'_> {
     fn add_rel(&mut self, kind: &str, target: &str, external: bool) -> String {
         let id = format!("rIdUmd{}", self.rels.len() + 1);
         let mode = if external { r#" TargetMode="External""# } else { "" };
-        self.rels.push(format!(
-            r#"<Relationship Id="{id}" Type="{REL_NS}/{kind}" Target="{}"{mode}/>"#,
-            escape(target)
-        ));
+        self.rels
+            .push(format!(r#"<Relationship Id="{id}" Type="{REL_NS}/{kind}" Target="{}"{mode}/>"#, escape(target)));
         id
     }
 
@@ -429,7 +430,11 @@ impl Writer<'_> {
 
         let mut cx = size.width as u64 * EMU_PER_PX / scale;
         let mut cy = size.height as u64 * EMU_PER_PX / scale;
-        let limit = self.input.settings.image_max_width.map_or(self.text_width_emu, |pt| (u64::from(pt) * EMU_PER_POINT).min(self.text_width_emu));
+        let limit = self
+            .input
+            .settings
+            .image_max_width
+            .map_or(self.text_width_emu, |pt| (u64::from(pt) * EMU_PER_POINT).min(self.text_width_emu));
         if cx > limit {
             cy = cy * limit / cx;
             cx = limit;
@@ -469,7 +474,11 @@ impl Writer<'_> {
             self.flush();
             return;
         }
-        let background = if self.input.settings.plain_code { "" } else { r#"<w:shd w:val="clear" w:color="auto" w:fill="F3F1EA"/>"# };
+        let background = if self.input.settings.plain_code {
+            ""
+        } else {
+            r#"<w:shd w:val="clear" w:color="auto" w:fill="F3F1EA"/>"#
+        };
         let body = self.body_style();
         self.open(format!("{body}{background}"));
         for (i, line) in code.trim_end_matches('\n').split('\n').enumerate() {
@@ -488,7 +497,9 @@ impl Writer<'_> {
         let level = level.clamp(1, MAX_LEVELS);
         let chosen = style.is_some();
         let id = style.map(String::from).or_else(|| self.heading_style(level));
-        let is_heading = id.as_deref().is_some_and(|id| self.styles.0.iter().any(|(name, v)| v == id && name.starts_with("heading ")));
+        let is_heading = id
+            .as_deref()
+            .is_some_and(|id| self.styles.0.iter().any(|(name, v)| v == id && name.starts_with("heading ")));
         let outline = if is_heading { String::new() } else { format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1) };
         let numbering = if chosen { String::new() } else { self.heading_numbering(level) };
         let style = id.as_ref().map_or(String::new(), |id| format!(r#"<w:pStyle w:val="{id}"/>"#));
@@ -552,7 +563,10 @@ impl Writer<'_> {
             Some(id) => format!(r#"<w:tblStyle w:val="{id}"/>{FULL_WIDTH}{LOOK}"#),
             None => format!("{FULL_WIDTH}{BORDERS}{LOOK}"),
         };
-        self.out.push_str(&format!("<w:tbl><w:tblPr>{properties}</w:tblPr><w:tblGrid>{grid}</w:tblGrid>{}</w:tbl>", table.rows));
+        self.out.push_str(&format!(
+            "<w:tbl><w:tblPr>{properties}</w:tblPr><w:tblGrid>{grid}</w:tblGrid>{}</w:tbl>",
+            table.rows
+        ));
         // Word needs a paragraph after a table that ends the body or a cell.
         self.open(String::new());
         self.flush();
@@ -567,7 +581,9 @@ impl Writer<'_> {
         let cell = std::mem::take(&mut self.out);
         let fill = self.input.settings.header_fill.as_ref().or(self.detected.header_fill.as_ref());
         let Some(table) = &mut self.table else { return };
-        let shade = fill.filter(|_| table.head).map_or(String::new(), |fill| format!(r#"<w:shd w:val="clear" w:color="auto" w:fill="{fill}"/>"#));
+        let shade = fill
+            .filter(|_| table.head)
+            .map_or(String::new(), |fill| format!(r#"<w:shd w:val="clear" w:color="auto" w:fill="{fill}"/>"#));
         table.row.push_str(&format!(r#"<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/>{shade}</w:tcPr>{cell}</w:tc>"#));
     }
 
@@ -605,7 +621,9 @@ impl Writer<'_> {
             Event::SoftBreak => self.push_text(" ", false),
             Event::HardBreak => self.push_raw("<w:r><w:br/></w:r>"),
             Event::Rule => {
-                self.open(r#"<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr>"#.to_string());
+                self.open(
+                    r#"<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr>"#.to_string(),
+                );
                 self.flush();
             }
             Event::TaskListMarker(done) => self.push_text(if done { "☑ " } else { "☐ " }, false),
@@ -629,7 +647,9 @@ impl Writer<'_> {
                 let style = self.heading_style(level);
                 // Without the style, the outline level keeps it in the contents.
                 let numbering = self.heading_numbering(level);
-                let properties = style.as_ref().map_or(format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1), |id| format!(r#"<w:pStyle w:val="{id}"/>{numbering}"#));
+                let properties = style.as_ref().map_or(format!(r#"<w:outlineLvl w:val="{}"/>"#, level - 1), |id| {
+                    format!(r#"<w:pStyle w:val="{id}"/>{numbering}"#)
+                });
                 self.open(properties);
                 self.format.bold = style.is_none();
                 self.heading = Some(Heading { level, text: String::new() });
@@ -797,9 +817,9 @@ fn breaks_page(paragraph: &str, styles_xml: &str) -> bool {
         return true;
     }
     PARAGRAPH_STYLE.captures(paragraph).is_some_and(|style| {
-        STYLE
-            .find_iter(styles_xml)
-            .any(|s| s.as_str().contains(&format!(r#"w:styleId="{}""#, &style[1])) && s.as_str().contains("<w:pageBreakBefore"))
+        STYLE.find_iter(styles_xml).any(|s| {
+            s.as_str().contains(&format!(r#"w:styleId="{}""#, &style[1])) && s.as_str().contains("<w:pageBreakBefore")
+        })
     })
 }
 
@@ -854,12 +874,12 @@ fn insert_body(document: &str, body: &str, styles_xml: &str) -> String {
 /// The heading levels a TOC field lists: the range of `\o`, plus those that `\t`
 /// names as pairs of style and level, as in `\t "Título 1;1;Mi-titulo;2"`.
 fn toc_levels(instruction: &str) -> Vec<usize> {
-    let mut levels: Vec<usize> = TOC_LEVELS.captures(instruction).map_or(Vec::new(), |c| {
-        (c[1].parse().unwrap_or(1)..=c[2].parse().unwrap_or(3)).collect()
-    });
+    let mut levels: Vec<usize> = TOC_LEVELS
+        .captures(instruction)
+        .map_or(Vec::new(), |c| (c[1].parse().unwrap_or(1)..=c[2].parse().unwrap_or(3)).collect());
     if let Some(styles) = TOC_STYLES.captures(instruction) {
         let pairs: Vec<&str> = styles[1].split([';', ',']).collect();
-        levels.extend(pairs.chunks_exact(2).filter_map(|pair| pair[1].trim().parse::<usize>().ok()));
+        levels.extend(pairs.as_chunks::<2>().0.iter().filter_map(|pair| pair[1].trim().parse::<usize>().ok()));
     }
     if levels.is_empty() { (1..=3).collect() } else { levels }
 }
@@ -961,9 +981,16 @@ fn add_numbering(parts: &mut Package, writer: &Writer, types: &mut String, rels:
         return;
     }
     let mut xml = text_of(parts, NUMBERING).unwrap_or_else(|| {
-        *rels = rels.replace("</Relationships>", &format!(r#"<Relationship Id="rIdUmdNum" Type="{REL_NS}/numbering" Target="numbering.xml"/></Relationships>"#));
+        *rels = rels.replace(
+            "</Relationships>",
+            &format!(
+                r#"<Relationship Id="rIdUmdNum" Type="{REL_NS}/numbering" Target="numbering.xml"/></Relationships>"#
+            ),
+        );
         add_override(types, NUMBERING, "application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml");
-        format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:numbering xmlns:w="{W_NS}"></w:numbering>"#)
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:numbering xmlns:w="{W_NS}"></w:numbering>"#
+        )
     });
     let (bullets, ordered) = (writer.next_abstract, writer.next_abstract + 1);
     let abstracts = format!(
@@ -976,12 +1003,20 @@ fn add_numbering(parts: &mut Package, writer: &Writer, types: &mut String, rels:
         .iter()
         .map(|(num, is_ordered)| {
             let source = if *is_ordered { ordered } else { bullets };
-            let restart = if *is_ordered { r#"<w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride>"# } else { "" };
+            let restart = if *is_ordered {
+                r#"<w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride>"#
+            } else {
+                ""
+            };
             format!(r#"<w:num w:numId="{num}"><w:abstractNumId w:val="{source}"/>{restart}</w:num>"#)
         })
         .collect();
     // Abstract definitions must come before every instance.
-    let first_num = xml.find("<w:num ").or_else(|| xml.find("<w:numIdMacAtCleanup")).or_else(|| xml.rfind("</w:numbering>")).unwrap_or(0);
+    let first_num = xml
+        .find("<w:num ")
+        .or_else(|| xml.find("<w:numIdMacAtCleanup"))
+        .or_else(|| xml.rfind("</w:numbering>"))
+        .unwrap_or(0);
     xml.insert_str(first_num, &abstracts);
     let end = xml.find("<w:numIdMacAtCleanup").or_else(|| xml.rfind("</w:numbering>")).unwrap_or(xml.len());
     xml.insert_str(end, &nums);
@@ -1012,7 +1047,8 @@ fn blank_styles() -> String {
             lvl = n - 1
         )
     };
-    let headings: String = [(1, 40), (2, 32), (3, 28), (4, 24), (5, 22), (6, 22)].iter().map(|(n, s)| heading(*n, *s)).collect();
+    let headings: String =
+        [(1, 40), (2, 32), (3, 28), (4, 24), (5, 22), (6, 22)].iter().map(|(n, s)| heading(*n, *s)).collect();
     format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="{W_NS}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>{headings}<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:qFormat/></w:style><w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:ind w:left="567"/></w:pPr><w:rPr><w:i/></w:rPr></w:style><w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:color="auto"/><w:left w:val="single" w:sz="4" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:color="auto"/><w:right w:val="single" w:sz="4" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:color="auto"/></w:tblBorders></w:tblPr></w:style></w:styles>"#
     )
@@ -1021,10 +1057,25 @@ fn blank_styles() -> String {
 fn blank_package() -> Package {
     let parts = [
         (CONTENT_TYPES, BLANK_TYPES.to_string()),
-        ("_rels/.rels", format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{REL_NS}/officeDocument" Target="word/document.xml"/></Relationships>"#)),
-        (DOC_RELS, format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{REL_NS}/styles" Target="styles.xml"/></Relationships>"#)),
+        (
+            "_rels/.rels",
+            format!(
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{REL_NS}/officeDocument" Target="word/document.xml"/></Relationships>"#
+            ),
+        ),
+        (
+            DOC_RELS,
+            format!(
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{REL_NS}/styles" Target="styles.xml"/></Relationships>"#
+            ),
+        ),
         (STYLES, blank_styles()),
-        (DOCUMENT, format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="{W_NS}" xmlns:r="{REL_NS}"><w:body><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>"#)),
+        (
+            DOCUMENT,
+            format!(
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="{W_NS}" xmlns:r="{REL_NS}"><w:body><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>"#
+            ),
+        ),
     ];
     parts.into_iter().map(|(k, v)| (k.to_string(), v.into_bytes())).collect()
 }
@@ -1041,7 +1092,8 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
     let numbering = text_of(&parts, NUMBERING).unwrap_or_default();
     let notes = text_of(&parts, FOOTNOTES).unwrap_or_default();
 
-    let options = Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
+    let options =
+        Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
 
     let mut writer = Writer {
         styles: &styles,
@@ -1075,13 +1127,19 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
         shift: 0,
         table: None,
         styled_header: styles.get("table grid").is_some_and(|id| formats_first_row(&styles_xml, id)),
-        detected: detect::detect(&styles_xml, &text_of(&parts, NUMBERING).unwrap_or_default(), &text_of(&parts, DOCUMENT).unwrap_or_default()),
+        detected: detect::detect(
+            &styles_xml,
+            &text_of(&parts, NUMBERING).unwrap_or_default(),
+            &text_of(&parts, DOCUMENT).unwrap_or_default(),
+        ),
     };
     let mut saved = Vec::new();
     let mut values: HashMap<String, String> = HashMap::new();
     for (index, section) in input.sections.iter().enumerate() {
         match section {
-            Section::Heading { text, style, level, page_break } => writer.section_heading(text, style.as_deref(), *level, *page_break),
+            Section::Heading { text, style, level, page_break } => {
+                writer.section_heading(text, style.as_deref(), *level, *page_break)
+            }
             Section::Note { path, markdown, shift, page_break } => {
                 let (meta, body) = split_frontmatter(markdown);
                 // The first note to state a value provides it.
@@ -1103,11 +1161,20 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
 
     let first_heading = writer.headings.first().map(|h| h.text.clone());
     let stated = values.get("titulo").or(values.get("title")).cloned().or(first_heading);
-    let title = if input.fixed_title { input.title.to_string() } else { stated.unwrap_or_else(|| input.title.to_string()) };
+    let title =
+        if input.fixed_title { input.title.to_string() } else { stated.unwrap_or_else(|| input.title.to_string()) };
     let author = values.get("autor").or(values.get("author")).cloned().unwrap_or_default();
     let date = values.get("fecha").or(values.get("date")).cloned().unwrap_or_else(|| input.date.to_string());
     let contents = input.contents.to_string();
-    for (key, value) in [("titulo", &title), ("title", &title), ("autor", &author), ("author", &author), ("fecha", &date), ("date", &date), ("indice", &contents)] {
+    for (key, value) in [
+        ("titulo", &title),
+        ("title", &title),
+        ("autor", &author),
+        ("author", &author),
+        ("fecha", &date),
+        ("date", &date),
+        ("indice", &contents),
+    ] {
         values.insert(key.to_string(), value.clone());
     }
 
@@ -1118,7 +1185,8 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
     }
     parts.insert(DOCUMENT.to_string(), document.into_bytes());
 
-    let furniture: Vec<String> = parts.keys().filter(|n| n.starts_with("word/header") || n.starts_with("word/footer")).cloned().collect();
+    let furniture: Vec<String> =
+        parts.keys().filter(|n| n.starts_with("word/header") || n.starts_with("word/footer")).cloned().collect();
     for name in furniture {
         if let Some(xml) = text_of(&parts, &name) {
             parts.insert(name, fill_placeholders(&xml, &values).into_bytes());
@@ -1160,7 +1228,9 @@ pub fn paragraph_styles(template: Option<&[u8]>) -> Result<Vec<StyleInfo>> {
         .find_iter(&xml)
         .map(|m| m.as_str())
         .filter(|s| s.contains(r#"w:type="paragraph""#))
-        .filter_map(|s| Some(StyleInfo { id: STYLE_ID.captures(s)?[1].to_string(), name: STYLE_NAME.captures(s)?[1].to_string() }))
+        .filter_map(|s| {
+            Some(StyleInfo { id: STYLE_ID.captures(s)?[1].to_string(), name: STYLE_NAME.captures(s)?[1].to_string() })
+        })
         .collect();
     styles.sort_by_key(|s| s.name.to_lowercase());
     Ok(styles)
@@ -1180,14 +1250,31 @@ pub fn template_info(template: Option<&[u8]>) -> Result<TemplateInfo> {
     let parts = template.map_or_else(|| Ok(blank_package()), read_package)?;
     let part = |name| text_of(&parts, name).unwrap_or_default();
     let found = detect::detect(&part(STYLES), &part(NUMBERING), &part(DOCUMENT));
-    Ok(TemplateInfo { headings: found.headings.to_vec(), body: found.body, header_fill: found.header_fill, styles: paragraph_styles(template)? })
+    Ok(TemplateInfo {
+        headings: found.headings.to_vec(),
+        body: found.body,
+        header_fill: found.header_fill,
+        styles: paragraph_styles(template)?,
+    })
 }
 
 /// A short document with one example of everything, written like a real export.
 pub fn sample(template: Option<&[u8]>, settings: &WordSettings, markdown: &str, picture: &[u8]) -> Result<Vec<u8>> {
-    let sections = [Section::Note { path: "muestra.md".into(), markdown: markdown.to_string(), shift: 0, page_break: false }];
+    let sections =
+        [Section::Note { path: "muestra.md".into(), markdown: markdown.to_string(), shift: 0, page_break: false }];
     let image = |_: &str, _: &str| Some(picture.to_vec());
-    render(&Input { sections: &sections, title: "", fixed_title: false, date: "", contents: "", diagrams: &[], image: &image, template, settings, inline_numbering: true })
+    render(&Input {
+        sections: &sections,
+        title: "",
+        fixed_title: false,
+        date: "",
+        contents: "",
+        diagrams: &[],
+        image: &image,
+        template,
+        settings,
+        inline_numbering: true,
+    })
 }
 
 /// A complete template to try exports with: cover, contents, header, numbered
@@ -1195,18 +1282,49 @@ pub fn sample(template: Option<&[u8]>, settings: &WordSettings, markdown: &str, 
 pub fn example_template() -> Vec<u8> {
     const INK: &str = "1F3A5F";
     let style = |id: &str, name: &str, ppr: &str, rpr: &str| {
-        format!(r#"<w:style w:type="paragraph" w:styleId="{id}"><w:name w:val="{name}"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr>{ppr}</w:pPr><w:rPr>{rpr}</w:rPr></w:style>"#)
+        format!(
+            r#"<w:style w:type="paragraph" w:styleId="{id}"><w:name w:val="{name}"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr>{ppr}</w:pPr><w:rPr>{rpr}</w:rPr></w:style>"#
+        )
     };
     let heading = |n: usize, size: usize, before: usize| {
-        style(&format!("Heading{n}"), &format!("heading {n}"), &format!(r#"<w:keepNext/><w:spacing w:before="{before}" w:after="100"/><w:outlineLvl w:val="{}"/>"#, n - 1), &format!(r#"<w:b/><w:color w:val="{INK}"/><w:sz w:val="{size}"/>"#))
+        style(
+            &format!("Heading{n}"),
+            &format!("heading {n}"),
+            &format!(r#"<w:keepNext/><w:spacing w:before="{before}" w:after="100"/><w:outlineLvl w:val="{}"/>"#, n - 1),
+            &format!(r#"<w:b/><w:color w:val="{INK}"/><w:sz w:val="{size}"/>"#),
+        )
     };
-    let toc = |n: usize| style(&format!("TOC{n}"), &format!("toc {n}"), &format!(r#"<w:spacing w:after="60"/><w:ind w:left="{}"/>"#, (n - 1) * 240), "");
+    let toc = |n: usize| {
+        style(
+            &format!("TOC{n}"),
+            &format!("toc {n}"),
+            &format!(r#"<w:spacing w:after="60"/><w:ind w:left="{}"/>"#, (n - 1) * 240),
+            "",
+        )
+    };
     let styles: String = [
-        style("Title", "Title", r#"<w:spacing w:before="3600" w:after="240"/><w:jc w:val="center"/>"#, &format!(r#"<w:b/><w:color w:val="{INK}"/><w:sz w:val="64"/>"#)),
+        style(
+            "Title",
+            "Title",
+            r#"<w:spacing w:before="3600" w:after="240"/><w:jc w:val="center"/>"#,
+            &format!(r#"<w:b/><w:color w:val="{INK}"/><w:sz w:val="64"/>"#),
+        ),
         style("Subtitle", "Subtitle", r#"<w:jc w:val="center"/>"#, r#"<w:color w:val="595959"/><w:sz w:val="26"/>"#),
-        heading(1, 34, 360), heading(2, 28, 280), heading(3, 24, 200), heading(4, 22, 160), heading(5, 22, 120), heading(6, 22, 120),
-        toc(1), toc(2), toc(3),
-        style("TOCHeading", "TOC Heading", r#"<w:pageBreakBefore/><w:spacing w:after="240"/>"#, &format!(r#"<w:b/><w:color w:val="{INK}"/><w:sz w:val="34"/>"#)),
+        heading(1, 34, 360),
+        heading(2, 28, 280),
+        heading(3, 24, 200),
+        heading(4, 22, 160),
+        heading(5, 22, 120),
+        heading(6, 22, 120),
+        toc(1),
+        toc(2),
+        toc(3),
+        style(
+            "TOCHeading",
+            "TOC Heading",
+            r#"<w:pageBreakBefore/><w:spacing w:after="240"/>"#,
+            &format!(r#"<w:b/><w:color w:val="{INK}"/><w:sz w:val="34"/>"#),
+        ),
         style("ListParagraph", "List Paragraph", "", ""),
         style("Quote", "Quote", r#"<w:ind w:left="567"/>"#, r#"<w:i/><w:color w:val="595959"/>"#),
         style("Header", "header", r#"<w:jc w:val="right"/>"#, r#"<w:color w:val="7F7F7F"/><w:sz w:val="18"/>"#),
@@ -1219,7 +1337,9 @@ pub fn example_template() -> Vec<u8> {
     let styles_xml = format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="{W_NS}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:cs="Georgia"/><w:sz w:val="22"/><w:lang w:val="es-ES"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="140" w:line="288" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>{styles}{table}{link}</w:styles>"#
     );
-    let para = |style: &str, text: &str| format!(r#"<w:p><w:pPr><w:pStyle w:val="{style}"/></w:pPr><w:r><w:t>{text}</w:t></w:r></w:p>"#);
+    let para = |style: &str, text: &str| {
+        format!(r#"<w:p><w:pPr><w:pStyle w:val="{style}"/></w:pPr><w:r><w:t>{text}</w:t></w:r></w:p>"#)
+    };
     let toc_field = r#"<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> TOC \o "1-3" \h \z \u </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Índice</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>"#;
     let body = [
         para("Title", "{{titulo}}"),

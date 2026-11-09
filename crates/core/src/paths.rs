@@ -7,8 +7,8 @@ use crate::{Error, Result};
 use std::path::{Component, Path, PathBuf};
 
 const WINDOWS_RESERVED: &[&str] = &[
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2",
+    "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
 /// Extensions treated as notes.
@@ -79,9 +79,8 @@ pub fn check_new_name(name: &str) -> Result<()> {
     if name.is_empty() || name.len() > 255 {
         return bad("empty or too long");
     }
-    if let Some(c) = name
-        .chars()
-        .find(|c| matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*' | '/' | '\\') || c.is_control())
+    if let Some(c) =
+        name.chars().find(|c| matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*' | '/' | '\\') || c.is_control())
     {
         return bad(&format!("the character {c:?} is not allowed"));
     }
@@ -106,9 +105,7 @@ pub fn check_new_path(rel: &str) -> Result<()> {
 /// vault, including through symlinks. The target itself does not need to exist.
 pub fn resolve(root: &Path, rel: &str) -> Result<PathBuf> {
     let rel_norm = normalize(rel)?;
-    let root = root
-        .canonicalize()
-        .map_err(|_| Error::Vault(format!("vault folder not found: {}", root.display())))?;
+    let root = root.canonicalize().map_err(|_| Error::Vault(format!("vault folder not found: {}", root.display())))?;
 
     let mut existing = root.clone();
     let mut pending = Vec::new();
@@ -116,9 +113,7 @@ pub fn resolve(root: &Path, rel: &str) -> Result<PathBuf> {
         let next = existing.join(part);
         // symlink_metadata also sees dangling symlinks, which exists() hides.
         if pending.is_empty() && next.symlink_metadata().is_ok() {
-            existing = next
-                .canonicalize()
-                .map_err(|_| Error::PathNotAllowed(rel.to_string()))?;
+            existing = next.canonicalize().map_err(|_| Error::PathNotAllowed(rel.to_string()))?;
         } else {
             pending.push((i, part));
         }
