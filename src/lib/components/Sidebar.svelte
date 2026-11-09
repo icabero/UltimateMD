@@ -1,16 +1,14 @@
 <script lang="ts">
-  import { open as openDialog } from '@tauri-apps/plugin-dialog';
   import Icon from './Icon.svelte';
   import TreeItem from './TreeItem.svelte';
   import SearchPanel from './SearchPanel.svelte';
-  import { api, type TreeNode, type Vault } from '../api';
+  import type { TreeNode, Vault } from '../api';
   import { tr } from '../i18n.svelte';
   import { baseName, dirName, join } from '../paths';
   import { store } from '../store.svelte';
+  import { vaultColor } from '../vaultColor';
 
-  // Tints of the theme's text, accent and syntax colours, to tell vaults apart.
-  const COLORS = ['--accent', '--syn-string', '--syn-attr', '--syn-number', '--syn-keyword', '--text-2'];
-  const colorOf = (id: string) => `var(${COLORS[[...id].reduce((n, c) => n + c.charCodeAt(0), 0) % COLORS.length]})`;
+  const colorOf = vaultColor;
 
   interface Menu {
     x: number;
@@ -72,17 +70,8 @@
     };
   }
 
-  async function createVault() {
-    const parent = await openDialog({ directory: true, title: tr('sidebar.createVaultWhere') });
-    if (typeof parent !== 'string') return;
-    const name = await store.prompt(tr('sidebar.vaultName'), '', tr('common.create'));
-    if (name?.trim()) await store.addVault(() => api.createVault(parent, name.trim()));
-  }
-
-  async function openVault() {
-    const path = await openDialog({ directory: true, title: tr('sidebar.openAsVault') });
-    if (typeof path === 'string') await store.addVault(() => api.openVault(path));
-  }
+  const createVault = () => store.createVaultDialog();
+  const openVault = () => store.openVaultDialog();
 
   function dropOnVault(e: DragEvent, id: string) {
     e.preventDefault();

@@ -168,6 +168,57 @@ pub fn search_all(query: String) -> Result<Vec<VaultHit>> {
     Ok(out)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultSummary {
+    vault_id: String,
+    /// None when the folder cannot be read, such as an unplugged drive.
+    notes: Option<usize>,
+    last_edit: Option<u64>,
+    /// The note edited last, to pick up where it was left.
+    last_note: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentNote {
+    vault_id: String,
+    path: String,
+    modified: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HomeInfo {
+    vaults: Vec<VaultSummary>,
+    recent: Vec<RecentNote>,
+}
+
+const RECENT_LIMIT: usize = 8;
+
+/// What the start screen shows: each open vault's size and last edit, and
+/// the notes changed last across all of them.
+#[tauri::command(async)]
+pub fn home_info() -> Result<HomeInfo> {
+    let mut vaults = Vec::new();
+    let mut recent = Vec::new();
+    for vault in Registry::load()?.vaults.iter().filter(|v| v.open) {
+        let stamps = VaultFs::new(&vault.path).note_stamps().ok();
+        vaults.push(VaultSummary {
+            vault_id: vault.id.clone(),
+            notes: stamps.as_ref().map(Vec::len),
+            last_edit: stamps.as_ref().and_then(|s| s.first()).map(|s| s.modified),
+            last_note: stamps.as_ref().and_then(|s| s.first()).map(|s| s.path.clone()),
+        });
+        for s in stamps.unwrap_or_default().into_iter().take(RECENT_LIMIT) {
+            recent.push(RecentNote { vault_id: vault.id.clone(), path: s.path, modified: s.modified });
+        }
+    }
+    recent.sort_by_key(|r| std::cmp::Reverse(r.modified));
+    recent.truncate(RECENT_LIMIT);
+    Ok(HomeInfo { vaults, recent })
+}
+
 #[tauri::command(async)]
 pub fn note_links(id: String, path: String) -> Result<LinkInfo> {
     links::info(&fs(&id)?, &path)

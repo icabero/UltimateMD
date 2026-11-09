@@ -1,5 +1,6 @@
 import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { api, type TreeNode, type Vault, type VaultThemes } from './api';
 import { withColors, type DiagramStyle } from './diagramStyle';
 import { tr } from './i18n.svelte';
@@ -313,6 +314,20 @@ class Store {
       this.trees[id] = [];
       this.notify(e);
     }
+  }
+
+  /** Asks where and how to call a new vault, then creates it. */
+  async createVaultDialog() {
+    const parent = await openDialog({ directory: true, title: tr('sidebar.createVaultWhere') });
+    if (typeof parent !== 'string') return;
+    const name = await this.prompt(tr('sidebar.vaultName'), '', tr('common.create'));
+    if (name?.trim()) await this.addVault(() => api.createVault(parent, name.trim()));
+  }
+
+  /** Asks for a folder and opens it as a vault. */
+  async openVaultDialog() {
+    const path = await openDialog({ directory: true, title: tr('sidebar.openAsVault') });
+    if (typeof path === 'string') await this.addVault(() => api.openVault(path));
   }
 
   async addVault(run: () => Promise<Vault>) {

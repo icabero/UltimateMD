@@ -91,6 +91,7 @@ fn main() {
             commands::rename_path,
             commands::trash_path,
             commands::search_all,
+            commands::home_info,
             commands::note_links,
             commands::open_with_system,
             commands::mcp_info,

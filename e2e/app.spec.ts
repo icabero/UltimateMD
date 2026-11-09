@@ -321,6 +321,49 @@ test('a narrow window folds the side bars without forgetting them', async ({ pag
   await expect(page.locator('aside').getByText('Trabajo')).toBeVisible();
 });
 
+test('the start screen shows recent notes and vaults, and opens them', async ({ page }) => {
+  const home = page.locator('.home');
+  await expect(home.getByRole('heading', { name: 'Recientes' })).toBeVisible();
+  await expect(home.locator('.card')).toHaveCount(2);
+  await expect(home.locator('.card').first()).toContainText(/\d+ notas/);
+  await expect(home.locator('.card').first()).toContainText('Editado hace');
+  // A note just edited comes first.
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Rara.md', '# Rara\n\notra vez\n'));
+  await expect(home.locator('.recent li').first()).toContainText('Rara');
+  await expect(home.locator('.recent li').first()).toContainText('ahora mismo');
+  await home.locator('.recent li').first().getByRole('button').click();
+  await expect(page.locator('main footer')).toContainText('Personal / Rara.md');
+});
+
+test('a vault card picks up the note edited last', async ({ page }) => {
+  await page.evaluate(() => (window as any).__test.externalWrite('a', 'dir/Destino.md', '# Destino\n\nnuevo\n'));
+  const card = page.locator('.home .card', { hasText: 'Trabajo' });
+  await expect(card).toHaveAttribute('title', 'Seguir con Destino');
+  await card.click();
+  await expect(page.locator('main footer')).toContainText('Trabajo / dir/Destino.md');
+});
+
+test('the start screen offers its actions and another tip', async ({ page }) => {
+  const home = page.locator('.home');
+  await expect(home.getByRole('button', { name: /Abrir nota/ }).locator('kbd')).toHaveText(['Ctrl', 'P']);
+  await home.getByRole('button', { name: /Acciones/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Abrir nota' }).getByRole('combobox')).toHaveValue('>');
+  await page.keyboard.press('Escape');
+  const tip = home.getByRole('note', { name: 'Consejo:' });
+  const before = await tip.textContent();
+  await tip.getByRole('button', { name: 'Otro consejo' }).click();
+  await expect(tip).not.toHaveText(before!);
+});
+
+test('with no vault open, the start screen says how to begin', async ({ page }) => {
+  await page.addInitScript(() => (window as any).__test.vaults.forEach((v: any) => (v.open = false)));
+  await page.reload();
+  const home = page.locator('.home');
+  await expect(home).toContainText('Crea un vault o abre una carpeta para empezar');
+  await expect(home.getByRole('button', { name: 'Crear vault' })).toBeVisible();
+  await expect(home.getByRole('button', { name: 'Abrir carpeta' })).toBeVisible();
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();

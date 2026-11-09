@@ -32,7 +32,13 @@
     },
   };
   const versionOf = (id, path) => (versions[`${id}:${path}`] ??= 'v0');
-  const bump = (id, path) => (versions[`${id}:${path}`] = `v${Date.now()}${Math.random()}`);
+  // When each note last changed: invented hours ago at first, now on every write.
+  const modified = {};
+  const changedAt = (id, path) => (modified[`${id}:${path}`] ??= Date.now() - (Object.keys(modified).length + 1) * 3_600_000);
+  const bump = (id, path) => {
+    modified[`${id}:${path}`] = Date.now();
+    return (versions[`${id}:${path}`] = `v${Date.now()}${Math.random()}`);
+  };
   const listeners = {};
 
   function tree(id) {
@@ -96,6 +102,24 @@
       vaults.find((v) => v.id === id).mcp = mcp;
     },
     mcp_info: () => ({ binary: 'C:\\Program Files\\UltimateMD\\ultimatemd-mcp.exe', available: true }),
+    home_info: () => {
+      const open = vaults.filter((v) => v.open);
+      const stamps = (id) =>
+        Object.keys(files[id])
+          .filter((p) => p.endsWith('.md'))
+          .map((path) => ({ path, modified: changedAt(id, path) }))
+          .sort((a, b) => b.modified - a.modified);
+      return {
+        vaults: open.map((v) => {
+          const s = stamps(v.id);
+          return { vaultId: v.id, notes: s.length, lastEdit: s[0]?.modified ?? null, lastNote: s[0]?.path ?? null };
+        }),
+        recent: open
+          .flatMap((v) => stamps(v.id).map((s) => ({ vaultId: v.id, ...s })))
+          .sort((a, b) => b.modified - a.modified)
+          .slice(0, 8),
+      };
+    },
     // Like the backend, for [[wikilinks]] by name.
     note_links: ({ id, path }) => {
       const stem = (p) => p.split('/').pop().replace(/\.md$/, '');
