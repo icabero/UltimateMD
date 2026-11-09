@@ -4,6 +4,7 @@
   import About from './lib/components/About.svelte';
   import Export from './lib/components/Export.svelte';
   import Modal from './lib/components/Modal.svelte';
+  import NotePanel from './lib/components/NotePanel.svelte';
   import Palette from './lib/components/Palette.svelte';
   import Preview from './lib/components/Preview.svelte';
   import Settings from './lib/components/Settings.svelte';
@@ -25,6 +26,8 @@
   let preview = $state<Preview>();
   let sidebarWidth = $state(260);
   const tab = $derived(store.active);
+  const panel = $derived(store.showRight && tab?.kind === 'md');
+  const columns = $derived(`${store.showLeft ? `${sidebarWidth}px ` : ''}minmax(0, 1fr)${panel ? ` ${store.layout.rightWidth}px` : ''}`);
   const words = $derived(tab?.content.trim() ? tab.content.trim().split(/\s+/).length : 0);
   const status = $derived(
     !tab ? '' : tr(tab.missing ? 'app.statusDeleted' : tab.conflict ? 'app.statusConflict' : tab.saving ? 'app.statusSaving' : tab.dirty ? 'app.statusUnsaved' : 'app.statusSaved'),
@@ -84,16 +87,25 @@
     if (e.shiftKey && key === 'f') {
       e.preventDefault();
       store.searching = true;
+      store.toggleBar('left', true);
+    } else if (e.shiftKey && key === 'e') {
+      e.preventDefault();
+      store.toggleBar('left');
+    } else if (e.shiftKey && key === 'o') {
+      e.preventDefault();
+      if (tab?.kind === 'md') store.toggleBar('right');
     } else if (actions[key] && (!e.shiftKey || key === 'tab')) {
       e.preventDefault();
       actions[key]();
     }
   }
 
+  const clampWidth = (width: number) => Math.min(480, Math.max(180, width));
+
   function resize(down: PointerEvent) {
     const el = down.currentTarget as HTMLElement;
     el.setPointerCapture(down.pointerId);
-    const move = (e: PointerEvent) => (sidebarWidth = Math.min(480, Math.max(180, e.clientX)));
+    const move = (e: PointerEvent) => (sidebarWidth = clampWidth(e.clientX));
     const up = () => {
       el.removeEventListener('pointermove', move);
       try {
@@ -105,13 +117,26 @@
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerup', up, { once: true });
   }
+
+  function resizePanel(down: PointerEvent) {
+    const el = down.currentTarget as HTMLElement;
+    el.setPointerCapture(down.pointerId);
+    const move = (e: PointerEvent) => (store.layout.rightWidth = clampWidth(innerWidth - e.clientX));
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', () => {
+      el.removeEventListener('pointermove', move);
+      store.saveLayout();
+    }, { once: true });
+  }
 </script>
 
-<svelte:window onkeydown={onKey} onblur={() => store.saveAll()} />
+<svelte:window onkeydown={onKey} onblur={() => store.saveAll()} onresize={() => store.setWindowWidth(innerWidth)} />
 
-<div class="app" style:grid-template-columns="{sidebarWidth}px 1fr">
-  <Sidebar />
-  <button class="grip" aria-label={tr('app.resize')} style:left="{sidebarWidth - 3}px" onpointerdown={resize}></button>
+<div class="app" style:grid-template-columns={columns}>
+  {#if store.showLeft}
+    <Sidebar />
+    <button class="grip" aria-label={tr('app.resize')} style:left="{sidebarWidth - 3}px" onpointerdown={resize}></button>
+  {/if}
   <main>
     <Tabs />
     {#if tab?.conflict}
@@ -154,6 +179,10 @@
       {/if}
     </footer>
   </main>
+  {#if panel && tab}
+    <button class="grip" aria-label={tr('app.resize')} style:right="{store.layout.rightWidth - 3}px" onpointerdown={resizePanel}></button>
+    <NotePanel {tab} />
+  {/if}
 </div>
 
 {#if store.palette}<Palette />{/if}

@@ -96,6 +96,18 @@
       vaults.find((v) => v.id === id).mcp = mcp;
     },
     mcp_info: () => ({ binary: 'C:\\Program Files\\UltimateMD\\ultimatemd-mcp.exe', available: true }),
+    // Like the backend, for [[wikilinks]] by name.
+    note_links: ({ id, path }) => {
+      const stem = (p) => p.split('/').pop().replace(/\.md$/, '');
+      const targets = (text) => [...text.matchAll(/\[\[([^\]|#]+)/g)].map((m) => m[1].trim());
+      const find = (name) => Object.keys(files[id]).find((p) => stem(p).toLowerCase() === name.toLowerCase());
+      const mine = targets(files[id][path] ?? '');
+      return {
+        outgoing: [...new Set(mine.map(find).filter(Boolean))],
+        unresolved: [...new Set(mine.filter((t) => !find(t)))],
+        backlinks: Object.keys(files[id]).filter((p) => p !== path && targets(files[id][p]).some((t) => find(t) === path)),
+      };
+    },
     // Like the backend: every word, ignoring case and accents, one hit per line.
     search_all: ({ query }) => {
       const fold = (t) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();

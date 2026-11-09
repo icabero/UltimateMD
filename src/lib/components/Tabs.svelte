@@ -14,6 +14,9 @@
 </script>
 
 <div class="bar">
+  {#if !store.showLeft}
+    <button class="icon show-left" title={tr('sidebar.show')} onclick={() => store.toggleBar('left', true)}><Icon name="panelLeft" /></button>
+  {/if}
   <div class="tabs" role="tablist">
     {#each store.tabs as tab (tab.key)}
       <div class="tab" class:active={tab.key === store.activeKey} role="tab" tabindex="0" aria-selected={tab.key === store.activeKey}
@@ -35,6 +38,7 @@
       {/each}
       {#if active.kind === 'md'}
         <button class="icon" title={tr('tabs.export')} onclick={() => (store.exporting = true)}><Icon name="export" /></button>
+        <button class="icon" class:on={store.showRight} aria-pressed={store.showRight} title={tr('panel.toggle')} onclick={() => store.toggleBar('right')}><Icon name="panelRight" /></button>
       {/if}
     </div>
   {/if}
@@ -52,5 +56,6 @@
   .x { display: flex; flex: none; padding: var(--space-1); border: 0; border-radius: var(--radius-xs); background: none; color: inherit; opacity: 0; }
   .tab:hover .x, .tab.active .x { opacity: .7; }
   .x:hover { background: var(--hover); opacity: 1; }
+  .show-left { align-self: center; flex: none; margin: 0 var(--space-1); }
   .views { display: flex; align-items: center; gap: 1px; padding: 0 var(--space-2); }
 </style>

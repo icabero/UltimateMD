@@ -103,6 +103,7 @@
     <button class="icon" title={tr('sidebar.searchTitle')} class:on={store.searching} onclick={() => (store.searching = !store.searching)}><Icon name="search" /></button>
     <button class="icon" title={tr('sidebar.settingsTitle')} onclick={() => (store.settings = true)}><Icon name="settings" /></button>
     <button class="icon" title={tr('about.title')} onclick={() => (store.about = true)}><Icon name="info" /></button>
+    <button class="icon" title={tr('sidebar.hide')} onclick={() => store.toggleBar('left', false)}><Icon name="panelLeft" /></button>
   </header>
 
   {#if store.searching}

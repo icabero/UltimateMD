@@ -123,6 +123,7 @@
         ...(current.kind === 'md' ? [wikilinks, followWithCtrl, autocompletion({ override: [noteCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
+          if (u.docChanged || u.selectionSet) publishPosition(u.state);
         }),
       ],
     });
@@ -135,6 +136,7 @@
       view.setState(states.get(current.key) ?? makeState(current));
       shownKey = current.key;
       shownRevision = current.revision;
+      publishPosition(view.state);
     }
     // An edit made outside this editor stays undoable.
     if (shownRevision !== current.revision || view.state.doc.toString() !== current.content) {
@@ -210,6 +212,13 @@
 
   onDestroy(() => view?.destroy());
 
+  /** Tells the note panel which line has the cursor. */
+  function publishPosition(state: EditorState) {
+    if (tab.view === 'preview') return;
+    const line = state.doc.lineAt(state.selection.main.head).number;
+    if (store.position?.key !== tab.key || store.position.line !== line) store.position = { key: tab.key, line };
+  }
+
   /** Goes to the line a search asked for, unless the editor is hidden behind the preview. */
   function reveal() {
     const want = store.reveal;
@@ -222,7 +231,7 @@
     const anchor = first?.[0] ?? line?.from ?? 0;
     view.dispatch({
       selection: { anchor },
-      effects: [setFound.of(marks), EditorView.scrollIntoView(anchor, { y: line ? 'center' : 'start' })],
+      effects: [setFound.of(marks), EditorView.scrollIntoView(anchor, { y: line && want.heading === undefined ? 'center' : 'start', yMargin: 16 })],
     });
     view.focus();
   }

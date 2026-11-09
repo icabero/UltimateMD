@@ -184,6 +184,89 @@ test('renaming a note updates the links to it, also in open tabs', async ({ page
   await expect(page.locator('main footer')).toContainText('Trabajo / Inicio.md');
 });
 
+const notePanel = (page: Page) => page.getByRole('complementary', { name: 'Panel de la nota' });
+
+/** A long note with sections, as if another program had written it. */
+async function sections(page: Page) {
+  await page.evaluate(() => {
+    const filler = (n: number) => Array.from({ length: n }, (_, i) => `Párrafo ${i + 1}.`).join('\n\n');
+    const text = `---\ntema: claro\n---\n# Larga\n\n${filler(30)}\n\n## Segunda parte\n\n${filler(30)}\n\n### Detalle [[Destino|el destino]]\n\nFin.\n`;
+    (window as any).__test.externalWrite('a', 'Larga.md', text);
+  });
+  await expect(page.locator('aside').getByRole('button', { name: 'Larga', exact: true })).toBeVisible();
+  await page.keyboard.press('Control+p');
+  await page.getByPlaceholder('Abrir nota…').fill('larga');
+  await page.keyboard.press('Enter');
+}
+
+test('the outline lists the headings and goes to one', async ({ page }) => {
+  await sections(page);
+  await page.keyboard.press('Control+Shift+o');
+  const outline = notePanel(page).getByRole('navigation', { name: 'Esquema' });
+  await expect(outline.getByRole('button')).toHaveText(['Larga', 'Segunda parte', 'Detalle el destino']);
+  await outline.getByRole('button', { name: 'Segunda parte' }).click();
+  await expect(page.locator('.cm-activeLine')).toHaveText('## Segunda parte');
+  await expect(page.locator('.cm-activeLine')).toBeInViewport();
+  // The section with the cursor is marked.
+  await expect(outline.locator('[aria-current="location"]')).toHaveText('Segunda parte');
+  // In the frontmatter, before the first heading, no section is marked.
+  await page.keyboard.press('Control+Home');
+  await expect(outline.locator('[aria-current="location"]')).toHaveCount(0);
+  await outline.getByRole('button', { name: 'Larga' }).click();
+  await expect(outline.locator('[aria-current="location"]')).toHaveText('Larga');
+});
+
+test('in reading view the outline scrolls the preview to the heading', async ({ page }) => {
+  await sections(page);
+  await page.getByTitle('Vista previa', { exact: true }).click();
+  await page.keyboard.press('Control+Shift+o');
+  await notePanel(page).getByRole('button', { name: 'Detalle el destino' }).click();
+  await expect(prose(page).getByRole('heading', { name: 'Detalle el destino' })).toBeInViewport();
+  await expect(notePanel(page).locator('[aria-current="location"]')).toHaveText('Detalle el destino');
+});
+
+test('the links tab shows who links here and opens them', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle(/^Panel de la nota/).click();
+  await notePanel(page).getByRole('tab', { name: 'Enlaces' }).click();
+  await expect(notePanel(page)).toContainText('Ninguna nota enlaza a esta.');
+  await expect(notePanel(page).getByRole('button', { name: /Destino/ })).toBeVisible();
+  await expect(notePanel(page).getByRole('button', { name: 'Falta' })).toHaveAttribute('title', 'Crear la nota');
+  await notePanel(page).getByRole('button', { name: /Destino/ }).click();
+  await expect(page.locator('main footer')).toContainText('Trabajo / dir/Destino.md');
+  await expect(notePanel(page).getByRole('button', { name: 'Inicio' })).toBeVisible();
+});
+
+test('both side bars hide with shortcuts and the choice is kept', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+Shift+o');
+  await expect(notePanel(page)).toBeVisible();
+  await page.keyboard.press('Control+Shift+e');
+  await expect(page.locator('aside').getByText('Trabajo')).toHaveCount(0);
+  await page.reload();
+  await expect(notePanel(page)).toBeVisible();
+  await page.getByTitle('Mostrar la barra lateral (Ctrl+Mayús+E)').click();
+  await expect(page.locator('aside').getByText('Trabajo')).toBeVisible();
+  await notePanel(page).getByTitle('Ocultar el panel (Ctrl+Mayús+O)').click();
+  await expect(notePanel(page)).toHaveCount(0);
+});
+
+test('a narrow window folds the side bars without forgetting them', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+Shift+o');
+  await page.setViewportSize({ width: 900, height: 700 });
+  await expect(notePanel(page)).toHaveCount(0);
+  await expect(page.locator('aside').getByText('Trabajo')).toBeVisible();
+  await page.setViewportSize({ width: 700, height: 700 });
+  await expect(page.locator('aside').getByText('Trabajo')).toHaveCount(0);
+  // Shown by hand while narrow, it stays until the window changes again.
+  await page.getByTitle('Mostrar la barra lateral (Ctrl+Mayús+E)').click();
+  await expect(page.locator('aside').getByText('Trabajo')).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(notePanel(page)).toBeVisible();
+  await expect(page.locator('aside').getByText('Trabajo')).toBeVisible();
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();
