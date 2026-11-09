@@ -210,7 +210,7 @@ test('the outline lists the headings and goes to one', async ({ page }) => {
   // The section with the cursor is marked.
   await expect(outline.locator('[aria-current="location"]')).toHaveText('Segunda parte');
   // In the frontmatter, before the first heading, no section is marked.
-  await page.keyboard.press('Control+Home');
+  await page.keyboard.press('ControlOrMeta+Home');
   await expect(outline.locator('[aria-current="location"]')).toHaveCount(0);
   await outline.getByRole('button', { name: 'Larga' }).click();
   await expect(outline.locator('[aria-current="location"]')).toHaveText('Larga');
