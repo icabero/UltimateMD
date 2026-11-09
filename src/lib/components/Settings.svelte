@@ -1,5 +1,6 @@
 <script lang="ts">
   import { frame } from '../frame.svelte';
+  import { IMAGE_FOLDER, LINE_WIDTHS, TEXT_SCALES, type ImagePlace, type LineWidth } from '../store.svelte';
   import { dim, pop } from '../motion';
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
@@ -127,6 +128,14 @@
     </select>
   </section>
   <section>
+    <h3>{tr('images.title')}</h3>
+    <select aria-label={tr('images.title')} value={store.imagePlace} onchange={(e) => store.setImagePlace(e.currentTarget.value as ImagePlace)}>
+      <option value="vault">{tr('images.vault', { folder: IMAGE_FOLDER })}</option>
+      <option value="note">{tr('images.note')}</option>
+    </select>
+    <p class="hint">{tr('images.hint')}</p>
+  </section>
+  <section>
     <h3>{tr('tutorial.label')}</h3>
     <button class="plain" onclick={() => { store.settings = false; store.tutorial = true; }}>{tr('settings.tutorial')}</button>
   </section>
@@ -176,6 +185,24 @@
         </label>
       </div>
     {/if}
+    <h3>{tr('reading.title')}</h3>
+    <div class="reading">
+      <label>{tr('reading.textSize')}
+        <select value={String(store.reading.textScale)} onchange={(e) => store.setReading({ textScale: Number(e.currentTarget.value) })}>
+          {#each TEXT_SCALES as s}<option value={String(s)}>{tr(`reading.scale${Math.round(s * 100)}` as Key)}</option>{/each}
+        </select>
+      </label>
+      <label>{tr('reading.lineWidth')}
+        <select value={store.reading.lineWidth} onchange={(e) => store.setReading({ lineWidth: e.currentTarget.value as LineWidth })}>
+          {#each Object.keys(LINE_WIDTHS) as w}<option value={w}>{tr(`reading.width.${w}` as Key)}</option>{/each}
+        </select>
+      </label>
+      <div class="zoom">
+        <span>{tr('reading.zoom', { n: Math.round(store.reading.zoom * 100) })}</span>
+        <button class="plain" disabled={store.reading.zoom === 1} onclick={() => store.setZoom(null, false)}>{tr('reading.zoomReset')}</button>
+      </div>
+      <p class="hint">{tr('reading.zoomHint')}</p>
+    </div>
     <label class="follow">
       <input type="checkbox" checked={frame.native} onchange={(e) => frame.setNative(e.currentTarget.checked)} />
       {tr('settings.nativeFrame')}
@@ -255,6 +282,10 @@
   .sample { font-size: var(--font-xl); line-height: 1.2; }
   .bar { width: 18px; height: 6px; border-radius: var(--radius-2xs); }
   .tname { grid-column: 1 / -1; font-size: var(--font-sm); }
+  .reading { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2) var(--space-3); }
+  .reading label { display: flex; flex-direction: column; gap: var(--space-1); color: var(--text-2); font-size: var(--font-sm); }
+  .reading .zoom { display: flex; grid-column: 1 / -1; align-items: center; gap: var(--space-3); color: var(--text-2); font-size: var(--font-sm); }
+  .reading .hint { grid-column: 1 / -1; margin: 0; }
   .hint { margin: var(--space-1) 0 0 var(--space-5); color: var(--text-3); font-size: var(--font-xs); line-height: 1.4; }
   .follow { display: flex; align-items: center; gap: var(--space-1-5); margin-top: var(--space-3); color: var(--text-2); font-size: var(--font-sm); }
   .modes { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-2); color: var(--text-2); font-size: var(--font-sm); }

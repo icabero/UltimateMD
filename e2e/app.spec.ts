@@ -485,6 +485,371 @@ test('on macOS the system buttons sit over the app, which leaves them room', asy
   await expect(page.locator('main > .bar')).toHaveCSS('padding-left', '76px');
 });
 
+test('after an export the notice opens the file or shows its folder', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'PDF');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  const notice = page.getByRole('group', { name: 'Aviso' });
+  await expect(notice.getByRole('status')).toHaveText('Exportado');
+  await notice.getByRole('button', { name: 'Mostrar en la carpeta' }).click();
+  expect(await page.evaluate(() => (window as any).__revealedExport)).toBe('/exportados/Inicio.pdf');
+  await expect(notice).toHaveCount(0);
+});
+
+test('a long error shows its first line and folds the rest', async ({ page }) => {
+  await page.evaluate(() => {
+    const long = 'No se pudo leer la plantilla\n' + 'detalle técnico '.repeat(20);
+    const internals = (window as any).__TAURI_INTERNALS__;
+    const invoke = internals.invoke;
+    internals.invoke = (cmd: string, args: unknown) => (cmd === 'create_note' ? Promise.reject(long) : invoke(cmd, args));
+  });
+  await page.keyboard.press('Control+n');
+  await page.getByRole('form').getByRole('textbox').fill('Nueva');
+  await page.keyboard.press('Enter');
+  const notice = page.getByRole('group', { name: 'Aviso' });
+  await expect(notice.getByRole('status')).toHaveText('No se pudo leer la plantilla');
+  await notice.getByRole('button', { name: 'Ver detalles' }).click();
+  await expect(notice.locator('pre')).toContainText('detalle técnico detalle técnico');
+  await notice.getByTitle('Cerrar el aviso').click();
+  await expect(notice).toHaveCount(0);
+});
+
+test('a long export shows how far it has gone', async ({ page }) => {
+  await page.evaluate(() => ((window as any).__slowExport = 1500));
+  await open(page, 'Inicio');
+  await exportAs(page, 'PDF');
+  await scope(page, 'Vault');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Exportar' });
+  await expect(dialog.getByRole('progressbar')).toBeVisible();
+  await expect(dialog).toContainText('Generando el documento…');
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+});
+
+async function trashFromTree(page: Page, name: string) {
+  await page.locator('aside').getByRole('button', { name, exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Enviar a la papelera' }).click();
+}
+
+test('a deleted note can be brought back from the notice', async ({ page }) => {
+  await open(page, 'Otra');
+  await typeInEditor(page, ' última frase');
+  await trashFromTree(page, 'Otra');
+  await expect(page.locator('aside').getByRole('button', { name: 'Otra', exact: true })).toHaveCount(0);
+  await expect(page.locator('[role=tab]')).toHaveCount(0);
+  const notice = page.getByRole('group', { name: 'Aviso' });
+  await expect(notice.getByRole('status')).toHaveText('«Otra» enviado a la papelera');
+  await notice.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(page.locator('aside').getByRole('button', { name: 'Otra', exact: true })).toBeVisible();
+  // The tab comes back with the text saved before deleting.
+  await expect(page.locator('.cm-content')).toContainText('# Otra última frase');
+  expect(await page.evaluate(() => (window as any).__trashed)).toBeUndefined();
+});
+
+test('a deletion goes to the trash once its notice goes', async ({ page }) => {
+  await trashFromTree(page, 'Otra');
+  await page.getByRole('group', { name: 'Aviso' }).getByTitle('Cerrar el aviso').click();
+  await expect.poll(() => page.evaluate(() => (window as any).__trashed)).toEqual(['Otra.md']);
+  // A second deletion finishes the first one waiting.
+  await trashFromTree(page, 'Rara');
+  await trashFromTree(page, 'Propia');
+  await expect.poll(() => page.evaluate(() => (window as any).__trashed)).toEqual(['Otra.md', 'Rara.md']);
+});
+
+test('the interface zooms with Ctrl + and Ctrl −, and remembers it', async ({ page }) => {
+  await page.keyboard.press('Control+=');
+  await page.keyboard.press('Control+=');
+  await expect(page.getByRole('status')).toHaveText('Zoom 120 %');
+  expect(await page.evaluate(() => (window as any).__zoom)).toBe(1.2);
+  await page.keyboard.press('Control+-');
+  await expect.poll(() => page.evaluate(() => (window as any).__zoom)).toBe(1.1);
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => (window as any).__zoom)).toBe(1.1);
+  await page.keyboard.press('Control+0');
+  await expect(page.getByRole('status')).toHaveText('Zoom 100 %');
+});
+
+test('text size and line width change notes on screen but not exports', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Ajustes y MCP').click();
+  const settings = page.getByRole('dialog', { name: 'Ajustes' });
+  await settings.getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
+  await settings.getByLabel('Tamaño del texto de las notas').selectOption({ label: 'Grande' });
+  await settings.getByLabel('Ancho de línea').selectOption({ label: 'Ancho' });
+  await page.keyboard.press('Escape');
+  await expect(prose(page)).toHaveCSS('font-size', '18.4px');
+  await expect(prose(page)).toHaveCSS('max-width', '960px');
+  await expect(page.locator('.cm-scroller').first()).toHaveCSS('font-size', '15.525px');
+  await exportAs(page, 'HTML');
+  await expect(page.getByRole('dialog', { name: 'Exportar' }).locator('.html article')).toHaveCSS('font-size', '16px');
+});
+
+/** A note full of links into the long note of `sections`. */
+async function linking(page: Page) {
+  await sections(page);
+  await page.evaluate(() => {
+    const filler = (n: number) => Array.from({ length: n }, (_, i) => `Párrafo ${i + 1}.`).join('\n\n');
+    const long = `---\ntema: claro\n---\n# Larga\n\n${filler(30)}\n\nLa frase clave. ^clave\n\n## Segunda parte\n\n${filler(30)}\n\n### Detalle [[Destino|el destino]]\n\nFin.\n`;
+    (window as any).__test.externalWrite('a', 'Larga.md', long);
+    const links = '# Fuente\n\n[[Larga#Segunda parte]] y [[Larga^clave]] y [[Larga#No existe]] y [md](Larga.md#segunda-parte)\n\n[[#Abajo]]\n\n' + 'relleno\n\n'.repeat(40) + '## Abajo\n';
+    (window as any).__test.externalWrite('a', 'Fuente.md', links);
+  });
+  await expect(page.locator('aside').getByRole('button', { name: 'Fuente', exact: true })).toBeVisible();
+  await page.locator('aside').getByRole('button', { name: 'Fuente', exact: true }).click();
+}
+
+test('a link to a heading opens the note at that heading', async ({ page }) => {
+  await linking(page);
+  await prose(page).getByText('Larga#Segunda parte').click();
+  await expect(page.locator('main footer')).toContainText('Trabajo / Larga.md');
+  await expect(page.locator('.cm-activeLine')).toHaveText('## Segunda parte');
+  await expect(page.locator('.cm-activeLine')).toBeInViewport();
+});
+
+test('links reach blocks, slugs and headings of the same note', async ({ page }) => {
+  await linking(page);
+  await prose(page).getByText('Larga^clave').click();
+  await expect(page.locator('.cm-activeLine')).toHaveText('La frase clave. ^clave');
+  await page.getByRole('tab', { name: /Fuente/ }).click();
+  await prose(page).getByText('md', { exact: true }).click();
+  await expect(page.locator('.cm-activeLine')).toHaveText('## Segunda parte');
+  await page.getByRole('tab', { name: /Fuente/ }).click();
+  await prose(page).getByText('#Abajo', { exact: true }).click();
+  await expect(page.locator('.cm-activeLine')).toHaveText('## Abajo');
+});
+
+test('a missing heading says so and the editor follows links with Ctrl+click', async ({ page }) => {
+  await linking(page);
+  await prose(page).getByText('Larga#No existe').click();
+  await expect(page.getByRole('status')).toHaveText('No se encuentra «No existe» en «Larga»');
+  await page.getByRole('tab', { name: /Fuente/ }).click();
+  await page.locator('.cm-wikilink', { hasText: 'Larga#Segunda parte' }).click({ modifiers: ['ControlOrMeta'] });
+  await expect(page.locator('.cm-activeLine')).toHaveText('## Segunda parte');
+});
+
+test('typing [[note# suggests its headings', async ({ page }) => {
+  await linking(page);
+  await typeInEditor(page, '\n[[Larga#Seg');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('Segunda parte');
+  // The editor ignores Enter for a moment after a suggestion appears, so it is never taken by accident.
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.cm-activeLine')).toHaveText('[[Larga#Segunda parte]]');
+});
+
+const CALLOUTS = '# Avisos\n\n> [!warning] Hielo fino\n> No cruzar de noche.\n\n> [!tip]\n> Llevar crampones.\n\n> [!faq]- Plegado\n> Oculto al abrir.\n\n> [!note] **Negrita** y más\n> Cuerpo.\n\n> Una cita normal.\n';
+
+async function calloutNote(page: Page) {
+  await page.evaluate((text) => (window as any).__test.externalWrite('a', 'Avisos.md', text), CALLOUTS);
+  await page.locator('aside').getByRole('button', { name: 'Avisos', exact: true }).click();
+}
+
+test('callouts show as coloured boxes with their title', async ({ page }) => {
+  await calloutNote(page);
+  const boxes = prose(page).locator('.callout');
+  await expect(boxes).toHaveCount(4);
+  await expect(boxes.locator('.callout-title')).toHaveText(['Hielo fino', 'Consejo', 'Plegado', 'Negrita y más']);
+  await expect(boxes.nth(0)).toHaveAttribute('data-callout', 'warning');
+  await expect(boxes.nth(2)).toHaveAttribute('data-callout', 'important');
+  await expect(boxes.nth(0).locator('.callout-body')).toHaveText('No cruzar de noche.');
+  await expect(boxes.nth(1).locator('.callout-body')).toHaveText('Llevar crampones.');
+  // A folded one opens on a click.
+  await expect(boxes.nth(2).getByText('Oculto al abrir.')).toBeHidden();
+  await boxes.nth(2).locator('summary').click();
+  await expect(boxes.nth(2).getByText('Oculto al abrir.')).toBeVisible();
+  await expect(prose(page).locator('blockquote')).toHaveText('Una cita normal.');
+  await expect(page.locator('.cm-line.cm-v-callout')).toHaveCount(0);
+  await page.getByTitle('Visual', { exact: true }).click();
+  await expect(page.locator('.cm-line.cm-v-callout-warning').first()).toBeVisible();
+});
+
+test('an HTML export keeps callouts and opens folded ones', async ({ page }) => {
+  await calloutNote(page);
+  await exportAs(page, 'HTML');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+  const html = await page.evaluate(() => (window as any).__exported.text);
+  expect(html).toContain('data-callout="warning"');
+  expect(html).toMatch(/<details[^>]*open/);
+  expect(html).toContain('.callout[data-callout');
+});
+
+/** Pastes into the editor as the system would, with HTML and plain text. `plain` first presses Ctrl+Shift+V. */
+async function paste(page: Page, html: string, text: string, plain = false) {
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.evaluate(([html, text, plain]) => {
+    const content = document.querySelector('.cm-content')!;
+    if (plain) content.dispatchEvent(new KeyboardEvent('keydown', { key: 'V', ctrlKey: true, shiftKey: true, bubbles: true }));
+    const data = new DataTransfer();
+    data.setData('text/html', html as string);
+    data.setData('text/plain', text as string);
+    content.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  }, [html, text, plain] as const);
+}
+
+/** What the pasted note holds once it has been saved. */
+async function editorDoc(page: Page) {
+  await expect(page.locator('main footer')).toContainText('Guardado', { timeout: 3000 });
+  return disk(page, 'b', 'Otra.md');
+}
+
+test('pasting from a web page gives clean Markdown', async ({ page }) => {
+  await open(page, 'Otra');
+  const html = '<h2>Ruta</h2><p>Texto <strong>fuerte</strong> y <a href="https://e.com">enlace</a>.</p><ul><li>uno</li><li>dos</li></ul><table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table><script>window.pwned=1</script>';
+  await paste(page, html, 'Ruta Texto fuerte y enlace. uno dos A B 1 2');
+  const text = await editorDoc(page);
+  expect(text).toContain('## Ruta\n\nTexto **fuerte** y [enlace](https://e.com).');
+  expect(text).toContain('- uno\n- dos');
+  expect(text).toMatch(/\| A +\| B +\|/);
+  expect(text).not.toContain('pwned');
+  expect(await page.evaluate(() => (window as any).pwned)).toBeUndefined();
+});
+
+test('Google Docs bold and italics survive, and code pastes as it is', async ({ page }) => {
+  await open(page, 'Otra');
+  const docs = '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-1"><span style="font-weight:700">negrita</span><span> y </span><span style="font-style:italic">cursiva</span></b>';
+  await paste(page, docs, 'negrita y cursiva');
+  expect(await editorDoc(page)).toContain('**negrita** y *cursiva*');
+  const code = '<div style="color:#ccc"><span style="color:#569cd6">const</span> a = 1 * 2_000;</div>';
+  await paste(page, code, '\nconst a = 1 * 2_000;');
+  expect(await editorDoc(page)).toContain('const a = 1 * 2_000;');
+});
+
+test('Ctrl+Shift+V pastes plain text', async ({ page }) => {
+  await open(page, 'Otra');
+  await paste(page, '<p><strong>fuerte</strong></p>', 'fuerte', true);
+  const text = await editorDoc(page);
+  expect(text).toContain('fuerte');
+  expect(text).not.toContain('**');
+});
+
+/** Pastes or drops an image file into the editor, as the system would. */
+async function giveImage(page: Page, how: 'paste' | 'drop', name: string) {
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.evaluate(([how, name]) => {
+    const content = document.querySelector('.cm-content')!;
+    const data = new DataTransfer();
+    data.items.add(new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], name, { type: 'image/png' }));
+    const box = content.getBoundingClientRect();
+    const event =
+      how === 'paste'
+        ? new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })
+        : new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true, clientX: box.left + 10, clientY: box.bottom - 5 });
+    content.dispatchEvent(event);
+  }, [how, name] as const);
+}
+
+test('a pasted screenshot is saved in the vault and linked', async ({ page }) => {
+  await open(page, 'dir');
+  await open(page, 'Destino');
+  await giveImage(page, 'paste', 'image.png');
+  // Saving the image takes a moment, and the note is saved after it.
+  await expect.poll(() => disk(page, 'a', 'dir/Destino.md'), { timeout: 5000 }).toMatch(/!\[\]\(\.\.\/adjuntos\/pegado-\d{4}-\d{2}-\d{2}-\d{6}\.png\)/);
+  await expect(page.locator('aside').getByRole('button', { name: 'adjuntos', exact: true })).toBeVisible();
+});
+
+test('dropped images keep their name, never replace a file and can go beside the note', async ({ page }) => {
+  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByRole('dialog', { name: 'Ajustes' }).getByLabel('Imágenes pegadas o arrastradas').selectOption('note');
+  await page.keyboard.press('Escape');
+  await open(page, 'dir');
+  await open(page, 'Destino');
+  await giveImage(page, 'drop', 'mapa (ruta).png');
+  await giveImage(page, 'drop', 'mapa (ruta).png');
+  await expect.poll(() => disk(page, 'a', 'dir/Destino.md'), { timeout: 5000 }).toContain('-2.png');
+  const text = await disk(page, 'a', 'dir/Destino.md');
+  expect(text).toContain('![](mapa%20%28ruta%29.png)');
+  expect(text).toContain('![](mapa%20%28ruta%29-2.png)');
+  await expect(prose(page).locator('img')).toHaveCount(2);
+});
+
+async function runAction(page: Page, words: string) {
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type(words);
+  await page.keyboard.press('Enter');
+}
+
+test('a note saved as a template fills in a new note', async ({ page }) => {
+  await page.evaluate(() => (window as any).__test.externalWrite('a', 'Modelo.md', '# {{titulo}}\n\nVault: {{vault}}\nFecha: {{fecha}}\nQueda: {{desconocido}}\n'));
+  await open(page, 'Modelo');
+  await runAction(page, 'guardar como plantilla');
+  const form = page.getByRole('form', { name: 'Nombre de la plantilla' });
+  await form.getByRole('textbox').fill('Acta');
+  await form.getByRole('button', { name: 'Guardar' }).click();
+  await expect(page.getByRole('status')).toHaveText('Plantilla «Acta» guardada');
+
+  await runAction(page, 'desde plantilla');
+  const picker = page.getByRole('dialog', { name: 'Nueva nota desde plantilla' });
+  await expect(picker.getByRole('option')).toHaveText(['Nota en blanco', 'Acta']);
+  await picker.getByRole('button', { name: 'Acta', exact: true }).click();
+  await page.getByRole('form', { name: 'Nombre de la nota' }).getByRole('textbox').fill('Reunión lunes');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main footer')).toContainText('Trabajo / Reunión lunes.md');
+  const text = await disk(page, 'a', 'Reunión lunes.md');
+  const today = await page.evaluate(() => new Date().toLocaleDateString('es'));
+  expect(text).toBe(`# Reunión lunes\n\nVault: Trabajo\nFecha: ${today}\nQueda: {{desconocido}}\n`);
+});
+
+test('the template list offers a blank note and deletes templates', async ({ page }) => {
+  await page.locator('aside').getByRole('button', { name: 'Trabajo', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Nueva nota desde plantilla' }).click();
+  const picker = page.getByRole('dialog', { name: 'Nueva nota desde plantilla' });
+  await expect(picker).toContainText('Este vault aún no tiene plantillas');
+  // Enter takes the first option, a blank note.
+  await page.keyboard.press('Enter');
+  await page.getByRole('form', { name: 'Nombre de la nota' }).getByRole('textbox').fill('Vacía');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main footer')).toContainText('Trabajo / Vacía.md');
+  expect(await disk(page, 'a', 'Vacía.md')).toBe('');
+  await page.evaluate(() => (window as any).__TAURI_INTERNALS__.invoke('save_note_template', { id: 'a', name: 'Ficha', content: 'x' }));
+  await runAction(page, 'desde plantilla');
+  await picker.getByTitle('Borrar la plantilla «Ficha»').click();
+  await page.getByRole('form', { name: '¿Borrar la plantilla «Ficha»?' }).getByRole('button', { name: 'Eliminar' }).click();
+  await expect(picker.getByRole('option')).toHaveText(['Nota en blanco']);
+});
+
+const ANIMATED = '# Flujo\n\n```mermaid animado\nflowchart LR\n  a --> b\n```\n\n```mermaid\nflowchart LR\n  c e1@--> d\n  e1@{ animate: true }\n```\n';
+
+async function animatedNote(page: Page) {
+  await page.evaluate((text) => (window as any).__test.externalWrite('a', 'Flujo.md', text), ANIMATED);
+  await page.locator('aside').getByRole('button', { name: 'Flujo', exact: true }).click();
+  await expect(prose(page).locator('.diagram svg')).toHaveCount(2);
+}
+
+const lineAnimation = (page: Page) =>
+  prose(page).locator('.diagram.animated polyline.edge').first().evaluate((el) => getComputedStyle(el).animationName);
+
+test('diagrams marked animado flow on screen, and Mermaid’s own animation draws', async ({ page }) => {
+  await animatedNote(page);
+  expect(await lineAnimation(page)).toBe('umd-flow');
+  // `e1@{ animate: true }` goes to the official renderer, which draws it.
+  await expect(prose(page).locator('.diagram').nth(1).locator('path').first()).toBeAttached();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(await lineAnimation(page)).toBe('none');
+});
+
+test('an HTML export keeps the animation; the builder can turn it on', async ({ page }) => {
+  await animatedNote(page);
+  await exportAs(page, 'HTML');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+  const html = await page.evaluate(() => (window as any).__exported.text);
+  expect(html).toContain('class="diagram animated"');
+  expect(html).toContain('@keyframes umd-flow');
+
+  await page.getByTitle('Editar', { exact: true }).click();
+  await page.locator('.cm-line', { hasText: 'c e1@--> d' }).click();
+  await page.getByRole('button', { name: 'Diagrama', exact: true }).click();
+  const builder = page.getByRole('dialog', { name: 'Editar diagrama' });
+  await builder.getByText('Apariencia de este diagrama').click();
+  await builder.getByLabel('Animar conexiones').check();
+  await expect(builder).toContainText('En Word, PDF e imágenes el diagrama sale quieto.');
+  await builder.getByRole('button', { name: 'Actualizar' }).click();
+  await expect(page.locator('.cm-content')).toContainText('```mermaid animado');
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();

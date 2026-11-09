@@ -17,6 +17,7 @@
     "core:window:allow-close",
     "core:window:allow-is-maximized",
     "core:window:allow-set-decorations",
-    "core:window:allow-set-title-bar-style"
+    "core:window:allow-set-title-bar-style",
+    "core:webview:allow-set-webview-zoom"
   ]
 }

@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { rise, swap } from './lib/motion';
+  import { swap } from './lib/motion';
+  import Toast from './lib/components/Toast.svelte';
   import { onMount } from 'svelte';
   import Editor from './lib/components/Editor.svelte';
   import About from './lib/components/About.svelte';
   import Export from './lib/components/Export.svelte';
   import Modal from './lib/components/Modal.svelte';
   import WindowControls from './lib/components/WindowControls.svelte';
+  import TemplatePicker from './lib/components/TemplatePicker.svelte';
   import { IS_MAC, frame } from './lib/frame.svelte';
   import NotePanel from './lib/components/NotePanel.svelte';
   import Palette from './lib/components/Palette.svelte';
@@ -18,7 +20,7 @@
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
   import { applyInstallerLanguage, tr } from './lib/i18n.svelte';
-  import { store, type ViewMode } from './lib/store.svelte';
+  import { LINE_WIDTHS, ZOOM, store, type ViewMode } from './lib/store.svelte';
   import { applyTheme } from './lib/themes';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
@@ -48,6 +50,7 @@
     }
     store.init().catch((e) => store.notify(e));
     void frame.watch();
+    void store.applyZoom();
     // The window starts hidden so it first appears with the right theme, language and frame.
     void Promise.all([applyInstallerLanguage(), frame.apply()]).finally(() => {
       try {
@@ -81,6 +84,10 @@
         if (tab) store.setView(tab, VIEWS[(VIEWS.indexOf(tab.view) + 1) % VIEWS.length]);
       },
       tab: () => store.cycleTab(e.shiftKey ? -1 : 1),
+      '+': () => store.setZoom(store.reading.zoom + ZOOM.step),
+      '=': () => store.setZoom(store.reading.zoom + ZOOM.step),
+      '-': () => store.setZoom(store.reading.zoom - ZOOM.step),
+      '0': () => store.setZoom(null),
     };
     const shifted: Record<string, () => void> = {
       f: () => {
@@ -93,6 +100,8 @@
         if (tab?.kind === 'md') store.toggleBar('right');
       },
       tab: actions.tab,
+      // On some keyboards + needs Shift.
+      '+': actions['+'],
     };
     const run = e.shiftKey ? shifted[key] : actions[key];
     if (!run) return;
@@ -151,7 +160,7 @@
     {:else if tab?.missing}
       <div class="banner" role="alert"><span>{tr('app.missingBanner')}</span></div>
     {/if}
-    <div class="content">
+    <div class="content" style:--text-scale={store.reading.textScale} style:--prose-width={LINE_WIDTHS[store.reading.lineWidth]}>
       {#if !tab}
         <Welcome />
       {:else if tab.kind === 'image'}
@@ -193,12 +202,13 @@
 {#if store.about}<About />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
 {#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
+{#if store.templatePicker}<TemplatePicker {...store.templatePicker} />{/if}
 {#if store.exporting && tab}<Export {tab} />{/if}
 {#if store.dialog}
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}
 {/if}
 {#if store.tutorial}<Tutorial />{/if}
-{#if store.toast}<div class="toast" role="status" in:rise>{store.toast}</div>{/if}
+{#if store.toast}{#key store.toast.id}<Toast toast={store.toast} />{/key}{/if}
 
 <style>
   .app { position: relative; display: grid; height: 100vh; overflow: hidden; }
@@ -217,5 +227,4 @@
   .where { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .adopt { flex: none; padding: 0; border: 0; background: none; color: var(--accent-text); font-size: inherit; }
   .adopt:hover { text-decoration: underline; }
-  .toast { position: fixed; bottom: 36px; left: 50%; z-index: var(--z-toast); max-width: min(560px, calc(100vw - 32px)); padding: var(--space-2-5) var(--space-3-5); border-radius: var(--radius-md); background: var(--text); color: var(--bg); box-shadow: var(--shadow-lg); font-size: var(--font-md); transform: translateX(-50%); }
 </style>

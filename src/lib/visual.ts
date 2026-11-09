@@ -4,6 +4,7 @@
 import { ensureSyntaxTree, syntaxTree } from '@codemirror/language';
 import { Prec, StateField, Transaction, type EditorState, type Range } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet } from '@codemirror/view';
+import { CALLOUT_START, describeCallout } from './callouts';
 import { parseStyle, type DiagramStyle } from './diagramStyle';
 import { renderDiagram } from './diagrams';
 import { tr } from './i18n.svelte';
@@ -61,18 +62,18 @@ class CheckboxWidget extends WidgetType {
 }
 
 class DiagramWidget extends WidgetType {
-  constructor(readonly lang: string, readonly src: string, readonly theme: Theme, readonly sketch: boolean) {
+  constructor(readonly lang: string, readonly src: string, readonly theme: Theme, readonly sketch: boolean, readonly animated = false) {
     super();
   }
   eq(other: DiagramWidget) {
-    return other.lang === this.lang && other.src === this.src && other.sketch === this.sketch && themeKey(other.theme) === themeKey(this.theme);
+    return other.lang === this.lang && other.src === this.src && other.sketch === this.sketch && other.animated === this.animated && themeKey(other.theme) === themeKey(this.theme);
   }
   get estimatedHeight() {
     return DIAGRAM_HEIGHT;
   }
   toDOM(view: EditorView) {
     const el = document.createElement('div');
-    el.className = 'cm-v-diagram';
+    el.className = this.animated ? 'cm-v-diagram animated' : 'cm-v-diagram';
     renderDiagram(this.lang, this.src, this.theme, this.sketch).then(
       (svg) => (el.innerHTML = svg),
       () => (el.textContent = tr('preview.diagramUnavailable')),
@@ -267,8 +268,9 @@ function decorate(state: EditorState, typing: boolean) {
         const closed = last.number > first.number && /^\s*(`{3,}|~{3,})\s*$/.test(last.text);
         if (fence && closed && !(typing && active)) {
           const src = state.sliceDoc(first.to + 1, last.from);
-          const { theme, sketch } = diagramLook(parseStyle(fence[3] ?? ''));
-          block(new DiagramWidget(fence[2].toLowerCase(), src, theme, sketch), first.from, last.to);
+          const style = parseStyle(fence[3] ?? '');
+          const { theme, sketch } = diagramLook(style);
+          block(new DiagramWidget(fence[2].toLowerCase(), src, theme, sketch, !!style.animated), first.from, last.to);
         } else {
           for (let n = first.number; n <= last.number; n++) out.push(lineClass('cm-v-code').range(state.doc.line(n).from));
         }
@@ -285,8 +287,13 @@ function decorate(state: EditorState, typing: boolean) {
       const heading = /^(?:ATX|Setext)Heading(\d)$/.exec(name);
       if (heading) out.push(lineClass(`cm-v-h${heading[1]}`).range(state.doc.lineAt(from).from));
       if (name === 'Blockquote') {
+        const start = state.doc.lineAt(from);
         const end = state.doc.lineAt(to).number;
-        for (let n = state.doc.lineAt(from).number; n <= end; n++) out.push(lineClass('cm-v-quote').range(state.doc.line(n).from));
+        // A callout gets the colour of its kind; its first line is the title.
+        const callout = CALLOUT_START.exec(start.text.replace(/^\s*>\s?/, ''));
+        const look = callout ? `cm-v-callout cm-v-callout-${describeCallout(callout[1]).kind}` : 'cm-v-quote';
+        for (let n = start.number; n <= end; n++) out.push(lineClass(look).range(state.doc.line(n).from));
+        if (callout) out.push(lineClass('cm-v-callout-title').range(start.from));
       }
       if (name === 'HorizontalRule') out.push(lineClass('cm-v-rule').range(state.doc.lineAt(from).from));
       if (name === 'InlineCode') out.push(Decoration.mark({ class: 'cm-v-inline-code' }).range(from, to));
@@ -344,16 +351,22 @@ const keepBlocksWhole = EditorView.inputHandler.of((view, from, to, text) => {
 
 const look = EditorView.theme({
   '.cm-gutters': { display: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--sans)', fontSize: '15px', lineHeight: '1.65' },
-  '.cm-content': { maxWidth: '760px', margin: '0 auto', width: '100%' },
+  '.cm-scroller': { fontFamily: 'var(--sans)', fontSize: 'calc(15px * var(--text-scale, 1))', lineHeight: '1.65' },
+  '.cm-content': { maxWidth: 'var(--prose-width, 760px)', margin: '0 auto', width: '100%' },
   '.cm-activeLine': { background: 'transparent' },
   '.cm-v-h1': { fontSize: '1.9em', fontWeight: '700', lineHeight: '1.3' },
   '.cm-v-h2': { fontSize: '1.5em', fontWeight: '700', lineHeight: '1.3' },
   '.cm-v-h3': { fontSize: '1.25em', fontWeight: '650' },
   '.cm-v-h4, .cm-v-h5, .cm-v-h6': { fontSize: '1.05em', fontWeight: '650' },
   '.cm-v-quote': { borderLeft: '3px solid var(--line)', color: 'var(--text-2)', fontStyle: 'italic' },
-  '.cm-v-code': { background: 'var(--panel)', fontFamily: 'var(--mono)', fontSize: '13px' },
-  '.cm-v-meta': { color: 'var(--text-3)', fontFamily: 'var(--mono)', fontSize: '12.5px' },
+  '.cm-v-callout': { '--callout': '#2563eb', borderLeft: '3px solid var(--callout)', background: 'color-mix(in srgb, var(--callout) 9%, transparent)' },
+  '.cm-v-callout-tip': { '--callout': '#16a34a' },
+  '.cm-v-callout-important': { '--callout': '#7c3aed' },
+  '.cm-v-callout-warning': { '--callout': '#d97706' },
+  '.cm-v-callout-caution': { '--callout': '#dc2626' },
+  '.cm-v-callout-title': { color: 'color-mix(in srgb, var(--callout) 70%, var(--text))', fontWeight: '650' },
+  '.cm-v-code': { background: 'var(--panel)', fontFamily: 'var(--mono)', fontSize: 'calc(13px * var(--text-scale, 1))' },
+  '.cm-v-meta': { color: 'var(--text-3)', fontFamily: 'var(--mono)', fontSize: 'calc(12.5px * var(--text-scale, 1))' },
   '.cm-v-inline-code': { padding: '1px 4px', borderRadius: '4px', background: 'var(--panel)', fontFamily: 'var(--mono)', fontSize: '.9em' },
   '.cm-v-link': { color: 'var(--accent-text)', textDecoration: 'underline' },
   '.cm-v-rule': { lineHeight: '.6', borderBottom: '1px solid var(--line)' },
@@ -384,7 +397,7 @@ const followLinks = EditorView.domEventHandlers({
     const tab = store.active;
     if (!link || !tab || touchesCursor(view.state, link.from, link.to)) return false;
     event.preventDefault();
-    void store.followLink(tab, link.target);
+    void store.followLink(tab, link.target, link.anchor);
     return true;
   },
 });

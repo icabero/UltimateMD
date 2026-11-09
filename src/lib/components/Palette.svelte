@@ -70,6 +70,8 @@
   const commands = $derived<Command[]>(
     [
       { id: 'note.new', label: tr('cmd.newNote'), keys: ['Ctrl', 'N'], run: () => void store.newNote() },
+      { id: 'note.template', label: tr('cmd.fromTemplate'), when: store.openVaults.length > 0, run: () => store.newNoteFromTemplate() },
+      { id: 'note.saveTemplate', label: tr('cmd.saveAsTemplate'), when: md && !tab?.loose, run: () => tab && void store.saveAsTemplate(tab) },
       { id: 'note.open', label: tr('cmd.openNote'), keys: ['Ctrl', 'P'], run: () => switchTo('') },
       { id: 'note.heading', label: tr('cmd.goToHeading'), when: md, run: () => switchTo('#') },
       { id: 'search', label: tr('cmd.searchAll'), keys: ['Ctrl', 'Shift', 'F'], run: () => { store.searching = true; store.toggleBar('left', true); } },
@@ -87,6 +89,9 @@
       { id: 'tab.next', label: tr('cmd.nextTab'), keys: ['Ctrl', 'Tab'], when: store.tabs.length > 1, run: () => store.cycleTab(1) },
       { id: 'tab.close', label: tr('cmd.closeTab'), keys: ['Ctrl', 'W'], when: !!tab, run: () => tab && void store.close(tab) },
       { id: 'save', label: tr('cmd.saveAll'), keys: ['Ctrl', 'S'], run: () => void store.saveAll() },
+      { id: 'zoom.in', label: tr('cmd.zoomIn'), keys: ['Ctrl', '+'], run: () => store.setZoom(store.reading.zoom + 0.1) },
+      { id: 'zoom.out', label: tr('cmd.zoomOut'), keys: ['Ctrl', '-'], run: () => store.setZoom(store.reading.zoom - 0.1) },
+      { id: 'zoom.reset', label: tr('cmd.zoomReset'), keys: ['Ctrl', '0'], run: () => store.setZoom(null) },
       { id: 'theme.system', label: tr('cmd.themeSystem'), run: () => store.setThemeChoice({ fixed: null }) },
       ...THEMES.map((t) => ({ id: `theme.${t.id}`, label: tr('cmd.theme', { name: themeName(t) }), run: () => store.setThemeChoice({ fixed: t.id }) })),
       { id: 'vault.word', label: tr('cmd.wordSettings'), when: !!tab && !tab.loose, run: () => tab && (store.wordScreen = tab.vaultId) },

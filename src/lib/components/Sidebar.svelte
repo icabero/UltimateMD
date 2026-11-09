@@ -37,6 +37,7 @@
       y: e.clientY,
       items: [
         { label: tr('sidebar.newNote'), run: () => newNote(id, dir) },
+        { label: tr('cmd.fromTemplate'), run: () => store.newNoteFromTemplate(id, dir) },
         { label: tr('sidebar.newFolder'), run: () => newFolder(id, dir) },
         {
           label: tr('common.rename'),
@@ -48,9 +49,7 @@
         {
           label: tr('sidebar.trash'),
           danger: true,
-          run: async () => {
-            if (await store.confirm(tr('sidebar.trashConfirm', { name: node.name }), tr('sidebar.trash'), true)) await store.trash(id, node.path);
-          },
+          run: () => store.trash(id, node.path),
         },
       ],
     };
@@ -63,6 +62,7 @@
       y: e.clientY,
       items: [
         { label: tr('sidebar.newNote'), run: () => newNote(vault.id, '') },
+        { label: tr('cmd.fromTemplate'), run: () => store.newNoteFromTemplate(vault.id, '') },
         { label: tr('sidebar.newFolder'), run: () => newFolder(vault.id, '') },
         { label: tr('word.openSettings'), run: () => (store.wordScreen = vault.id) },
         { label: tr('sidebar.closeVault'), run: () => store.setVaultOpen(vault.id, false) },

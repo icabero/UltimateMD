@@ -16,12 +16,13 @@
   import { parseSource } from '../diagramBuilder';
   import { fenceLine, parseStyle, splitFence } from '../diagramStyle';
   import { findTerms } from '../fold';
+  import { htmlToMarkdown } from '../paste';
   import { fenceAt, insertBlock, insertLink, wrap } from '../formatting';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
   import { frontmatterChange, frontmatterValue } from '../themes';
   import { EDIT_DIAGRAM, visualMode } from '../visual';
-  import { linkAt, noteCompletions, wikilinks } from '../wikilinks';
+  import { headingCompletions, linkAt, noteCompletions, wikilinks } from '../wikilinks';
 
   let { tab, onscroll }: { tab: Tab; onscroll?: (ratio: number) => void } = $props();
 
@@ -45,7 +46,7 @@
   const baseTheme = EditorView.theme({
     '&': { height: '100%', background: 'var(--bg)', color: 'var(--text)' },
     '&.cm-focused': { outline: 'none' },
-    '.cm-scroller': { fontFamily: 'var(--mono)', fontSize: '13.5px', lineHeight: '1.65', overflow: 'auto' },
+    '.cm-scroller': { fontFamily: 'var(--mono)', fontSize: 'calc(13.5px * var(--text-scale, 1))', lineHeight: '1.65', overflow: 'auto' },
     '.cm-content': { padding: '20px 0 40vh', caretColor: 'var(--accent)' },
     '.cm-line': { padding: '0 22px' },
     '.cm-gutters': { background: 'var(--bg)', color: 'var(--text-3)', border: 'none', fontSize: 'var(--font-xs)' },
@@ -104,7 +105,52 @@
       const link = pos === null ? null : linkAt(target.state, pos);
       if (!link) return false;
       event.preventDefault();
-      void store.followLink(tab, link.target);
+      void store.followLink(tab, link.target, link.anchor);
+      return true;
+    },
+  });
+
+  // Ctrl+Shift+V pastes plain text; the paste event itself does not say so.
+  let plainPaste = false;
+  const pasteMarkdown = EditorView.domEventHandlers({
+    keydown(event) {
+      plainPaste = (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'v';
+      return false;
+    },
+    paste(event, target) {
+      const plain = plainPaste;
+      plainPaste = false;
+      const images = [...(event.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+      if (images.length) {
+        event.preventDefault();
+        void insertImages(target, images, target.state.selection.main.from, target.state.selection.main.to);
+        return true;
+      }
+      const html = event.clipboardData?.getData('text/html');
+      if (plain || !html) return false;
+      const markdown = htmlToMarkdown(html);
+      if (markdown === null) return false;
+      event.preventDefault();
+      target.dispatch(target.state.replaceSelection(markdown), { scrollIntoView: true, userEvent: 'input.paste' });
+      return true;
+    },
+  });
+
+  /** Saves images in the vault and links them where they were pasted or dropped. */
+  async function insertImages(target: EditorView, files: File[], from: number, to: number) {
+    const markdown = await store.saveImages(tab, files);
+    if (markdown === null) return;
+    target.dispatch({ changes: { from, to, insert: markdown }, selection: { anchor: from + markdown.length }, userEvent: 'input.paste' });
+    target.focus();
+  }
+
+  const dropImages = EditorView.domEventHandlers({
+    drop(event, target) {
+      const images = [...(event.dataTransfer?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+      if (!images.length) return false;
+      event.preventDefault();
+      const at = target.posAtCoords({ x: event.clientX, y: event.clientY }) ?? target.state.selection.main.head;
+      void insertImages(target, images, at, at);
       return true;
     },
   });
@@ -120,7 +166,7 @@
         language.of(languageFor(current.kind)),
         mode.of(PLAIN),
         found,
-        ...(current.kind === 'md' ? [wikilinks, followWithCtrl, autocompletion({ override: [noteCompletions], icons: false })] : []),
+        ...(current.kind === 'md' ? [wikilinks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
           if (u.docChanged || u.selectionSet) publishPosition(u.state);

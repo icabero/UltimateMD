@@ -134,3 +134,16 @@ fn pages_are_white() {
     let pixmap = typst_render::render(&document.pages()[0], &RenderOptions::default());
     assert_eq!(pixmap.pixel(1, 1).map(|p| (p.red(), p.green(), p.blue())), Some((255, 255, 255)));
 }
+
+#[test]
+fn callouts_are_coloured_boxes_with_a_title() {
+    let sections = note("> [!danger] Grietas\n> Ir encordados.\n\n> [!note]\n> Texto.\n\n> Cita.\n");
+    let image = |_: &str, _: &str| None;
+    let input = input(&sections, false, &[], &image);
+    let (source, _) = crate::markup::build(&input);
+    assert!(!source.contains("[!"), "{source}");
+    assert!(source.contains(r##"fill: rgb("#FEF2F2")"##) && source.contains(r##"fill: rgb("#EFF6FF")"##), "{source}");
+    assert!(source.contains("Grietas") && source.contains("Nota"), "{source}");
+    assert!(source.contains("#quote(block: true)"), "a plain quote stays a quote");
+    assert!(render(&input).unwrap().starts_with(b"%PDF-"));
+}

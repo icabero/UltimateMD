@@ -1,7 +1,7 @@
 // A single diagram's look, kept on its own fence line so it travels with the note
 // and works for hand-written diagrams too:
 //
-//   ```mermaid tema=sepia boceto relleno=#ffeecc borde=#aa5500
+//   ```mermaid tema=sepia boceto animado relleno=#ffeecc borde=#aa5500
 import type { Theme } from './themes';
 
 export type DiagramColor = 'surface' | 'border' | 'line' | 'text';
@@ -9,6 +9,8 @@ export type DiagramColor = 'surface' | 'border' | 'line' | 'text';
 export interface DiagramStyle {
   theme?: string;
   sketch?: boolean;
+  /** Connections move on screen; documents and images show them still. */
+  animated?: boolean;
   surface?: string;
   border?: string;
   line?: string;
@@ -25,6 +27,7 @@ export function parseStyle(words: string): DiagramStyle {
   for (const word of words.trim().split(/\s+/)) {
     const [key, value] = word.split('=');
     if (key === 'boceto' && value === undefined) style.sketch = true;
+    else if (key === 'animado' && value === undefined) style.animated = true;
     else if (key === 'tema' && value && THEME_ID.test(value)) style.theme = value;
     else if (COLOR_WORDS[key] && value && HEX.test(value)) style[COLOR_WORDS[key]] = value.toLowerCase();
   }
@@ -40,6 +43,7 @@ export function fenceLine(lang: string, style: DiagramStyle) {
   const words = [lang];
   if (style.theme) words.push(`tema=${style.theme}`);
   if (style.sketch) words.push('boceto');
+  if (style.animated) words.push('animado');
   for (const [word, key] of Object.entries(COLOR_WORDS)) {
     if (style[key]) words.push(`${word}=${style[key]}`);
   }

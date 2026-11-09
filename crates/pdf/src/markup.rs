@@ -1,8 +1,9 @@
 //! Turns notes into Typst source. All text is emitted as string literals.
 
 use crate::Input;
-use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::collections::HashMap;
+use ultimatemd_core::callouts;
 use ultimatemd_core::docx::{Section, normalize_wikilinks, split_frontmatter};
 
 /// Width of the text area on A4 with these margins, in points.
@@ -188,7 +189,15 @@ impl Writer<'_> {
                 let level = (heading_number(level) + self.shift).min(6);
                 self.wrap(move |c| format!("#heading(level: {level})[{c}]\n\n"));
             }
-            Tag::BlockQuote(_) => self.wrap(|c| format!("#quote(block: true)[{c}]\n\n")),
+            Tag::BlockQuote(None) => self.wrap(|c| format!("#quote(block: true)[{c}]\n\n")),
+            Tag::BlockQuote(Some(kind)) => {
+                let (line, fill) = callout_colors(kind);
+                self.wrap(move |c| {
+                    format!(
+                        "#block(width: 100%, inset: (x: 10pt, y: 8pt), radius: 2pt, fill: rgb(\"#{fill}\"), stroke: (left: 3pt + rgb(\"#{line}\")))[{c}]\n\n"
+                    )
+                })
+            }
             Tag::CodeBlock(kind) => {
                 let language = match kind {
                     CodeBlockKind::Fenced(info) => info.split_whitespace().next().unwrap_or("").to_lowercase(),
@@ -320,8 +329,11 @@ pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
     if input.cover {
         source.push_str(&cover(input.title, input.date, input.contents));
     }
-    let options =
-        Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
+    let options = Options::ENABLE_TABLES
+        | Options::ENABLE_FOOTNOTES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_GFM;
     let mut writer = Writer {
         input,
         note: String::new(),
@@ -350,7 +362,8 @@ pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
                 writer.note = path.clone();
                 writer.shift = *shift;
                 writer.notes.clear();
-                let body = normalize_wikilinks(split_frontmatter(markdown).1);
+                let body = callouts::normalize(split_frontmatter(markdown).1, input.language);
+                let body = normalize_wikilinks(&body);
                 for event in Parser::new_ext(&body, options) {
                     writer.event(event);
                 }
@@ -360,4 +373,15 @@ pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
         }
     }
     (source, writer.images)
+}
+
+/// The line and fill colours of each kind of callout, the same as in Word.
+fn callout_colors(kind: BlockQuoteKind) -> (&'static str, &'static str) {
+    match kind {
+        BlockQuoteKind::Note => ("2563EB", "EFF6FF"),
+        BlockQuoteKind::Tip => ("16A34A", "F0FDF4"),
+        BlockQuoteKind::Important => ("7C3AED", "F5F3FF"),
+        BlockQuoteKind::Warning => ("D97706", "FFFBEB"),
+        BlockQuoteKind::Caution => ("DC2626", "FEF2F2"),
+    }
 }

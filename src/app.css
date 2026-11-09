@@ -77,6 +77,10 @@ input[type='checkbox']:not(:disabled):active { scale: .82; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: var(--radius-sm); background: var(--line) padding-box; }
 ::-webkit-scrollbar-track { background: none; }
+/* Animated diagrams in the visual mode and the builder, as in the preview. */
+:is(.cm-v-diagram, .drawing).animated svg :is(polyline.edge, .message line, path.connection, .flowchart-link, path.transition, .messageLine0, .messageLine1) { stroke-dasharray: 8 6; animation: umd-flow 1s linear infinite; }
+@keyframes umd-flow { to { stroke-dashoffset: -28; } }
 @media (prefers-reduced-motion: reduce) {
   :root { --ease: 0ms; }
+  :is(.cm-v-diagram, .drawing) svg * { animation: none !important; }
 }

@@ -40,6 +40,8 @@
     return (versions[`${id}:${path}`] = `v${Date.now()}${Math.random()}`);
   };
   const listeners = {};
+  const staged = {};
+  const noteTemplates = { a: {}, b: {} };
 
   function tree(id) {
     const root = [];
@@ -120,6 +122,48 @@
           .slice(0, 8),
       };
     },
+    // Deletions wait aside until undone or finished, like the backend.
+    trash_path: ({ id, path }) => {
+      const token = `t${Object.keys(staged).length}`;
+      const moved = {};
+      for (const p of Object.keys(files[id])) {
+        if (p !== path && !p.startsWith(`${path}/`)) continue;
+        moved[p] = files[id][p];
+        delete files[id][p];
+      }
+      staged[token] = moved;
+      return token;
+    },
+    undo_trash: ({ id, token }) => {
+      const moved = staged[token];
+      if (Object.keys(moved).some((p) => p in files[id])) throw 'the path already exists';
+      Object.assign(files[id], moved);
+      delete staged[token];
+      return Object.keys(moved)[0];
+    },
+    note_templates: ({ id }) => Object.keys(noteTemplates[id]).sort(),
+    note_template: ({ id, name }) => {
+      if (!(name in noteTemplates[id])) throw `not found: ${name}`;
+      return noteTemplates[id][name];
+    },
+    save_note_template: ({ id, name, content }) => void (noteTemplates[id][name] = content),
+    delete_note_template: ({ id, name }) => void delete noteTemplates[id][name],
+    // Like the backend: a free name, numbered if taken.
+    save_image: ({ id, dir, name }) => {
+      const [stem, ext] = [name.replace(/\.[^.]+$/, ''), name.split('.').pop()];
+      for (let n = 1; ; n++) {
+        const candidate = n === 1 ? name : `${stem}-${n}.${ext}`;
+        const path = dir ? `${dir}/${candidate}` : candidate;
+        if (!(path in files[id])) {
+          files[id][path] = '';
+          return path;
+        }
+      }
+    },
+    finish_trash: ({ token }) => {
+      window.__trashed = [...(window.__trashed ?? []), ...Object.keys(staged[token])];
+      delete staged[token];
+    },
     // Like the backend, for [[wikilinks]] by name.
     note_links: ({ id, path }) => {
       const stem = (p) => p.split('/').pop().replace(/\.md$/, '');
@@ -182,16 +226,20 @@
     list_templates: () => ['Ejemplo', 'Corporativa'],
     export_file: ({ name, data }) => {
       window.__exported = { name, text: new TextDecoder().decode(new Uint8Array(data)) };
-      return true;
+      return `/exportados/${name}`;
     },
     export_docx: ({ plan }) => {
       window.__docx = plan;
-      return true;
+      return `/exportados/${plan.title}.docx`;
     },
-    export_pdf: ({ plan }) => {
+    // A test can slow it down to see the progress.
+    export_pdf: async ({ plan }) => {
+      await new Promise((resolve) => setTimeout(resolve, window.__slowExport ?? 0));
       window.__pdf = plan;
-      return true;
+      return `/exportados/${plan.title}.pdf`;
     },
+    open_exported: ({ path }) => void (window.__openedExport = path),
+    reveal_exported: ({ path }) => void (window.__revealedExport = path),
     preview_pdf: () => ['data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'],
     // A real file, because the viewer opens it.
     preview_docx: () => Array.from(atob('UEsDBAoAAAAIAIKIZV26d6ScywAAAFMBAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbJWQvVLDQAyEX+XmWiYnQ0HB2E4BtEDBC2jOsn3D/c1JCeHtkRNIQUcp7Wq/HfX7U4rmSI1DyYO9dZ3dj/37VyU2qmQe7CpSHwDYr5SQXamUVZlLSyg6tgUq+g9cCO667h58yUJZdrJl2LF/ohkPUczzSdcXSqPI1jxejBtrsFhrDB5FdTjm6Q9l90Nwenn28Boq36jBwti/av0WJjJv2OQFk8bBZ2kTTMUfkiLcZvwXr8xz8HS939JqK56YQ15SdFclYci/PeD8tvEbUEsDBAoAAAAAAIKIZV0AAAAAAAAAAAAAAAAGAAAAX3JlbHMvUEsDBAoAAAAIAIKIZV3+xpu/lAAAAAUBAAALAAAAX3JlbHMvLnJlbHONzzsOwjAMBuCrRD5A3DIwoKRdWFgrLhClblrRPOSE1+3JwEARA6N///osq/7hV3EjzksMGlrZQN+pgVZTapDnJWVRGyFrmEtJB8RsZ/Imy5go1M0U2ZtSR3aYjL0YR7hrmj3ypwFbU5xGDdyCOD8T/SPHaVosHaO9egrlx4GvRpUNOyoa7pFHHN+xrCxgp3DzYPcCUEsDBAoAAAAAAIKIZV0AAAAAAAAAAAAAAAAFAAAAd29yZC9QSwMECgAAAAgAgohlXVtze8aIAAAAugAAABEAAAB3b3JkL2RvY3VtZW50LnhtbEWOQQ6DMAwEvxLlAZj20EMU4NKPBOICEokjJ5T2941ppV5mZY28th1eYVNP5LxS7PSlafXQ28N4mvaAsaiqYzZHp5dSkgHI04LB5YYSxuoexMGVOvIMB7FPTBPmvMY5bHBt2xsEt0YtlSP5t2QSsKD0998ZUh5V4h1HZ0GEkE+mk99l+D/WfwBQSwECFAAKAAAACACCiGVduneknMsAAABTAQAAEwAAAAAAAAAAAAAAAAAAAAAAW0NvbnRlbnRfVHlwZXNdLnhtbFBLAQIUAAoAAAAAAIKIZV0AAAAAAAAAAAAAAAAGAAAAAAAAAAAAEAAAAPwAAABfcmVscy9QSwECFAAKAAAACACCiGVd/sabv5QAAAAFAQAACwAAAAAAAAAAAAAAAAAgAQAAX3JlbHMvLnJlbHNQSwECFAAKAAAAAACCiGVdAAAAAAAAAAAAAAAABQAAAAAAAAAAABAAAADdAQAAd29yZC9QSwECFAAKAAAACACCiGVdW3N7xogAAAC6AAAAEQAAAAAAAAAAAAAAAAAAAgAAd29yZC9kb2N1bWVudC54bWxQSwUGAAAAAAUABQAgAQAAtwIAAAAA'), (c) => c.charCodeAt(0)),
@@ -233,6 +281,7 @@
     commands[`plugin:window|${name}`] = (args) => void window.__windowCalls.push({ name, value: args?.value });
   }
   commands['plugin:window|is_maximized'] = () => false;
+  commands['plugin:webview|set_webview_zoom'] = ({ value }) => void (window.__zoom = value);
 
   window.__TAURI_INTERNALS__ = {
     metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },

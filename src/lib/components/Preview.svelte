@@ -33,7 +33,7 @@
     return async () => {
       const name = `${tr('preview.diagramFile', { n: index + 1 })}.${format}`;
       try {
-        await api.exportFile(name, format === 'svg' ? toSvgBytes(svg) : await toPng(svg));
+        store.notifyExported(await api.exportFile(name, format === 'svg' ? toSvgBytes(svg) : await toPng(svg)));
       } catch (e) {
         store.notify(format === 'png' ? tr('preview.pngFailed') : e);
       }
@@ -52,7 +52,9 @@
     await Promise.all(blocks.map(async (el, index) => {
       const src = decodeURIComponent(el.dataset.src ?? '');
       try {
-        const { theme, sketch } = store.diagramLook(tab, parseStyle(el.dataset.style ?? ''));
+        const style = parseStyle(el.dataset.style ?? '');
+        el.classList.toggle('animated', !!style.animated);
+        const { theme, sketch } = store.diagramLook(tab, style);
         const svg = await renderDiagram(el.dataset.lang!, src, theme, sketch);
         if (id !== run) return;
         el.innerHTML = svg;
@@ -165,17 +167,15 @@
     const a = e.composedPath().find((n) => n instanceof HTMLAnchorElement) as HTMLAnchorElement | undefined;
     if (!a) return;
     const href = a.getAttribute('href') ?? '';
-    if (href.startsWith('#') && !a.dataset.wikilink) {
-      e.preventDefault();
-      if (href.length > 1) root.getElementById(decodeURIComponent(href.slice(1)))?.scrollIntoView();
+    e.preventDefault();
+    // Footnotes keep their own ids within the preview.
+    if (/^#fn/.test(href)) {
+      root.getElementById(decodeURIComponent(href.slice(1)))?.scrollIntoView();
       return;
     }
-    e.preventDefault();
-    if (a.dataset.note) return store.openFile(tab.vaultId, a.dataset.note);
+    if (a.dataset.note) return store.openNoteAt(tab.vaultId, a.dataset.note, a.dataset.anchor);
     if (a.dataset.external && /^(https?|mailto):/i.test(a.dataset.external)) return openUrl(a.dataset.external);
-    if (a.dataset.wikilink) {
-      await store.followLink(tab, a.dataset.wikilink);
-    }
+    if (a.dataset.wikilink !== undefined) await store.followLink(tab, a.dataset.wikilink, a.dataset.anchor);
   }
 
   onMount(() => {

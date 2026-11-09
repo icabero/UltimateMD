@@ -57,7 +57,8 @@ async function renderOfficial(src: string, theme: Theme, sketch: boolean) {
 
 async function renderMermaid(src: string, theme: Theme, sketch: boolean) {
   // The lighter renderer has no hand-drawn look.
-  if (!sketch && BEAUTIFUL.test(src)) {
+  // Mermaid's own animated edges (`e1@{ animate: true }`) need the official renderer.
+  if (!sketch && BEAUTIFUL.test(src) && !/@\{[^}]*\banimat/.test(src)) {
     try {
       const { renderMermaidSVG } = await import('beautiful-mermaid');
       return renderMermaidSVG(src, { ...palette(theme), transparent: true });
@@ -133,6 +134,11 @@ export async function toPng(svg: SVGSVGElement): Promise<Uint8Array> {
   const width = (box?.width || svg.clientWidth) * scale;
   const height = (box?.height || svg.clientHeight) * scale;
   const clone = svg.cloneNode(true) as SVGSVGElement;
+  // An image is still: lines that move are drawn whole, not caught mid-dash.
+  const moving = [...svg.querySelectorAll('*')].map((el) => getComputedStyle(el).animationName !== 'none');
+  [...clone.querySelectorAll<SVGElement>('*')].forEach((el, i) => {
+    if (moving[i]) el.style.cssText += ';animation:none!important;stroke-dasharray:none!important';
+  });
   clone.setAttribute('width', String(width));
   clone.setAttribute('height', String(height));
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');

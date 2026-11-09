@@ -135,7 +135,16 @@ export const api = {
   createDir: (id: string, path: string) => invoke<void>('create_dir', { id, path }),
   /** Moves or renames, rewriting the links that would break. */
   rename: (id: string, from: string, to: string) => invoke<LinkUpdate>('rename_path', { id, from, to }),
-  trash: (id: string, path: string) => invoke<void>('trash_path', { id, path }),
+  /** Sets a file or folder aside and returns the token that undoes it or trashes it for good. */
+  trash: (id: string, path: string) => invoke<string>('trash_path', { id, path }),
+  undoTrash: (id: string, token: string) => invoke<string>('undo_trash', { id, token }),
+  noteTemplates: (id: string) => invoke<string[]>('note_templates', { id }),
+  noteTemplate: (id: string, name: string) => invoke<string>('note_template', { id, name }),
+  saveNoteTemplate: (id: string, name: string, content: string) => invoke<void>('save_note_template', { id, name, content }),
+  deleteNoteTemplate: (id: string, name: string) => invoke<void>('delete_note_template', { id, name }),
+  /** Saves an image in `dir` under `name`, or a numbered variant. Its path in the vault. */
+  saveImage: (id: string, dir: string, name: string, data: Uint8Array) => invoke<string>('save_image', { id, dir, name, data: Array.from(data) }),
+  finishTrash: (id: string, token: string) => invoke<void>('finish_trash', { id, token }),
   search: (query: string) => invoke<VaultHit[]>('search_all', { query }),
   homeInfo: () => invoke<HomeInfo>('home_info'),
   links: (id: string, path: string) => invoke<LinkInfo>('note_links', { id, path }),
@@ -156,8 +165,12 @@ export const api = {
   renameTemplate: (name: string, newName: string) => invoke<void>('rename_template', { name, newName }),
   deleteTemplate: (name: string) => invoke<void>('delete_template', { name }),
   readImage: (id: string, path: string) => invoke<number[]>('read_image', { id, path }),
-  exportDocx: (plan: ExportPlan) => invoke<boolean>('export_docx', { plan }),
-  exportPdf: (plan: ExportPlan) => invoke<boolean>('export_pdf', { plan }),
+  /** The saved file's path, or null if the save dialog was cancelled. */
+  exportDocx: (plan: ExportPlan) => invoke<string | null>('export_docx', { plan }),
+  exportPdf: (plan: ExportPlan) => invoke<string | null>('export_pdf', { plan }),
+  /** Only for files exported in this session. */
+  openExported: (path: string) => invoke<void>('open_exported', { path }),
+  revealExported: (path: string) => invoke<void>('reveal_exported', { path }),
   previewDocx: (plan: ExportPlan) => invoke<number[]>('preview_docx', { plan }),
   previewPdf: (plan: ExportPlan) => invoke<string[]>('preview_pdf', { plan }),
   templateStyles: (template: string | null) => invoke<TemplateStyle[]>('template_styles', { template }),
@@ -168,7 +181,7 @@ export const api = {
   removeVaultTemplate: (id: string) => invoke<void>('remove_vault_template', { id }),
   wordSample: (id: string, settings: WordSettings, markdown: string, picture: number[]) => invoke<number[]>('word_sample', { id, settings, markdown, picture }),
   installerLanguage: () => invoke<string | null>('installer_language'),
-  exportFile: (name: string, data: Uint8Array) => invoke<boolean>('export_file', { name, data: Array.from(data) }),
+  exportFile: (name: string, data: Uint8Array) => invoke<string | null>('export_file', { name, data: Array.from(data) }),
 };
 
 /** URL of a vault file, served by the app's `umd` protocol. */

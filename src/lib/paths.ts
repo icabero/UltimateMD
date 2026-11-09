@@ -43,3 +43,14 @@ export function resolveLink(target: string, from: string, files: string[]): stri
     null
   );
 }
+
+/** How a note at `from` links to `target`, both from the vault root, ready for a Markdown link. */
+export function linkFrom(from: string, target: string) {
+  const dir = dirName(from).split('/').filter(Boolean);
+  const parts = target.split('/');
+  let common = 0;
+  while (common < dir.length && common < parts.length - 1 && dir[common] === parts[common]) common++;
+  const path = [...Array(dir.length - common).fill('..'), ...parts.slice(common)].join('/');
+  // Spaces and brackets would end the link.
+  return path.replace(/ /g, '%20').replace(/\(/g, '%28').replace(/\)/g, '%29');
+}

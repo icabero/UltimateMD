@@ -55,7 +55,7 @@ fn scan_line(line: &str, offset: usize, out: &mut Vec<Link>) {
     let code = code_spans(line);
     let in_code = |i: usize| code.iter().any(|&(a, b)| i > a && i < b);
     let kinds: [(&str, &str, &[char], Kind); 2] =
-        [("[[", "]]", &['|', '#'], Kind::Wiki), ("](", ")", &['#'], Kind::Markdown)];
+        [("[[", "]]", &['|', '#', '^'], Kind::Wiki), ("](", ")", &['#'], Kind::Markdown)];
     let mut found = Vec::new();
     for (open, close, cut, kind) in kinds {
         let mut at = 0;
@@ -379,6 +379,27 @@ mod tests {
         assert_eq!(i.outgoing, ["a.md"]);
         assert_eq!(i.backlinks, ["a.md", "c.md"]);
         assert_eq!(info(&v, "a.md").unwrap().unresolved, ["falta"]);
+    }
+
+    #[test]
+    fn block_and_same_note_links() {
+        let line = "[[Plan^tarea-1]] [[#Arriba]] [[Plan#Fechas^x]]
+";
+        assert_eq!(extract(line), ["Plan", "Plan"]);
+        let (_d, v) = vault_with(&[
+            ("Plan.md", ""),
+            (
+                "a.md",
+                "[[Plan^tarea-1|ver]]
+",
+            ),
+        ]);
+        move_path(&v, "Plan.md", "Proyecto.md").unwrap();
+        assert_eq!(
+            text(&v, "a.md"),
+            "[[Proyecto^tarea-1|ver]]
+"
+        );
     }
 
     #[test]

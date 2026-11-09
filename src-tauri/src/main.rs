@@ -78,6 +78,13 @@ fn main() {
                 for vault in registry.vaults.iter().filter(|v| v.open) {
                     watcher::watch(handle, vault);
                 }
+                // Deletions the app closed before finishing, such as on a crash.
+                let roots: Vec<_> = registry.vaults.iter().map(|v| v.path.clone()).collect();
+                std::thread::spawn(move || {
+                    for root in roots {
+                        let _ = ultimatemd_core::VaultFs::new(root).trash_leftovers();
+                    }
+                });
             }
             Ok(())
         })
@@ -103,6 +110,15 @@ fn main() {
             commands::open_with_system,
             commands::mcp_info,
             commands::export_file,
+            commands::undo_trash,
+            commands::save_image,
+            commands::note_templates,
+            commands::note_template,
+            commands::save_note_template,
+            commands::delete_note_template,
+            commands::finish_trash,
+            commands::open_exported,
+            commands::reveal_exported,
             commands::installer_language,
             commands::open_path,
             commands::close_loose,
