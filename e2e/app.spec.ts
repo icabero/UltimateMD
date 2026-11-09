@@ -145,7 +145,7 @@ test('the quick switcher turns into actions with > and headings with #', async (
   await expect(palette(page)).toContainText('Escribe > para ver acciones');
   await page.keyboard.type('>');
   await expect(palette(page).getByRole('combobox')).toHaveAttribute('placeholder', 'Buscar una acción…');
-  await page.keyboard.press('Control+a');
+  await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.type('#');
   await expect(palette(page).getByRole('option')).toHaveText(['Inicio H1']);
   await page.keyboard.press('Enter');
