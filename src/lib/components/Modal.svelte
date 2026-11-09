@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dim, pop } from '../motion';
   import { untrack } from 'svelte';
   import { tr } from '../i18n.svelte';
   import { store, type Dialog } from '../store.svelte';
@@ -20,8 +21,8 @@
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape') store.dialog?.resolve(null); }} />
 
-<button class="scrim top" aria-label={tr('common.cancel')} onclick={() => dialog.resolve(null)}></button>
-<form class="dialog" aria-label={dialog.title} {onsubmit}>
+<button in:dim class="scrim top" aria-label={tr('common.cancel')} onclick={() => dialog.resolve(null)}></button>
+<form in:pop class="dialog" aria-label={dialog.title} {onsubmit}>
   <p>{dialog.title}</p>
   {#if dialog.value !== null}
     <input bind:value use:select />

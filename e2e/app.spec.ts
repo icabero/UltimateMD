@@ -422,6 +422,22 @@ test('a property name is checked before it is added', async ({ page }) => {
   expect(await page.locator('.cm-content').textContent()).toContain('autor: Ana');
 });
 
+test('with reduced motion nothing animates', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.keyboard.press('Control+Shift+p');
+  const box = page.getByRole('dialog', { name: 'Abrir nota' });
+  await expect(box).toBeVisible();
+  const running = await box.evaluate((el) => el.getAnimations().filter((a) => Number(a.effect?.getComputedTiming().duration) > 0).length);
+  expect(running).toBe(0);
+});
+
+test('dialogs grow into place when motion is allowed', async ({ page }) => {
+  await page.keyboard.press('Control+Shift+p');
+  const box = page.getByRole('dialog', { name: 'Abrir nota' });
+  const timing = await box.evaluate((el) => el.getAnimations().map((a) => Number(a.effect?.getComputedTiming().duration)));
+  expect(timing.some((d) => d >= 120 && d <= 200)).toBe(true);
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();

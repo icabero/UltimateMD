@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dim, pop } from '../motion';
   import { onMount } from 'svelte';
   import DocxSheet from './DocxSheet.svelte';
   import Icon from './Icon.svelte';
@@ -100,8 +101,8 @@
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape' && !store.dialog) close(); }} />
 
-<button class="scrim top" aria-label={tr('common.close')} onclick={close}></button>
-<div class="modal" role="dialog" aria-label={tr('word.title', { name: vaultName })}>
+<button in:dim class="scrim top" aria-label={tr('common.close')} onclick={close}></button>
+<div in:pop class="modal" role="dialog" aria-label={tr('word.title', { name: vaultName })}>
   <div class="config">
     <header>
       <h2>{tr('word.title', { name: vaultName })}</h2>

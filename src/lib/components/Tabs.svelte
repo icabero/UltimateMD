@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { enter } from '../motion';
   import Icon from './Icon.svelte';
   import { tr, type Key } from '../i18n.svelte';
   import { baseName } from '../paths';
@@ -19,7 +20,7 @@
   {/if}
   <div class="tabs" role="tablist">
     {#each store.tabs as tab (tab.key)}
-      <div class="tab" class:active={tab.key === store.activeKey} role="tab" tabindex="0" aria-selected={tab.key === store.activeKey}
+      <div class="tab" in:enter class:active={tab.key === store.activeKey} role="tab" tabindex="0" aria-selected={tab.key === store.activeKey}
         onclick={() => { store.activeKey = tab.key; store.persist(); }}
         onkeydown={(e) => { if (e.key === 'Enter') store.activeKey = tab.key; }}
         onauxclick={(e) => { if (e.button === 1) store.close(tab); }}

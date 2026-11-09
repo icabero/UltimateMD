@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { unfold } from '../motion';
   import Self from './TreeItem.svelte';
   import Icon from './Icon.svelte';
   import type { TreeNode } from '../api';
@@ -61,9 +62,11 @@
   <span class="label">{node.isDir ? node.name : node.name.replace(/\.(md|markdown)$/i, '')}</span>
 </button>
 {#if node.isDir && expanded}
-  {#each node.children as child (child.path)}
-    <Self {vaultId} node={child} depth={depth + 1} {onmenu} />
-  {/each}
+  <div transition:unfold>
+    {#each node.children as child (child.path)}
+      <Self {vaultId} node={child} depth={depth + 1} {onmenu} />
+    {/each}
+  </div>
 {/if}
 
 <style>

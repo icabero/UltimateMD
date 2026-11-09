@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dim, pop } from '../motion';
   import { LANGUAGES, language, setLanguage, tr, type Key, type Language } from '../i18n.svelte';
   import { store } from '../store.svelte';
 
@@ -26,8 +27,8 @@
   const focus = (el: HTMLElement) => el.focus();
 </script>
 
-<div class="scrim shade"></div>
-<div class="tutorial" role="dialog" aria-modal="true" aria-label={tr('tutorial.label')}>
+<div in:dim class="scrim shade"></div>
+<div in:pop class="tutorial" role="dialog" aria-modal="true" aria-label={tr('tutorial.label')}>
   <p class="count">{tr('tutorial.step', { n: index + 1, total: STEPS.length })}</p>
   <h2>{tr(step.title)}</h2>
   <p class="body">{tr(step.body)}</p>

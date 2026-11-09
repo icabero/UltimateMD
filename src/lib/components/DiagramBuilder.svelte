@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dim, pop } from '../motion';
   import { untrack } from 'svelte';
   import Icon from './Icon.svelte';
   import { freshId, hasD2, toSource, type Diagram, type Engine, type Flow, type Gantt, type Kind, type Mindmap, type Pie, type Sequence, type Shape, type States } from '../diagramBuilder';
@@ -340,8 +341,8 @@
   <button class="add" onclick={() => addIdea(mindmap)}><Icon name="plus" size={13} /> {tr('builder.addIdea')}</button>
 {/snippet}
 
-<button class="scrim top" aria-label={tr('common.close')} onclick={onclose}></button>
-<div class="modal" role="dialog" aria-label={tr(editing ? 'builder.editTitle' : 'builder.title')}>
+<button in:dim class="scrim top" aria-label={tr('common.close')} onclick={onclose}></button>
+<div in:pop class="modal" role="dialog" aria-label={tr(editing ? 'builder.editTitle' : 'builder.title')}>
   <div class="config">
     <header>
       <h2>{tr(editing ? 'builder.editTitle' : 'builder.title')}</h2>

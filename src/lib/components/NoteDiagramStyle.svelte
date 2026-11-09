@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dim, pop } from '../motion';
   import { untrack } from 'svelte';
   import Icon from './Icon.svelte';
   import { api } from '../api';
@@ -38,8 +39,8 @@
   </optgroup>
 {/snippet}
 
-<button class="scrim top" aria-label={tr('common.close')} onclick={onclose}></button>
-<div class="modal" role="dialog" aria-label={tr('noteStyle.title')}>
+<button in:dim class="scrim top" aria-label={tr('common.close')} onclick={onclose}></button>
+<div in:pop class="modal" role="dialog" aria-label={tr('noteStyle.title')}>
   <header>
     <h2>{tr('noteStyle.title')}</h2>
     <button class="icon" title={tr('common.close')} onclick={onclose}><Icon name="close" /></button>

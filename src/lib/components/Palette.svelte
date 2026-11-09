@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dim, pop } from '../motion';
   import { onMount, untrack } from 'svelte';
   import { fold } from '../fold';
   import { themeName, tr, type Key } from '../i18n.svelte';
@@ -173,8 +174,8 @@
   const placeholder = $derived(tr(mode === 'commands' ? 'palette.commands' : mode === 'headings' ? 'palette.headings' : 'palette.placeholder'));
 </script>
 
-<button class="scrim" aria-label={tr('common.close')} onclick={() => (store.palette = null)}></button>
-<div class="box" role="dialog" aria-label={tr('palette.title')}>
+<button in:dim class="scrim" aria-label={tr('common.close')} onclick={() => (store.palette = null)}></button>
+<div in:pop class="box" role="dialog" aria-label={tr('palette.title')}>
   <input bind:this={input} bind:value={query} oninput={() => (index = 0)} onkeydown={onKey} placeholder={placeholder} role="combobox" aria-expanded="true" aria-controls="palette-list" aria-activedescendant="palette-{index}" />
   <div class="list" id="palette-list" role="listbox">
     {#each results as r, i}

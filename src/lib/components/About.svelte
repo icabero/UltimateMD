@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dim, pop } from '../motion';
   import { getVersion } from '@tauri-apps/api/app';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { onMount, untrack } from 'svelte';
@@ -35,8 +36,8 @@
   const open = (url: string) => openUrl(url).catch((e) => store.notify(e));
 </script>
 
-<button class="scrim" aria-label={tr('common.close')} onclick={() => (store.about = false)}></button>
-<div class="modal" role="dialog" aria-label={tr('about.title')}>
+<button in:dim class="scrim" aria-label={tr('common.close')} onclick={() => (store.about = false)}></button>
+<div in:pop class="modal" role="dialog" aria-label={tr('about.title')}>
   <header>
     <h2>Ultimate<b>MD</b></h2>
     <button class="icon" title={tr('common.close')} onclick={() => (store.about = false)}><Icon name="close" /></button>

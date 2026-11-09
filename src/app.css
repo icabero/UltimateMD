@@ -64,7 +64,9 @@ body { overflow: hidden; background: var(--bg); color: var(--text); font: var(--
 button { font: inherit; color: inherit; }
 input:not([type='checkbox']) { height: 34px; padding: 0 var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg); color: var(--text); font: inherit; font-size: var(--font-md); outline: none; transition: border-color var(--ease); }
 input:focus { border-color: var(--accent); }
-input[type='checkbox'] { accent-color: var(--accent); }
+input[type='checkbox'] { accent-color: var(--accent); transition: scale var(--ease); }
+/* A task box gives a little when pressed; only a click moves it, not opening a note. */
+input[type='checkbox']:not(:disabled):active { scale: .82; }
 ::placeholder { color: var(--text-3); opacity: 1; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); transition: background var(--ease), color var(--ease); }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dim, pop } from '../motion';
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
   import { api, type DefaultAppInfo, type McpAccess, type Vault } from '../api';
@@ -103,8 +104,8 @@
   </button>
 {/snippet}
 
-<button class="scrim" aria-label={tr('common.close')} onclick={() => (store.settings = false)}></button>
-<div class="modal" role="dialog" aria-label={tr('settings.title')}>
+<button in:dim class="scrim" aria-label={tr('common.close')} onclick={() => (store.settings = false)}></button>
+<div in:pop class="modal" role="dialog" aria-label={tr('settings.title')}>
   <header>
     <h2>{tr('settings.title')}</h2>
     <button class="icon" title={tr('common.close')} onclick={() => (store.settings = false)}><Icon name="close" /></button>

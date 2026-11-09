@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { rise, swap } from './lib/motion';
   import { onMount } from 'svelte';
   import Editor from './lib/components/Editor.svelte';
   import About from './lib/components/About.svelte';
@@ -170,7 +171,7 @@
         {/if}
         <span class="spacer"></span>
         {#if tab.kind === 'md' || tab.kind === 'html'}<span>{tr('app.words', { n: words })}</span>{/if}
-        <span>{status}</span>
+        {#key status}<span class="status" in:swap>{status}</span>{/key}
       {/if}
       {#if store.update}
         <button class="adopt" onclick={() => (store.about = true)}>{tr('app.updateAvailable', { version: store.update })}</button>
@@ -193,7 +194,7 @@
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}
 {/if}
 {#if store.tutorial}<Tutorial />{/if}
-{#if store.toast}<div class="toast" role="status">{store.toast}</div>{/if}
+{#if store.toast}<div class="toast" role="status" in:rise>{store.toast}</div>{/if}
 
 <style>
   .app { position: relative; display: grid; height: 100vh; overflow: hidden; }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dim, pop } from '../motion';
   import { onMount, untrack } from 'svelte';
   import DocxSheet from './DocxSheet.svelte';
   import Icon from './Icon.svelte';
@@ -199,8 +200,8 @@
   }
 </script>
 
-<button class="scrim" aria-label={tr('common.close')} onclick={() => (store.exporting = false)}></button>
-<div class="modal" role="dialog" aria-label={tr('export.title')}>
+<button in:dim class="scrim" aria-label={tr('common.close')} onclick={() => (store.exporting = false)}></button>
+<div in:pop class="modal" role="dialog" aria-label={tr('export.title')}>
   <div class="config">
     <header>
       <h2>{tr('export.title')}</h2>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dim, pop } from '../motion';
   import Icon from './Icon.svelte';
   import { api, type ThemeFile } from '../api';
   import { themeName, tr, type Key } from '../i18n.svelte';
@@ -110,8 +111,8 @@
   }
 </script>
 
-<button class="scrim top" aria-label={tr('common.close')} onclick={() => (store.themeEditor = null)}></button>
-<div class="modal" role="dialog" aria-label={tr('themes.of', { name: vaultName })}>
+<button in:dim class="scrim top" aria-label={tr('common.close')} onclick={() => (store.themeEditor = null)}></button>
+<div in:pop class="modal" role="dialog" aria-label={tr('themes.of', { name: vaultName })}>
   <header>
     <h2>{tr('themes.of', { name: vaultName })}</h2>
     <button class="icon" title={tr('common.close')} onclick={() => (store.themeEditor = null)}><Icon name="close" /></button>
