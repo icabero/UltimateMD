@@ -19,8 +19,22 @@ const MAX_ID: usize = 40;
 
 const BASES: &[&str] = &["claro", "oscuro", "sepia", "rosa", "medianoche", "bosque", "grafito", "contraste"];
 const COLORS: &[&str] = &[
-    "bg", "panel", "raised", "line", "text", "text2", "text3", "accent", "accentText", "onAccent", "danger", "warn",
-    "synString", "synKeyword", "synNumber", "synAttr",
+    "bg",
+    "panel",
+    "raised",
+    "line",
+    "text",
+    "text2",
+    "text3",
+    "accent",
+    "accentText",
+    "onAccent",
+    "danger",
+    "warn",
+    "synString",
+    "synKeyword",
+    "synNumber",
+    "synAttr",
 ];
 const DIAGRAM_COLORS: &[&str] = &["surface", "border", "line", "text"];
 
@@ -90,7 +104,10 @@ fn check_colors(colors: &BTreeMap<String, String>, allowed: &[&str]) -> Result<(
 impl ThemeFile {
     fn validate(&self) -> Result<()> {
         check_id(&self.id)?;
-        if self.name.trim().is_empty() || self.name.chars().count() > MAX_NAME || self.name.chars().any(char::is_control) {
+        if self.name.trim().is_empty()
+            || self.name.chars().count() > MAX_NAME
+            || self.name.chars().any(char::is_control)
+        {
             return Err(Error::InvalidName(self.name.clone()));
         }
         if !BASES.contains(&self.base.as_str()) {
@@ -127,7 +144,11 @@ fn read_config(root: &Path) -> Config {
 
 pub fn load(root: &Path) -> Result<VaultThemes> {
     let config = read_config(root);
-    let mut out = VaultThemes { default_theme: config.default_theme, default_diagram_theme: config.default_diagram_theme, ..Default::default() };
+    let mut out = VaultThemes {
+        default_theme: config.default_theme,
+        default_diagram_theme: config.default_diagram_theme,
+        ..Default::default()
+    };
     let Ok(entries) = std::fs::read_dir(themes_dir(root)) else {
         return Ok(out);
     };
@@ -286,7 +307,11 @@ mod tests {
         let outside = tempfile::tempdir().unwrap();
         save(outside.path(), &sample("fuera")).unwrap();
         std::fs::create_dir_all(themes_dir(d.path())).unwrap();
-        std::os::unix::fs::symlink(themes_dir(outside.path()).join("fuera.json"), themes_dir(d.path()).join("fuera.json")).unwrap();
+        std::os::unix::fs::symlink(
+            themes_dir(outside.path()).join("fuera.json"),
+            themes_dir(d.path()).join("fuera.json"),
+        )
+        .unwrap();
         let loaded = load(d.path()).unwrap();
         assert!(loaded.themes.is_empty());
         assert_eq!(loaded.invalid, ["fuera.json"]);

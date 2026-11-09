@@ -72,8 +72,14 @@ fn heading_number(level: HeadingLevel) -> usize {
 enum Open {
     /// Collects inline or block content, then wraps it.
     Wrap(Box<dyn Fn(&str) -> String>),
-    List { first: Option<u64>, items: Vec<String> },
-    Table { columns: usize, cells: Vec<String> },
+    List {
+        first: Option<u64>,
+        items: Vec<String>,
+    },
+    Table {
+        columns: usize,
+        cells: Vec<String>,
+    },
     Footnote(String),
 }
 
@@ -306,11 +312,16 @@ fn cover(title: &str, date: &str, contents: &str) -> String {
 
 /// Returns the Typst source and the images it refers to.
 pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
-    let mut source = format!("#set document(title: {})\n{PREAMBLE}\n#set text(lang: {})\n", quoted(input.title), quoted(input.language));
+    let mut source = format!(
+        "#set document(title: {})\n{PREAMBLE}\n#set text(lang: {})\n",
+        quoted(input.title),
+        quoted(input.language)
+    );
     if input.cover {
         source.push_str(&cover(input.title, input.date, input.contents));
     }
-    let options = Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
+    let options =
+        Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
     let mut writer = Writer {
         input,
         note: String::new(),

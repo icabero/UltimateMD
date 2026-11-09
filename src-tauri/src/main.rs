@@ -16,8 +16,9 @@ fn allowed_navigation(url: &tauri::Url) -> bool {
     let host = url.host_str().unwrap_or("");
     match url.scheme() {
         "tauri" | "umd" | "about" => true,
-        "http" => matches!(host, "tauri.localhost" | "umd.localhost")
-            || (cfg!(debug_assertions) && host == "localhost"),
+        "http" => {
+            matches!(host, "tauri.localhost" | "umd.localhost") || (cfg!(debug_assertions) && host == "localhost")
+        }
         _ => false,
     }
 }

@@ -2,8 +2,8 @@ use super::*;
 use quick_xml::events::Event as Xml;
 
 const PNG: &[u8] = &[
-    0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0x03, 0xE8, 0, 0, 0x01, 0xF4,
-    8, 6, 0, 0, 0, 0, 0, 0, 0,
+    0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0x03, 0xE8, 0, 0, 0x01,
+    0xF4, 8, 6, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 const SAMPLE: &str = "---\nautor: Ane\n---\n# Informe\n\nAntes de la tabla. Texto **fuerte** y *leve* con [web](https://e.com/?a=1&b=2) y [[Otra|alias]].\n\n## Datos & más\n\n- uno\n  - anidado\n- dos\n\n1. primero\n2. segundo\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n> cita\n\nNota[^n].\n\n[^n]: pie.\n\n```mermaid\nflowchart LR\n```\n\n```rust\nfn a() {}\n```\n\n![foto](img.png)\n";
@@ -16,7 +16,18 @@ fn render_with(template: Option<&[u8]>) -> Package {
     let diagrams = [PNG.to_vec()];
     let image = |_: &str, path: &str| (path == "img.png").then(|| PNG.to_vec());
     let sections = note(SAMPLE);
-    let input = Input { sections: &sections, title: "archivo", fixed_title: false, date: "5/11/2026", contents: "Índice", diagrams: &diagrams, image: &image, template, settings: &Default::default(), inline_numbering: false };
+    let input = Input {
+        sections: &sections,
+        title: "archivo",
+        fixed_title: false,
+        date: "5/11/2026",
+        contents: "Índice",
+        diagrams: &diagrams,
+        image: &image,
+        template,
+        settings: &Default::default(),
+        inline_numbering: false,
+    };
     read_package(&render(&input).unwrap()).unwrap()
 }
 
@@ -65,9 +76,15 @@ fn template() -> Vec<u8> {
         ),
         w = W_NS,
     );
-    let header = format!(r#"<?xml version="1.0"?><w:hdr xmlns:w="{W_NS}"><w:p><w:r><w:t>Cabecera {{{{titulo}}}}</w:t></w:r></w:p></w:hdr>"#);
-    let settings = format!(r#"<?xml version="1.0"?><w:settings xmlns:w="{W_NS}"><w:zoom w:percent="100"/><w:compat/></w:settings>"#);
-    let numbering = format!(r#"<?xml version="1.0"?><w:numbering xmlns:w="{W_NS}"><w:abstractNum w:abstractNumId="3"/><w:num w:numId="4"><w:abstractNumId w:val="3"/></w:num></w:numbering>"#);
+    let header = format!(
+        r#"<?xml version="1.0"?><w:hdr xmlns:w="{W_NS}"><w:p><w:r><w:t>Cabecera {{{{titulo}}}}</w:t></w:r></w:p></w:hdr>"#
+    );
+    let settings = format!(
+        r#"<?xml version="1.0"?><w:settings xmlns:w="{W_NS}"><w:zoom w:percent="100"/><w:compat/></w:settings>"#
+    );
+    let numbering = format!(
+        r#"<?xml version="1.0"?><w:numbering xmlns:w="{W_NS}"><w:abstractNum w:abstractNumId="3"/><w:num w:numId="4"><w:abstractNumId w:val="3"/></w:num></w:numbering>"#
+    );
     let parts: Package = [
         (CONTENT_TYPES, BLANK_TYPES.to_string()),
         (DOCUMENT, document),
@@ -110,7 +127,8 @@ fn blank_document_contains_everything() {
 #[test]
 fn tables_keep_their_place_in_the_document() {
     let doc = text(&render_with(None), DOCUMENT);
-    let (before, table, after) = (doc.find("Antes de la tabla").unwrap(), doc.find("<w:tbl>").unwrap(), doc.find("cita").unwrap());
+    let (before, table, after) =
+        (doc.find("Antes de la tabla").unwrap(), doc.find("<w:tbl>").unwrap(), doc.find("cita").unwrap());
     assert!(before < table && table < after);
     let inside = &doc[table..doc.find("</w:tbl>").unwrap()];
     assert!(!inside.contains("Antes de la tabla"), "a cell must not swallow earlier text");
@@ -178,7 +196,8 @@ fn images_fit_the_text_width() {
     let source = template();
     let doc = text(&render_with(Some(&source)), DOCUMENT);
     let width = (11906 - 2000) * EMU_PER_TWIP;
-    let extents: Vec<u64> = Regex::new(r#"<wp:extent cx="(\d+)""#).unwrap().captures_iter(&doc).map(|c| c[1].parse().unwrap()).collect();
+    let extents: Vec<u64> =
+        Regex::new(r#"<wp:extent cx="(\d+)""#).unwrap().captures_iter(&doc).map(|c| c[1].parse().unwrap()).collect();
     assert_eq!(extents, [500 * EMU_PER_PX, width.min(1000 * EMU_PER_PX)], "diagram at half size, photo capped");
 }
 
@@ -186,7 +205,18 @@ fn images_fit_the_text_width() {
 fn missing_assets_leave_a_note_rather_than_fail() {
     let image = |_: &str, _: &str| None;
     let sections = note("![x](no.png)\n\n```d2\na\n```\n");
-    let input = Input { sections: &sections, title: "t", fixed_title: false, date: "", contents: "Índice", diagrams: &[], image: &image, template: None, settings: &Default::default(), inline_numbering: false };
+    let input = Input {
+        sections: &sections,
+        title: "t",
+        fixed_title: false,
+        date: "",
+        contents: "Índice",
+        diagrams: &[],
+        image: &image,
+        template: None,
+        settings: &Default::default(),
+        inline_numbering: false,
+    };
     let doc = text(&read_package(&render(&input).unwrap()).unwrap(), DOCUMENT);
     assert!(doc.contains("[Imagen: no.png]") && doc.contains("[Diagrama no disponible]"));
 }
@@ -196,7 +226,18 @@ fn bad_templates_are_rejected() {
     assert!(check_template(b"esto no es un zip").is_err());
     let image = |_: &str, _: &str| None;
     let sections = note("x");
-    let input = Input { sections: &sections, title: "t", fixed_title: false, date: "", contents: "Índice", diagrams: &[], image: &image, template: Some(b"nope"), settings: &Default::default(), inline_numbering: false };
+    let input = Input {
+        sections: &sections,
+        title: "t",
+        fixed_title: false,
+        date: "",
+        contents: "Índice",
+        diagrams: &[],
+        image: &image,
+        template: Some(b"nope"),
+        settings: &Default::default(),
+        inline_numbering: false,
+    };
     assert!(render(&input).is_err());
     assert!(check_template(&template()).is_ok());
 }
@@ -206,7 +247,18 @@ fn title_prefers_frontmatter() {
     let image = |_: &str, _: &str| None;
     let source = template();
     let sections = note("---\ntitulo: Elegido\n---\n# Otro\n");
-    let input = Input { sections: &sections, title: "t", fixed_title: false, date: "", contents: "Índice", diagrams: &[], image: &image, template: Some(&source), settings: &Default::default(), inline_numbering: false };
+    let input = Input {
+        sections: &sections,
+        title: "t",
+        fixed_title: false,
+        date: "",
+        contents: "Índice",
+        diagrams: &[],
+        image: &image,
+        template: Some(&source),
+        settings: &Default::default(),
+        inline_numbering: false,
+    };
     let doc = text(&read_package(&render(&input).unwrap()).unwrap(), DOCUMENT);
     assert!(doc.contains("<w:t xml:space=\"preserve\">Elegido"));
 }
@@ -214,7 +266,9 @@ fn title_prefers_frontmatter() {
 #[test]
 fn marker_paragraph_keeps_its_breaks() {
     let body = "<w:p>CUERPO</w:p>";
-    let marker = |extra: &str| format!("<w:body><w:p>A</w:p><w:p>{extra}<w:r><w:t>{{{{contenido}}}}</w:t></w:r></w:p><w:p>B</w:p></w:body>");
+    let marker = |extra: &str| {
+        format!("<w:body><w:p>A</w:p><w:p>{extra}<w:r><w:t>{{{{contenido}}}}</w:t></w:r></w:p><w:p>B</w:p></w:body>")
+    };
 
     let plain = insert_body(&marker(""), body, "");
     assert_eq!(plain, "<w:body><w:p>A</w:p><w:p>CUERPO</w:p><w:p>B</w:p></w:body>");
@@ -246,13 +300,34 @@ fn marker_paragraph_keeps_its_breaks() {
 fn folder_document() -> Package {
     let sections = vec![
         Section::Heading { text: "Reuniones".into(), style: None, level: 1, page_break: true },
-        Section::Note { path: "r/a.md".into(), markdown: "---\nautor: Ane\n---\n# Lunes\n\nUno[^n].\n\n[^n]: pie uno\n".into(), shift: 1, page_break: false },
+        Section::Note {
+            path: "r/a.md".into(),
+            markdown: "---\nautor: Ane\n---\n# Lunes\n\nUno[^n].\n\n[^n]: pie uno\n".into(),
+            shift: 1,
+            page_break: false,
+        },
         Section::Heading { text: "Anexo".into(), style: Some("Destacado".into()), level: 2, page_break: false },
-        Section::Note { path: "r/b.md".into(), markdown: "# Martes\n\nDos[^n].\n\n[^n]: pie dos\n".into(), shift: 2, page_break: true },
+        Section::Note {
+            path: "r/b.md".into(),
+            markdown: "# Martes\n\nDos[^n].\n\n[^n]: pie dos\n".into(),
+            shift: 2,
+            page_break: true,
+        },
     ];
     let image = |_: &str, _: &str| None;
     let source = template();
-    let input = Input { sections: &sections, title: "Vault", fixed_title: true, date: "", contents: "Índice", diagrams: &[], image: &image, template: Some(&source), settings: &Default::default(), inline_numbering: false };
+    let input = Input {
+        sections: &sections,
+        title: "Vault",
+        fixed_title: true,
+        date: "",
+        contents: "Índice",
+        diagrams: &[],
+        image: &image,
+        template: Some(&source),
+        settings: &Default::default(),
+        inline_numbering: false,
+    };
     read_package(&render(&input).unwrap()).unwrap()
 }
 
@@ -262,18 +337,27 @@ fn folders_become_titles_and_notes_move_down_a_level() {
     assert_well_formed(&parts);
     let doc = text(&parts, DOCUMENT);
     let folder = doc.rfind(">Reuniones<").unwrap();
-    assert!(doc[..folder].rfind(r#"<w:pPr><w:pStyle w:val="Ttulo1"/><w:pageBreakBefore/></w:pPr>"#).is_some(), "style first, then the break");
+    assert!(
+        doc[..folder].rfind(r#"<w:pPr><w:pStyle w:val="Ttulo1"/><w:pageBreakBefore/></w:pPr>"#).is_some(),
+        "style first, then the break"
+    );
     let lunes = doc.rfind(">Lunes<").unwrap();
     assert!(doc[..lunes].rfind(r#"w:val="Ttulo2""#).unwrap() > folder, "a note's h1 sits under its folder");
     let martes = doc.rfind(">Martes<").unwrap();
-    assert!(doc[..martes].rfind(r#"<w:pStyle w:val="Ttulo2"/><w:pageBreakBefore/>"#).is_none_or(|i| i < lunes), "shift 2 has no style in this template");
+    assert!(
+        doc[..martes].rfind(r#"<w:pStyle w:val="Ttulo2"/><w:pageBreakBefore/>"#).is_none_or(|i| i < lunes),
+        "shift 2 has no style in this template"
+    );
     assert!(doc[..martes].rfind("<w:pageBreakBefore/>").unwrap() > lunes, "a note can start a new page");
 }
 
 #[test]
 fn custom_styles_stay_in_the_contents() {
     let doc = text(&folder_document(), DOCUMENT);
-    assert!(doc.contains(r#"<w:pStyle w:val="Destacado"/><w:outlineLvl w:val="1"/>"#), "the outline level keeps it listed");
+    assert!(
+        doc.contains(r#"<w:pStyle w:val="Destacado"/><w:outlineLvl w:val="1"/>"#),
+        "the outline level keeps it listed"
+    );
     let toc_end = doc.find(">Reuniones<").unwrap();
     assert!(toc_end < doc.rfind(">Reuniones<").unwrap(), "folder titles appear in the contents");
 }

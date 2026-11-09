@@ -29,8 +29,7 @@ fn touches_themes(root: &Path, path: &Path) -> bool {
 }
 
 fn is_hidden(root: &Path, path: &Path) -> bool {
-    path.strip_prefix(root)
-        .is_ok_and(|rel| rel.components().any(|c| c.as_os_str().to_string_lossy().starts_with('.')))
+    path.strip_prefix(root).is_ok_and(|rel| rel.components().any(|c| c.as_os_str().to_string_lossy().starts_with('.')))
 }
 
 pub fn watch(app: &AppHandle, vault: &Vault) {

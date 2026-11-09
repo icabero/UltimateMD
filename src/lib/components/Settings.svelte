@@ -132,11 +132,14 @@
     <section>
       <h3>{tr('settings.defaultApp')}</h3>
       {#if defaultApp.platform === 'windows'}
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- our own translation, with markup -->
         <p class="muted">{@html tr('settings.defaultWindows')}</p>
         <button class="plain" onclick={makeDefault}>{tr('settings.defaultWindowsButton')}</button>
       {:else if defaultApp.platform === 'macos'}
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- our own translation, with markup -->
         <p class="muted">{@html tr('settings.defaultMac')}</p>
       {:else if defaultApp.appimage}
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- our own translation, with markup -->
         <p class="muted">{@html tr('settings.defaultAppImage')}</p>
       {:else if defaultApp.isDefault}
         <p class="muted">{tr('settings.defaultDone')}</p>

@@ -1,0 +1,3 @@
+# Wide lines, as the code was written before formatting was checked.
+max_width = 120
+use_small_heuristics = "Max"

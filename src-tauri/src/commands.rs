@@ -10,13 +10,15 @@ use std::sync::Mutex;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
+use ultimatemd_core::docx::Section;
 use ultimatemd_core::links::{self, LinkInfo};
 use ultimatemd_core::paths::{is_image, join_relative};
 use ultimatemd_core::vault_themes::{self, ThemeFile, VaultThemes};
-use ultimatemd_core::docx::Section;
 use ultimatemd_core::word_settings::{self, WordSettings};
+use ultimatemd_core::{
+    Error, McpAccess, Note, Registry, Result, SearchHit, TreeNode, Vault, VaultFs, WriteMode, search,
+};
 use ultimatemd_core::{docx, templates};
-use ultimatemd_core::{Error, McpAccess, Note, Registry, Result, SearchHit, TreeNode, Vault, VaultFs, WriteMode, search};
 
 const SEARCH_LIMIT: usize = 200;
 /// In an export plan, the template kept in the vault itself.
@@ -134,8 +136,9 @@ pub fn create_dir(id: String, path: String) -> Result<()> {
 }
 
 #[tauri::command(async)]
-pub fn rename_path(id: String, from: String, to: String) -> Result<()> {
-    fs(&id)?.rename(&from, &to)
+/// Moves or renames, rewriting the links that would otherwise break.
+pub fn rename_path(id: String, from: String, to: String) -> Result<links::LinkUpdate> {
+    links::move_path(&fs(&id)?, &from, &to)
 }
 
 #[tauri::command(async)]
@@ -159,6 +162,9 @@ pub fn search_all(query: String) -> Result<Vec<VaultHit>> {
         let Ok(hits) = search::search(&VaultFs::new(&vault.path), &query, SEARCH_LIMIT) else { continue };
         out.extend(hits.into_iter().map(|hit| VaultHit { vault_id: vault.id.clone(), hit }));
     }
+    // Best notes first across vaults. Stable, so each note's lines stay together.
+    out.sort_by_key(|h| std::cmp::Reverse(h.hit.score));
+    out.truncate(SEARCH_LIMIT);
     Ok(out)
 }
 
@@ -170,9 +176,7 @@ pub fn note_links(id: String, path: String) -> Result<LinkInfo> {
 #[tauri::command(async)]
 pub fn open_with_system(app: AppHandle, id: String, path: String) -> Result<()> {
     let file = fs(&id)?.resolve_file(&path)?;
-    app.opener()
-        .open_path(file.to_string_lossy(), None::<&str>)
-        .map_err(|e| Error::Vault(e.to_string()))
+    app.opener().open_path(file.to_string_lossy(), None::<&str>).map_err(|e| Error::Vault(e.to_string()))
 }
 
 #[tauri::command(async)]
@@ -247,7 +251,9 @@ fn note_image(id: &str, note: &str, reference: &str) -> Option<Vec<u8>> {
     let vault = fs(id).ok()?;
     let name = reference.rsplit('/').next()?;
     fn find(nodes: &[TreeNode], name: &str) -> Option<String> {
-        nodes.iter().find_map(|n| if n.is_dir { find(&n.children, name) } else { (n.name == name).then(|| n.path.clone()) })
+        nodes
+            .iter()
+            .find_map(|n| if n.is_dir { find(&n.children, name) } else { (n.name == name).then(|| n.path.clone()) })
     }
     read_image(id.to_string(), find(&vault.tree().ok()?, name)?).ok()
 }
@@ -458,12 +464,7 @@ pub fn open_path(app: AppHandle, lock: State<RegistryLock>, path: PathBuf) -> Re
     let id = loose::register(&file);
     watcher::watch_file(&app, &id, &file);
     let plain = |p: &Path| p.to_string_lossy().trim_start_matches(r"\\?\").to_string();
-    Ok(Opened::Loose {
-        id,
-        name,
-        dir: file.parent().map(plain).unwrap_or_default(),
-        absolute: plain(&file),
-    })
+    Ok(Opened::Loose { id, name, dir: file.parent().map(plain).unwrap_or_default(), absolute: plain(&file) })
 }
 
 #[tauri::command(async)]
@@ -502,11 +503,7 @@ pub fn default_app_info() -> DefaultAppInfo {
         .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == DESKTOP_FILE);
     #[cfg(not(target_os = "linux"))]
     let is_default = false;
-    DefaultAppInfo {
-        platform: std::env::consts::OS,
-        appimage: std::env::var_os("APPIMAGE").is_some(),
-        is_default,
-    }
+    DefaultAppInfo { platform: std::env::consts::OS, appimage: std::env::var_os("APPIMAGE").is_some(), is_default }
 }
 
 /// Windows lets only the user pick default apps, so this opens that screen. On
@@ -514,15 +511,11 @@ pub fn default_app_info() -> DefaultAppInfo {
 #[tauri::command(async)]
 pub fn set_default_app(app: AppHandle) -> Result<()> {
     #[cfg(target_os = "windows")]
-    app.opener()
-        .open_url("ms-settings:defaultapps", None::<&str>)
-        .map_err(|e| Error::Vault(e.to_string()))?;
+    app.opener().open_url("ms-settings:defaultapps", None::<&str>).map_err(|e| Error::Vault(e.to_string()))?;
     #[cfg(target_os = "linux")]
     {
         let _ = &app;
-        let status = std::process::Command::new("xdg-mime")
-            .args(["default", DESKTOP_FILE, MARKDOWN_MIME])
-            .status()?;
+        let status = std::process::Command::new("xdg-mime").args(["default", DESKTOP_FILE, MARKDOWN_MIME]).status()?;
         if !status.success() {
             return Err(Error::Vault("xdg-mime could not set the default app".into()));
         }

@@ -72,11 +72,7 @@ impl World for Document {
     }
 
     fn source(&self, id: FileId) -> FileResult<Source> {
-        if id == self.main.id() {
-            Ok(self.main.clone())
-        } else {
-            Err(FileError::AccessDenied)
-        }
+        if id == self.main.id() { Ok(self.main.clone()) } else { Err(FileError::AccessDenied) }
     }
 
     fn file(&self, id: FileId) -> FileResult<Bytes> {
@@ -117,11 +113,7 @@ pub fn preview(input: &Input, pixels_per_point: f64) -> Result<Vec<Vec<u8>>> {
     document
         .pages()
         .iter()
-        .map(|page| {
-            typst_render::render(page, &options)
-                .encode_png()
-                .map_err(|e| Error::Vault(e.to_string()))
-        })
+        .map(|page| typst_render::render(page, &options).encode_png().map_err(|e| Error::Vault(e.to_string())))
         .collect()
 }
 
