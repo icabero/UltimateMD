@@ -1006,6 +1006,18 @@ test('export to PDF writes the file directly, with no print dialog', async ({ pa
   const plan = await page.evaluate(() => (window as any).__pdf);
   expect(plan.sections).toEqual([{ kind: 'note', path: 'Inicio.md', shift: 0, pageBreak: false }]);
   expect(await page.evaluate(() => (window as any).__printed)).toBeUndefined();
+  expect(plan.archive).toBe(false);
+});
+
+test('a PDF can be written for archiving, and the choice is remembered', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'PDF');
+  await page.getByLabel('Para archivar (PDF/A)').check();
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+  expect((await page.evaluate(() => (window as any).__pdf)).archive).toBe(true);
+  await page.keyboard.press('Control+e');
+  await expect(page.getByLabel('Para archivar (PDF/A)')).toBeChecked();
 });
 
 const scope = (page: Page, name: string) => page.getByRole('group', { name: 'Alcance' }).getByRole('button', { name }).click();

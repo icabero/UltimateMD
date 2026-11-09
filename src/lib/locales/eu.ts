@@ -320,6 +320,8 @@ export const eu: Record<Key, string> = {
   'export.noteBreak': 'Hasi ohar bakoitza orri berrian',
   'export.document': 'Dokumentua',
   'export.cover': 'Azala eta aurkibidea',
+  'export.archive': 'Artxibatzeko (PDF/A)',
+  'export.archiveHint': 'Urte askoren buruan berdin irekiko den PDFa. Erregistro eta administrazio batzuek eskatzen dute.',
   'export.template': 'Txantiloia',
   'export.noTemplate': 'Txantiloirik gabe',
   'export.exampleTemplate': 'Adibidea (barne hartua)',

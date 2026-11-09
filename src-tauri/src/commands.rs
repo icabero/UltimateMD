@@ -368,6 +368,9 @@ pub struct ExportPlan {
     language: String,
     contents: String,
     cover: bool,
+    /// PDF/A, for archiving.
+    #[serde(default)]
+    archive: bool,
     template: Option<String>,
     sections: Vec<PlanSection>,
     diagrams: Vec<Vec<u8>>,
@@ -428,6 +431,7 @@ impl ExportPlan {
             language: &self.language,
             contents: &self.contents,
             cover: self.cover,
+            archive: self.archive,
             diagrams: &self.diagrams,
             image: &|note, reference| note_image(&self.vault_id, note, reference),
         })

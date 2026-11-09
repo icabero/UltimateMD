@@ -63,6 +63,7 @@ fn input<'a>(
         language: "es",
         contents: "Índice",
         cover,
+        archive: false,
         diagrams,
         image,
     }
@@ -75,6 +76,35 @@ fn writes_a_real_pdf_with_every_element() {
     let image = |_: &str, r: &str| (r == "foto.png").then(|| PNG.to_vec());
     let pdf = render(&input(&sections, true, &diagrams, &image)).unwrap();
     assert!(pdf.starts_with(b"%PDF-"));
+}
+
+#[test]
+fn the_first_author_goes_to_the_metadata_and_the_cover() {
+    let mut sections = note("# Sin autor\n");
+    sections.extend(note(SAMPLE));
+    sections.extend(note("---\nauthor: Otra\n---\nx\n"));
+    let image = |_: &str, _: &str| None;
+    let (source, _) = markup::build(&input(&sections, true, &[], &image));
+    assert!(source.starts_with("#set document(title: \"Título \\\"raro\\\"\", author: \"Ane\")"), "{source}");
+    assert!(source.contains("#text(14pt, \"Ane\")"));
+    assert!(!source.contains("Otra\")"));
+
+    let (source, _) = markup::build(&input(&note("x"), true, &[], &image));
+    assert!(!source.contains("author:"));
+}
+
+#[test]
+fn archives_as_pdf_a() {
+    let sections = note(SAMPLE);
+    let diagrams = [PNG.to_vec()];
+    let image = |_: &str, r: &str| (r == "foto.png").then(|| PNG.to_vec());
+    let pdf = render(&Input { archive: true, ..input(&sections, true, &diagrams, &image) });
+    let pdf = pdf.unwrap_or_else(|e| panic!("{e}"));
+    let text = String::from_utf8_lossy(&pdf);
+    assert!(text.contains("pdfaid:part") && text.contains("Ane"), "PDF/A metadata with the author");
+    assert!(
+        !String::from_utf8_lossy(&render(&input(&sections, true, &diagrams, &image)).unwrap()).contains("pdfaid:part")
+    );
 }
 
 #[test]

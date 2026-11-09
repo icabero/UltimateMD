@@ -34,6 +34,8 @@ export interface ExportOptions {
   noteTitles: boolean;
   noteBreak: boolean;
   cover: boolean;
+  /** PDF/A, for archiving. */
+  archive: boolean;
   template: string | null;
 }
 
@@ -200,6 +202,7 @@ export async function buildPlan(tab: Tab, options: ExportOptions, onProgress?: P
     language: language(),
     contents: tr('export.contents'),
     cover: options.cover,
+    archive: options.archive,
     template: options.template,
     sections,
     diagrams,

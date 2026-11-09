@@ -77,6 +77,8 @@ export interface ExportPlan {
   /** The title of the table of contents, in that language. */
   contents: string;
   cover: boolean;
+  /** PDF/A, for archiving. */
+  archive: boolean;
   template: string | null;
   sections: PlanSection[];
   diagrams: number[][];

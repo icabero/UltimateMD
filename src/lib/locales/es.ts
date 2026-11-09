@@ -319,6 +319,8 @@ export const es = {
   'export.noteBreak': 'Empezar cada nota en página nueva',
   'export.document': 'Documento',
   'export.cover': 'Portada e índice',
+  'export.archive': 'Para archivar (PDF/A)',
+  'export.archiveHint': 'Un PDF que se podrá abrir igual dentro de muchos años. Lo piden algunos registros y administraciones.',
   'export.template': 'Plantilla',
   'export.noTemplate': 'Sin plantilla',
   'export.exampleTemplate': 'Ejemplo (incluida)',

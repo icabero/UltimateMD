@@ -20,6 +20,7 @@ const NUMBERING: &str = "word/numbering.xml";
 const FOOTNOTES: &str = "word/footnotes.xml";
 const DOC_RELS: &str = "word/_rels/document.xml.rels";
 const CONTENT_TYPES: &str = "[Content_Types].xml";
+const CORE: &str = "docProps/core.xml";
 
 const W_NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -44,6 +45,8 @@ macro_rules! re {
 }
 
 re!(PARAGRAPH, r"(?s)<w:p(?: [^>]*[^/])?>.*?</w:p>");
+re!(CORE_TITLE, r"(?s)<dc:title\s*/>|<dc:title(?:\s[^>]*)?>.*?</dc:title>");
+re!(CORE_CREATOR, r"(?s)<dc:creator\s*/>|<dc:creator(?:\s[^>]*)?>.*?</dc:creator>");
 re!(TEXT, r"(?s)<w:t(?: [^>]*)?>(.*?)</w:t>");
 re!(PARAGRAPH_STYLE, r#"<w:pStyle w:val="([^"]*)""#);
 re!(PLACEHOLDER, r"\{\{\s*([^{}]+?)\s*\}\}");
@@ -153,6 +156,21 @@ pub fn check_template(bytes: &[u8]) -> Result<()> {
 
 fn text_of(parts: &Package, name: &str) -> Option<String> {
     parts.get(name).map(|b| String::from_utf8_lossy(b).into_owned())
+}
+
+/// The template's document properties with this document's title and author,
+/// so Word's File › Info does not show the template's.
+fn with_properties(core: &str, title: &str, author: &str) -> String {
+    let set = |xml: &str, pattern: &Regex, tag: &str, value: &str| {
+        let element = format!("<{tag}>{}</{tag}>", escape(value));
+        if pattern.is_match(xml) {
+            pattern.replace(xml, regex::NoExpand(&element)).into_owned()
+        } else {
+            xml.replacen("</cp:coreProperties>", &format!("{element}</cp:coreProperties>"), 1)
+        }
+    };
+    let core = set(core, &CORE_TITLE, "dc:title", title);
+    set(&core, &CORE_CREATOR, "dc:creator", author)
 }
 
 fn escape(text: &str) -> String {
@@ -1229,6 +1247,9 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
     }
     if let Some(settings) = text_of(&parts, SETTINGS) {
         parts.insert(SETTINGS.to_string(), without_field_update(&settings).into_bytes());
+    }
+    if let Some(core) = text_of(&parts, CORE) {
+        parts.insert(CORE.to_string(), with_properties(&core, &title, &author).into_bytes());
     }
     parts.insert(CONTENT_TYPES.to_string(), types.into_bytes());
     parts.insert(DOC_RELS.to_string(), rels.into_bytes());

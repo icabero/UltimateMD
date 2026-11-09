@@ -31,6 +31,7 @@
     noteTitles: boolean;
     noteBreak: boolean;
     cover: boolean;
+    archive: boolean;
     template: string;
   }
 
@@ -67,6 +68,7 @@
   let noteTitles = $state(memory.noteTitles ?? false);
   let noteBreak = $state(memory.noteBreak ?? false);
   let cover = $state(remembered.scope === 'note' ? false : (memory.cover ?? true));
+  let archive = $state(memory.archive ?? false);
   let templates = $state<string[]>([]);
   let template = $state(EXAMPLE);
   let vaultTemplate = $state(false);
@@ -83,7 +85,7 @@
 
   const folders = $derived(foldersOf(store.trees[tab.vaultId] ?? []));
   const canWiden = $derived(!tab.loose);
-  const options = $derived<ExportOptions>({ scope, folder, levels: levels.map((l) => ({ ...l })), noteTitles, noteBreak, cover, template: format === 'docx' && template ? template : null });
+  const options = $derived<ExportOptions>({ scope, folder, levels: levels.map((l) => ({ ...l })), noteTitles, noteBreak, cover, archive, template: format === 'docx' && template ? template : null });
   const examples = $derived(scope === 'note' ? [] : levelExamples(tab, options));
   const customStyles = $derived(styles.filter((s) => !/^(heading|toc) \d$|^(header|footer|normal|footnote text|toc heading)$/i.test(s.name)));
 
@@ -104,7 +106,7 @@
 
   // One row per depth of folders; a new row titles folders at that depth.
   $effect(() => {
-    const count = levelCount(tab, { scope, folder, levels: [], noteTitles: false, noteBreak: false, cover: false, template: null });
+    const count = levelCount(tab, { scope, folder, levels: [], noteTitles: false, noteBreak: false, cover: false, archive: false, template: null });
     const current = $state.snapshot(levels);
     if (current.length === count) return;
     levels = Array.from({ length: count }, (_, i) => current[i] ?? { value: i === 0 ? '' : `heading:${Math.min(i, 6)}`, pageBreak: false });
@@ -200,7 +202,7 @@
     busy = false;
     progress = null;
     if (saved) {
-      saveMemory({ format, scope, folder, levels: $state.snapshot(levels), noteTitles, noteBreak, cover, template });
+      saveMemory({ format, scope, folder, levels: $state.snapshot(levels), noteTitles, noteBreak, cover, archive, template });
       store.exporting = false;
       store.notifyExported(saved);
     }
@@ -265,6 +267,7 @@
     {#if format === 'pdf'}
       <h3>{tr('export.document')}</h3>
       <label class="check"><input type="checkbox" bind:checked={cover} /> {tr('export.cover')}</label>
+      <label class="check" title={tr('export.archiveHint')}><input type="checkbox" bind:checked={archive} /> {tr('export.archive')}</label>
     {:else if format === 'docx'}
       <h3>{tr('export.template')}</h3>
       <select class="wide" aria-label={tr('export.template')} bind:value={template}>

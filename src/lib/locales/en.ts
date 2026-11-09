@@ -320,6 +320,8 @@ export const en: Record<Key, string> = {
   'export.noteBreak': 'Start each note on a new page',
   'export.document': 'Document',
   'export.cover': 'Cover and contents',
+  'export.archive': 'For archiving (PDF/A)',
+  'export.archiveHint': 'A PDF that will open the same way many years from now. Some registries and public bodies require it.',
   'export.template': 'Template',
   'export.noTemplate': 'No template',
   'export.exampleTemplate': 'Example (included)',
