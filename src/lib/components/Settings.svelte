@@ -231,45 +231,45 @@
 </div>
 
 <style>
-  .modal { position: fixed; top: 50%; left: 50%; z-index: 31; display: flex; flex-direction: column; width: min(820px, calc(100vw - 32px)); height: min(600px, calc(100vh - 48px)); padding: 8px 20px 0; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translate(-50%, -50%); }
-  header { display: flex; flex: none; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-  .layout { display: grid; flex: 1; grid-template-columns: 180px 1fr; min-height: 0; margin: 0 -20px; }
-  nav { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; border-right: 1px solid var(--line); background: var(--panel); }
-  nav button { padding: 7px 10px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 13px; text-align: left; }
+  .modal { position: fixed; top: 50%; left: 50%; z-index: var(--z-dialog); display: flex; flex-direction: column; width: min(820px, calc(100vw - 32px)); height: min(600px, calc(100vh - 48px)); padding: var(--space-2) var(--space-5) 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-lg); transform: translate(-50%, -50%); }
+  header { display: flex; flex: none; align-items: center; justify-content: space-between; padding-bottom: var(--space-2); border-bottom: 1px solid var(--line); }
+  .layout { display: grid; flex: 1; grid-template-columns: 180px 1fr; min-height: 0; margin: 0 calc(var(--space-5) * -1); }
+  nav { display: flex; flex-direction: column; gap: var(--space-0-5); padding: var(--space-3) var(--space-2-5); border-right: 1px solid var(--line); background: var(--panel); }
+  nav button { padding: var(--space-2) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-md); text-align: left; }
   nav button:hover { background: var(--hover); color: var(--text); }
   nav .on { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
-  .content { min-width: 0; padding: 0 20px 20px; overflow-y: auto; }
-  section + section { margin-top: 22px; padding-top: 2px; border-top: 1px solid var(--line); }
-  h2 { margin: 8px 0; font-size: 15px; font-weight: 650; }
-  h3 { margin: 16px 0 8px; font-size: 13px; font-weight: 650; }
-  .themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 8px; }
-  .swatch { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; padding: 8px 10px; border: 1.5px solid; border-radius: 8px; text-align: left; }
+  .content { min-width: 0; padding: 0 var(--space-5) var(--space-5); overflow-y: auto; }
+  section + section { margin-top: var(--space-6); padding-top: var(--space-0-5); border-top: 1px solid var(--line); }
+  h2 { margin: var(--space-2) 0; font-size: var(--font-lg); font-weight: 650; }
+  h3 { margin: var(--space-4) 0 var(--space-2); font-size: var(--font-md); font-weight: 650; }
+  .themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: var(--space-2); }
+  .swatch { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--space-0-5) var(--space-2); padding: var(--space-2) var(--space-2-5); border: 1.5px solid; border-radius: var(--radius-md); text-align: left; }
   .swatch.selected { box-shadow: 0 0 0 1px currentColor; }
-  .sample { font-size: 20px; line-height: 1.2; }
-  .bar { width: 18px; height: 6px; border-radius: 3px; }
-  .tname { grid-column: 1 / -1; font-size: 12px; }
-  .follow { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: var(--text-2); font-size: 12.5px; }
-  .modes { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; color: var(--text-2); font-size: 12.5px; }
-  .modes label { display: flex; align-items: center; gap: 6px; }
-  select { min-width: 170px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
-  .vault { padding: 10px 0; border-top: 1px solid var(--line); }
-  .info { display: flex; align-items: baseline; gap: 10px; min-width: 0; margin-bottom: 8px; }
-  .name { flex: none; padding: 0; border: 0; background: none; color: var(--text); font-size: 13.5px; font-weight: 600; }
-  .path { overflow: hidden; color: var(--text-3); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
-  .seg, .clients { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--hover); flex-wrap: wrap; }
-  .seg button, .clients button { padding: 4px 10px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 12.5px; }
-  .seg .on, .clients .on { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 15%); }
-  .actions { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--text-2); font-size: 12.5px; }
-  .actions label { display: flex; align-items: center; gap: 5px; }
-  .actions button, .code button { padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text-2); font-size: 12px; }
+  .sample { font-size: var(--font-xl); line-height: 1.2; }
+  .bar { width: 18px; height: 6px; border-radius: var(--radius-2xs); }
+  .tname { grid-column: 1 / -1; font-size: var(--font-sm); }
+  .follow { display: flex; align-items: center; gap: var(--space-1-5); margin-top: var(--space-3); color: var(--text-2); font-size: var(--font-sm); }
+  .modes { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-2); color: var(--text-2); font-size: var(--font-sm); }
+  .modes label { display: flex; align-items: center; gap: var(--space-1-5); }
+  select { min-width: 170px; padding: var(--space-1) var(--space-1-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; }
+  .vault { padding: var(--space-2-5) 0; border-top: 1px solid var(--line); }
+  .info { display: flex; align-items: baseline; gap: var(--space-2-5); min-width: 0; margin-bottom: var(--space-2); }
+  .name { flex: none; padding: 0; border: 0; background: none; color: var(--text); font-size: var(--font-md); font-weight: 600; }
+  .path { overflow: hidden; color: var(--text-3); font-size: var(--font-sm); white-space: nowrap; text-overflow: ellipsis; }
+  .seg, .clients { display: inline-flex; padding: var(--space-0-5); border-radius: var(--radius-md); background: var(--hover); flex-wrap: wrap; }
+  .seg button, .clients button { padding: var(--space-1) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); }
+  .seg .on, .clients .on { background: var(--raised); color: var(--text); box-shadow: var(--shadow-sm); }
+  .actions { display: flex; align-items: center; gap: var(--space-1-5); margin-top: var(--space-2); color: var(--text-2); font-size: var(--font-sm); }
+  .actions label { display: flex; align-items: center; gap: var(--space-1-5); }
+  .actions button, .code button { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); }
   .actions button:hover, .code button:hover { background: var(--hover); color: var(--text); }
   .spacer { flex: 1; }
-  .code { position: relative; margin: 10px 0 6px; }
-  pre { margin: 0; padding: 12px 76px 12px 12px; overflow-x: auto; border-radius: 8px; background: var(--panel); font: 12.5px/1.5 var(--mono); }
+  .code { position: relative; margin: var(--space-2-5) 0 var(--space-1-5); }
+  pre { margin: 0; padding: var(--space-3) 76px var(--space-3) var(--space-3); overflow-x: auto; border-radius: var(--radius-md); background: var(--panel); font: var(--font-sm)/1.5 var(--mono); }
   .code button { position: absolute; top: 8px; right: 8px; background: var(--raised); }
-  .plain { margin-top: 4px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text); font-size: 12.5px; }
+  .plain { margin-top: var(--space-1); padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: none; color: var(--text); font-size: var(--font-sm); }
   .plain:hover { background: var(--hover); }
-  .muted :global(code) { font: 12px var(--mono); }
-  .muted { margin: 4px 0; color: var(--text-2); font-size: 12.5px; }
-  .warn { color: var(--danger); font-size: 12.5px; }
+  .muted :global(code) { font: var(--font-sm) var(--mono); }
+  .muted { margin: var(--space-1) 0; color: var(--text-2); font-size: var(--font-sm); }
+  .warn { color: var(--danger); font-size: var(--font-sm); }
 </style>

@@ -170,20 +170,20 @@
 
 <style>
   .app { position: relative; display: grid; height: 100vh; overflow: hidden; }
-  .grip { position: absolute; top: 0; bottom: 0; z-index: 5; width: 6px; padding: 0; border: 0; background: none; cursor: col-resize; }
+  .grip { position: absolute; top: 0; bottom: 0; z-index: var(--z-raised); width: 6px; padding: 0; border: 0; background: none; cursor: col-resize; }
   .grip:hover { background: var(--line); }
   main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .content { display: flex; flex: 1; min-height: 0; background: var(--bg); }
   .pane { flex: 1 1 0; min-width: 0; min-height: 0; }
   .pane.hidden { display: none; }
   .pane.preview:not(:first-child) { border-left: 1px solid var(--line); }
-  .banner { display: flex; align-items: center; gap: 8px; padding: 7px 12px; flex: none; background: var(--warn); color: var(--text); font-size: 13px; }
+  .banner { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); flex: none; background: var(--warn); color: var(--text); font-size: var(--font-md); }
   .banner span { flex: 1; }
-  .banner button { padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--raised); color: var(--text); font-size: 12.5px; }
-  footer { display: flex; gap: 16px; align-items: center; height: 24px; flex: none; padding: 0 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+  .banner button { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--raised); color: var(--text); font-size: var(--font-sm); }
+  footer { display: flex; gap: var(--space-4); align-items: center; height: 24px; flex: none; padding: 0 var(--space-3); background: var(--panel); border-top: 1px solid var(--line); color: var(--text-3); font-size: var(--font-xs); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
   .spacer { flex: 1; }
   .where { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .adopt { flex: none; padding: 0; border: 0; background: none; color: var(--accent-text); font-size: inherit; }
   .adopt:hover { text-decoration: underline; }
-  .toast { position: fixed; bottom: 36px; left: 50%; z-index: 60; max-width: min(560px, calc(100vw - 32px)); padding: 9px 14px; border-radius: 8px; background: var(--text); color: var(--bg); box-shadow: var(--shadow); font-size: 13px; transform: translateX(-50%); }
+  .toast { position: fixed; bottom: 36px; left: 50%; z-index: var(--z-toast); max-width: min(560px, calc(100vw - 32px)); padding: var(--space-2-5) var(--space-3-5); border-radius: var(--radius-md); background: var(--text); color: var(--bg); box-shadow: var(--shadow-lg); font-size: var(--font-md); transform: translateX(-50%); }
 </style>

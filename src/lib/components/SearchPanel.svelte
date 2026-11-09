@@ -64,18 +64,18 @@
 </div>
 
 <style>
-  .panel { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 0 8px 8px; }
+  .panel { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 0 var(--space-2) var(--space-2); }
   input { width: 100%; }
-  .results { flex: 1; min-height: 0; margin-top: 8px; overflow-y: auto; }
-  .note + .note { margin-top: 6px; }
-  button { display: flex; width: 100%; border: 0; border-radius: 6px; background: none; color: var(--text); text-align: left; }
+  .results { flex: 1; min-height: 0; margin-top: var(--space-2); overflow-y: auto; }
+  .note + .note { margin-top: var(--space-1-5); }
+  button { display: flex; width: 100%; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text); text-align: left; }
   button:hover { background: var(--hover); }
-  .name { flex-direction: column; padding: 5px 8px 3px; }
-  .title { overflow: hidden; font-size: 13px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
-  .where { overflow: hidden; color: var(--text-3); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
-  .line { gap: 8px; padding: 3px 8px; }
-  .n { flex: none; min-width: 2.2em; color: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; line-height: 1.6; text-align: right; }
-  .text { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 12.5px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
-  mark { border-radius: 2px; background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text); }
-  p { padding: 8px; color: var(--text-3); font-size: 13px; }
+  .name { flex-direction: column; padding: var(--space-1-5) var(--space-2) var(--space-1); }
+  .title { overflow: hidden; font-size: var(--font-md); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+  .where { overflow: hidden; color: var(--text-3); font-size: var(--font-xs); white-space: nowrap; text-overflow: ellipsis; }
+  .line { gap: var(--space-2); padding: var(--space-1) var(--space-2); }
+  .n { flex: none; min-width: 2.2em; color: var(--text-3); font-size: var(--font-xs); font-variant-numeric: tabular-nums; line-height: 1.6; text-align: right; }
+  .text { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: var(--font-sm); line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
+  mark { border-radius: var(--radius-2xs); background: var(--found); color: var(--text); }
+  p { padding: var(--space-2); color: var(--text-3); font-size: var(--font-md); }
 </style>

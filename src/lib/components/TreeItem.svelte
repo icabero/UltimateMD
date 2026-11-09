@@ -68,9 +68,9 @@
 
 <style>
   .row {
-    display: flex; align-items: center; gap: 5px; width: 100%; height: 27px;
-    padding-right: 8px; border: 0; border-radius: 6px; background: none; color: var(--text-2);
-    font-size: 13px; text-align: left; cursor: default;
+    display: flex; align-items: center; gap: var(--space-1-5); width: 100%; height: 27px;
+    padding-right: var(--space-2); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2);
+    font-size: var(--font-md); text-align: left; cursor: default;
   }
   .row:hover { background: var(--hover); color: var(--text); }
   .row.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 500; }

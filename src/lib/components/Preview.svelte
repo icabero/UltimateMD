@@ -155,7 +155,7 @@
     root = host!.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
     style.textContent = `${previewCss}
-::highlight(${FOUND}) { background: color-mix(in srgb, var(--accent) 30%, transparent); }`;
+::highlight(${FOUND}) { background: var(--found); }`;
     body = document.createElement('article');
     body.className = 'prose';
     root.append(style, body);
@@ -198,7 +198,7 @@
   .scroll { height: 100%; overflow-y: auto; background: var(--bg); }
   .frame { display: flex; flex-direction: column; height: 100%; }
   iframe { flex: 1; min-height: 0; width: 100%; border: 0; background: #fff; }
-  .note { margin: 0; padding: 4px 12px; background: var(--panel); color: var(--text-3); font-size: 11.5px; }
-  .image { display: flex; align-items: center; justify-content: center; height: 100%; padding: 24px; overflow: auto; background: var(--bg); }
+  .note { margin: 0; padding: var(--space-1) var(--space-3); background: var(--panel); color: var(--text-3); font-size: var(--font-xs); }
+  .image { display: flex; align-items: center; justify-content: center; height: 100%; padding: var(--space-6); overflow: auto; background: var(--bg); }
   .image img { max-width: 100%; max-height: 100%; }
 </style>

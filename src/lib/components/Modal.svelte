@@ -33,12 +33,12 @@
 </form>
 
 <style>
-  .top { z-index: 50; }
-  .dialog { position: fixed; top: 22vh; left: 50%; z-index: 51; width: min(420px, calc(100vw - 32px)); padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translateX(-50%); }
-  p { margin: 0 0 12px; font-size: 13.5px; }
+  .top { z-index: var(--z-confirm-scrim); }
+  .dialog { position: fixed; top: 22vh; left: 50%; z-index: var(--z-confirm); width: min(420px, calc(100vw - 32px)); padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-lg); transform: translateX(-50%); }
+  p { margin: 0 0 var(--space-3); font-size: var(--font-md); }
   input { width: 100%; }
-  .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-  button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 7px; background: none; color: var(--text); font-size: 13px; }
+  .buttons { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-3-5); }
+  button { padding: var(--space-1-5) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: none; color: var(--text); font-size: var(--font-md); }
   .main { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
   .main.danger { border-color: var(--danger); background: none; color: var(--danger); }
 </style>

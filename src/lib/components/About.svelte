@@ -67,19 +67,19 @@
 </div>
 
 <style>
-  .modal { position: fixed; top: 50%; left: 50%; z-index: 31; width: min(440px, calc(100vw - 32px)); padding: 10px 20px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translate(-50%, -50%); }
+  .modal { position: fixed; top: 50%; left: 50%; z-index: var(--z-dialog); width: min(440px, calc(100vw - 32px)); padding: var(--space-2-5) var(--space-5) var(--space-5); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-lg); transform: translate(-50%, -50%); }
   header { display: flex; align-items: center; justify-content: space-between; }
-  h2 { margin: 6px 0; color: var(--text-2); font-size: 20px; font-weight: 400; letter-spacing: -.02em; }
+  h2 { margin: var(--space-1-5) 0; color: var(--text-2); font-size: var(--font-xl); font-weight: 400; letter-spacing: -.02em; }
   b { color: var(--text); font-weight: 700; }
-  h3 { margin: 18px 0 8px; font-size: 12.5px; font-weight: 650; }
-  p { margin: 0 0 8px; color: var(--text-2); font-size: 13px; line-height: 1.5; }
-  .version { color: var(--text-3); font-size: 12px; }
-  .links { display: flex; gap: 14px; }
-  .links button { padding: 0; border: 0; background: none; color: var(--accent-text); font-size: 12.5px; }
+  h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--font-sm); font-weight: 650; }
+  p { margin: 0 0 var(--space-2); color: var(--text-2); font-size: var(--font-md); line-height: 1.5; }
+  .version { color: var(--text-3); font-size: var(--font-sm); }
+  .links { display: flex; gap: var(--space-3-5); }
+  .links button { padding: 0; border: 0; background: none; color: var(--accent-text); font-size: var(--font-sm); }
   .links button:hover { text-decoration: underline; }
-  .check { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-2); font-size: 12.5px; }
+  .check { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); color: var(--text-2); font-size: var(--font-sm); }
   .bad { color: var(--danger); }
-  .plain { padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text); font-size: 12.5px; }
+  .plain { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: none; color: var(--text); font-size: var(--font-sm); }
   .plain:hover { background: var(--hover); }
-  label { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: var(--text-2); font-size: 12.5px; }
+  label { display: flex; align-items: center; gap: var(--space-1-5); margin-top: var(--space-3); color: var(--text-2); font-size: var(--font-sm); }
 </style>

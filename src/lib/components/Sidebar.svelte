@@ -156,26 +156,26 @@
 
 <style>
   aside { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--panel); border-right: 1px solid var(--line); }
-  header { display: flex; align-items: center; gap: 2px; padding: 10px 8px 8px 14px; }
-  .brand { flex: 1; font-size: 13.5px; letter-spacing: -.01em; color: var(--text-2); }
+  header { display: flex; align-items: center; gap: var(--space-0-5); padding: var(--space-2-5) var(--space-2) var(--space-2) var(--space-3-5); }
+  .brand { flex: 1; font-size: var(--font-md); letter-spacing: -.01em; color: var(--text-2); }
   .brand b { color: var(--text); font-weight: 700; }
-  .vaults { flex: 1; min-height: 0; overflow-y: auto; padding: 0 6px 8px; }
-  .vault { margin-bottom: 8px; border-radius: 8px; }
+  .vaults { flex: 1; min-height: 0; overflow-y: auto; padding: 0 var(--space-1-5) var(--space-2); }
+  .vault { margin-bottom: var(--space-2); border-radius: var(--radius-md); }
   .vault.drop { background: var(--accent-soft); }
   .vhead { display: flex; align-items: center; height: 30px; }
   .vhead .small { opacity: 0; }
   .vhead:hover .small, .vhead .small:focus-visible { opacity: 1; }
-  .vname { display: flex; flex: 1; align-items: center; gap: 6px; min-width: 0; padding: 0 4px; border: 0; background: none; color: var(--text); font-size: 12.5px; font-weight: 600; text-align: left; }
+  .vname { display: flex; flex: 1; align-items: center; gap: var(--space-1-5); min-width: 0; padding: 0 var(--space-1); border: 0; background: none; color: var(--text); font-size: var(--font-sm); font-weight: 600; text-align: left; }
   .label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .chev { display: flex; flex: none; color: var(--text-3); transition: transform .12s; }
   .chev.open { transform: rotate(90deg); }
-  .dot { flex: none; width: 8px; height: 8px; border-radius: 2px; }
-  .empty { margin: 2px 0 6px 28px; color: var(--text-3); font-size: 12.5px; }
-  footer { display: flex; gap: 4px; padding: 8px; border-top: 1px solid var(--line); }
-  footer button { display: flex; flex: 1; align-items: center; justify-content: center; gap: 5px; height: 30px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 12px; white-space: nowrap; }
+  .dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-2xs); }
+  .empty { margin: var(--space-0-5) 0 var(--space-1-5) var(--space-8); color: var(--text-3); font-size: var(--font-sm); }
+  footer { display: flex; gap: var(--space-1); padding: var(--space-2); border-top: 1px solid var(--line); }
+  footer button { display: flex; flex: 1; align-items: center; justify-content: center; gap: var(--space-1-5); height: 30px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); white-space: nowrap; }
   footer button:hover { background: var(--hover); color: var(--text); }
-  .menu { position: fixed; z-index: 40; min-width: 180px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); box-shadow: var(--shadow); }
-  .menu button { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: var(--text); font-size: 13px; text-align: left; }
+  .menu { position: fixed; z-index: var(--z-menu); min-width: 180px; padding: var(--space-1); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--raised); box-shadow: var(--shadow-lg); }
+  .menu button { display: block; width: 100%; padding: var(--space-1-5) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text); font-size: var(--font-md); text-align: left; }
   .menu button:hover { background: var(--hover); }
   .menu .danger { color: var(--danger); }
 </style>

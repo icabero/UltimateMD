@@ -48,13 +48,13 @@
     '.cm-scroller': { fontFamily: 'var(--mono)', fontSize: '13.5px', lineHeight: '1.65', overflow: 'auto' },
     '.cm-content': { padding: '20px 0 40vh', caretColor: 'var(--accent)' },
     '.cm-line': { padding: '0 22px' },
-    '.cm-gutters': { background: 'var(--bg)', color: 'var(--text-3)', border: 'none', fontSize: '11.5px' },
+    '.cm-gutters': { background: 'var(--bg)', color: 'var(--text-3)', border: 'none', fontSize: 'var(--font-xs)' },
     '.cm-activeLine, .cm-activeLineGutter': { background: 'var(--hover)' },
     '.cm-cursor': { borderLeftColor: 'var(--accent)', borderLeftWidth: '2px' },
     '.cm-selectionBackground, &.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { background: 'var(--selection) !important' },
     '.cm-panels': { background: 'var(--panel)', color: 'var(--text)', borderColor: 'var(--line)' },
     '.cm-searchMatch': { background: 'var(--accent-soft)' },
-    '.cm-found': { background: 'color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: '2px' },
+    '.cm-found': { background: 'var(--found)', borderRadius: 'var(--radius-2xs)' },
   });
 
   // The words of a search, marked until the next edit.

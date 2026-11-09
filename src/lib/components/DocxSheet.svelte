@@ -3,7 +3,7 @@
   const CSS = `
     :host { display: block; }
     .docx-wrapper { padding: 0 !important; background: none !important; }
-    .docx-wrapper > section.docx { margin: 0 auto 12px !important; box-shadow: 0 1px 4px rgb(0 0 0 / 30%) !important; font-size: 10pt; }
+    .docx-wrapper > section.docx { margin: 0 auto var(--space-3) !important; box-shadow: var(--shadow-md) !important; font-size: 10pt; }
   `;
 
   let host = $state<HTMLDivElement>();

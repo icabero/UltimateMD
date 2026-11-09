@@ -65,13 +65,13 @@
 </div>
 
 <style>
-  .top { z-index: 32; }
-  .modal { position: fixed; top: 50%; left: 50%; z-index: 33; width: min(460px, calc(100vw - 32px)); padding: 8px 18px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translate(-50%, -50%); }
+  .top { z-index: var(--z-nested-scrim); }
+  .modal { position: fixed; top: 50%; left: 50%; z-index: var(--z-nested); width: min(460px, calc(100vw - 32px)); padding: var(--space-2) var(--space-5) var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-lg); transform: translate(-50%, -50%); }
   header { display: flex; align-items: center; justify-content: space-between; }
-  h2 { margin: 8px 0; font-size: 15px; font-weight: 650; }
-  label { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; color: var(--text-2); font-size: 13px; }
-  select { flex: none; width: 210px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
-  p { margin: 14px 0 10px; color: var(--text-2); font-size: 12.5px; line-height: 1.5; }
-  .plain { padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text); font-size: 12.5px; }
+  h2 { margin: var(--space-2) 0; font-size: var(--font-lg); font-weight: 650; }
+  label { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2-5); margin-top: var(--space-2); color: var(--text-2); font-size: var(--font-md); }
+  select { flex: none; width: 210px; padding: var(--space-1) var(--space-1-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; }
+  p { margin: var(--space-3-5) 0 var(--space-2-5); color: var(--text-2); font-size: var(--font-sm); line-height: 1.5; }
+  .plain { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: none; color: var(--text); font-size: var(--font-sm); }
   .plain:hover { background: var(--hover); }
 </style>

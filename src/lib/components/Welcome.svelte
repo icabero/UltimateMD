@@ -18,12 +18,12 @@
 </div>
 
 <style>
-  .wrap { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 24px; background: var(--bg); text-align: center; }
-  h1 { margin: 0 0 14px; color: var(--text-2); font-size: 26px; font-weight: 400; letter-spacing: -.02em; }
+  .wrap { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: var(--space-6); background: var(--bg); text-align: center; }
+  h1 { margin: 0 0 var(--space-3-5); color: var(--text-2); font-size: var(--font-2xl); font-weight: 400; letter-spacing: -.02em; }
   b { color: var(--text); font-weight: 700; }
-  p { max-width: 380px; color: var(--text-2); font-size: 14px; line-height: 1.5; }
-  dl { display: grid; gap: 7px; margin: 8px 0 0; }
-  div { display: flex; gap: 12px; align-items: center; font-size: 13px; }
-  dt { min-width: 104px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--text-2); font: 11.5px var(--mono); }
+  p { max-width: 380px; color: var(--text-2); font-size: var(--font-base); line-height: 1.5; }
+  dl { display: grid; gap: var(--space-2); margin: var(--space-2) 0 0; }
+  div { display: flex; gap: var(--space-3); align-items: center; font-size: var(--font-md); }
+  dt { min-width: 104px; padding: var(--space-0-5) var(--space-2); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--text-2); font: var(--font-xs) var(--mono); }
   dd { margin: 0; color: var(--text-2); }
 </style>

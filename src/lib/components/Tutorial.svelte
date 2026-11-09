@@ -51,19 +51,19 @@
 </div>
 
 <style>
-  .shade { position: fixed; inset: 0; z-index: 70; }
-  .tutorial { position: fixed; top: 50%; left: 50%; z-index: 71; display: flex; flex-direction: column; width: min(520px, calc(100vw - 32px)); min-height: 340px; max-height: calc(100vh - 32px); padding: 22px 24px 18px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); box-shadow: var(--shadow); transform: translate(-50%, -50%); }
-  .count { margin: 0 0 6px; color: var(--text-3); font-size: 12px; }
-  h2 { margin: 0 0 10px; font-size: 19px; font-weight: 650; letter-spacing: -.01em; }
-  .body { margin: 0; color: var(--text-2); font-size: 14px; line-height: 1.55; }
-  pre { margin: 14px 0 0; padding: 10px 12px; overflow-x: auto; border-radius: 8px; background: var(--panel); font: 12.5px/1.5 var(--mono); }
-  .language { display: flex; align-items: center; gap: 10px; margin-top: 16px; color: var(--text-2); font-size: 13px; }
-  select { min-width: 170px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
-  .dots { display: flex; gap: 6px; justify-content: center; margin-top: auto; padding-top: 18px; }
+  .shade { position: fixed; inset: 0; z-index: var(--z-tour-scrim); }
+  .tutorial { position: fixed; top: 50%; left: 50%; z-index: var(--z-tour); display: flex; flex-direction: column; width: min(520px, calc(100vw - 32px)); min-height: 340px; max-height: calc(100vh - 32px); padding: var(--space-6) var(--space-6) var(--space-5); overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-xl); background: var(--raised); box-shadow: var(--shadow-lg); transform: translate(-50%, -50%); }
+  .count { margin: 0 0 var(--space-1-5); color: var(--text-3); font-size: var(--font-sm); }
+  h2 { margin: 0 0 var(--space-2-5); font-size: var(--font-xl); font-weight: 650; letter-spacing: -.01em; }
+  .body { margin: 0; color: var(--text-2); font-size: var(--font-base); line-height: 1.55; }
+  pre { margin: var(--space-3-5) 0 0; padding: var(--space-2-5) var(--space-3); overflow-x: auto; border-radius: var(--radius-md); background: var(--panel); font: var(--font-sm)/1.5 var(--mono); }
+  .language { display: flex; align-items: center; gap: var(--space-2-5); margin-top: var(--space-4); color: var(--text-2); font-size: var(--font-md); }
+  select { min-width: 170px; padding: var(--space-1-5) var(--space-2); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; }
+  .dots { display: flex; gap: var(--space-1-5); justify-content: center; margin-top: auto; padding-top: var(--space-5); }
   .dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
   .dots .on { background: var(--accent); }
-  footer { display: flex; gap: 8px; margin-top: 14px; }
-  footer button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 7px; background: none; color: var(--text); font-size: 13px; }
+  footer { display: flex; gap: var(--space-2); margin-top: var(--space-3-5); }
+  footer button { padding: var(--space-1-5) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: none; color: var(--text); font-size: var(--font-md); }
   footer .main { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
   .spacer { flex: 1; }
 </style>

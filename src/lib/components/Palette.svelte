@@ -66,12 +66,12 @@
 </div>
 
 <style>
-  .box { position: fixed; top: 12vh; left: 50%; z-index: 31; width: min(600px, calc(100vw - 32px)); padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translateX(-50%); }
+  .box { position: fixed; top: 12vh; left: 50%; z-index: var(--z-dialog); width: min(600px, calc(100vw - 32px)); padding: var(--space-2); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-lg); transform: translateX(-50%); }
   input { width: 100%; }
-  .list { max-height: 50vh; margin-top: 6px; overflow-y: auto; }
-  .list button { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 7px 9px; border: 0; border-radius: 6px; background: none; color: var(--text); font-size: 13px; text-align: left; }
+  .list { max-height: 50vh; margin-top: var(--space-1-5); overflow-y: auto; }
+  .list button { display: flex; justify-content: space-between; gap: var(--space-3); width: 100%; padding: var(--space-2) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text); font-size: var(--font-md); text-align: left; }
   .list button.on { background: var(--accent-soft); }
   .path { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .vault { flex: none; color: var(--text-3); font-size: 12px; }
-  p { padding: 8px; color: var(--text-3); font-size: 13px; }
+  .vault { flex: none; color: var(--text-3); font-size: var(--font-sm); }
+  p { padding: var(--space-2); color: var(--text-3); font-size: var(--font-md); }
 </style>
