@@ -237,6 +237,21 @@ test('the links tab shows who links here and opens them', async ({ page }) => {
   await expect(notePanel(page).getByRole('button', { name: 'Inicio' })).toBeVisible();
 });
 
+test('app shortcuts never reach the editor, where macOS gives Ctrl keys their own meaning', async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' }));
+  await page.reload();
+  await open(page, 'Otra');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.press('Control+Shift+o');
+  await page.keyboard.press('Control+Shift+o');
+  await page.keyboard.press('Control+Shift+e');
+  await page.keyboard.press('Control+Shift+e');
+  await page.waitForTimeout(800);
+  expect(await disk(page, 'b', 'Otra.md')).toBe('# Otra\n');
+  await expect(page.locator('.cm-content')).toHaveText('# Otra');
+});
+
 test('both side bars hide with shortcuts and the choice is kept', async ({ page }) => {
   await open(page, 'Inicio');
   await page.keyboard.press('Control+Shift+o');

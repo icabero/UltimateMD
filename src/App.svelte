@@ -84,20 +84,23 @@
       },
       tab: () => store.cycleTab(e.shiftKey ? -1 : 1),
     };
-    if (e.shiftKey && key === 'f') {
-      e.preventDefault();
-      store.searching = true;
-      store.toggleBar('left', true);
-    } else if (e.shiftKey && key === 'e') {
-      e.preventDefault();
-      store.toggleBar('left');
-    } else if (e.shiftKey && key === 'o') {
-      e.preventDefault();
-      if (tab?.kind === 'md') store.toggleBar('right');
-    } else if (actions[key] && (!e.shiftKey || key === 'tab')) {
-      e.preventDefault();
-      actions[key]();
-    }
+    const shifted: Record<string, () => void> = {
+      f: () => {
+        store.searching = true;
+        store.toggleBar('left', true);
+      },
+      e: () => store.toggleBar('left'),
+      o: () => {
+        if (tab?.kind === 'md') store.toggleBar('right');
+      },
+      tab: actions.tab,
+    };
+    const run = e.shiftKey ? shifted[key] : actions[key];
+    if (!run) return;
+    // Caught before the editor sees it: on macOS, Ctrl+O, P, N and E also edit or move the cursor there.
+    e.preventDefault();
+    e.stopPropagation();
+    run();
   }
 
   const clampWidth = (width: number) => Math.min(480, Math.max(180, width));
@@ -130,7 +133,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onKey} onblur={() => store.saveAll()} onresize={() => store.setWindowWidth(innerWidth)} />
+<svelte:window onkeydowncapture={onKey} onblur={() => store.saveAll()} onresize={() => store.setWindowWidth(innerWidth)} />
 
 <div class="app" style:grid-template-columns={columns}>
   {#if store.showLeft}
