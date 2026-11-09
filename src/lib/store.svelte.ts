@@ -5,6 +5,7 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { anchorLabel, findAnchor, parseAnchor } from './anchors';
 import { api, type TreeNode, type Vault, type VaultThemes } from './api';
 import { fold } from './fold';
+import { fillTemplate } from './noteTemplates';
 import { withColors, type DiagramStyle } from './diagramStyle';
 import { tr } from './i18n.svelte';
 import { baseName, dirName, join, kindOf, linkFrom, resolveLink, type FileKind } from './paths';
@@ -213,6 +214,8 @@ class Store {
   themeEditor = $state<string | null>(null);
   /** The vault whose Word settings are open. */
   wordScreen = $state<string | null>(null);
+  /** Where a note from a template goes, while choosing the template. */
+  templatePicker = $state<{ vaultId: string; dir: string } | null>(null);
   /** Taken by the editor, or the preview when it shows alone. */
   reveal = $state<Reveal | null>(null);
   layout = $state(loadLayout());
@@ -647,6 +650,41 @@ class Store {
     if (name?.trim()) await this.createNote(vaultId, tab ? dirName(tab.path) : '', name.trim());
   }
 
+  /** Chooses a template for a new note beside the one open, or in the first vault. */
+  newNoteFromTemplate(vaultId?: string, dir?: string) {
+    const tab = this.active;
+    const vault = vaultId ?? (tab && !tab.loose ? tab.vaultId : this.openVaults[0]?.id);
+    if (!vault) return this.notify(tr('app.openVaultFirst'));
+    this.templatePicker = { vaultId: vault, dir: dir ?? (tab && tab.vaultId === vault ? dirName(tab.path) : '') };
+  }
+
+  /** Asks for a name and creates the note, filled from a template or blank. */
+  async createFromTemplate(vaultId: string, dir: string, template: string | null) {
+    const name = (await this.prompt(tr('sidebar.noteName'), '', tr('common.create')))?.trim();
+    if (!name) return;
+    let content = '';
+    if (template) {
+      try {
+        content = fillTemplate(await api.noteTemplate(vaultId, template), { titulo: name.replace(/\.md$/i, ''), vault: this.vault(vaultId)?.name ?? '' });
+      } catch (e) {
+        return this.notify(e);
+      }
+    }
+    await this.createNote(vaultId, dir, name, content);
+  }
+
+  /** Keeps the note open as a template of its vault. */
+  async saveAsTemplate(tab: Tab) {
+    const name = (await this.prompt(tr('templates.name'), baseName(tab.path).replace(/\.(md|markdown)$/i, ''), tr('common.save')))?.trim();
+    if (!name) return;
+    try {
+      await api.saveNoteTemplate(tab.vaultId, name, tab.content);
+      this.notify(tr('templates.saved', { name }));
+    } catch (e) {
+      this.notify(e);
+    }
+  }
+
   /** Opens a note at a line, with the words of a search marked. */
   async openAt(vaultId: string, path: string, line: number, terms: string[]) {
     await this.openFile(vaultId, path);
@@ -752,11 +790,11 @@ class Store {
     }
   }
 
-  async createNote(vaultId: string, dir: string, name: string) {
+  async createNote(vaultId: string, dir: string, name: string, content = '') {
     const file = /\.(md|markdown|html?)$/i.test(name) ? name : `${name}.md`;
     const path = join(dir, file);
     try {
-      await api.create(vaultId, path, '');
+      await api.create(vaultId, path, content);
       await this.refreshTree(vaultId);
       await this.openFile(vaultId, path);
     } catch (e) {

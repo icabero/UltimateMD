@@ -70,6 +70,8 @@
   const commands = $derived<Command[]>(
     [
       { id: 'note.new', label: tr('cmd.newNote'), keys: ['Ctrl', 'N'], run: () => void store.newNote() },
+      { id: 'note.template', label: tr('cmd.fromTemplate'), when: store.openVaults.length > 0, run: () => store.newNoteFromTemplate() },
+      { id: 'note.saveTemplate', label: tr('cmd.saveAsTemplate'), when: md && !tab?.loose, run: () => tab && void store.saveAsTemplate(tab) },
       { id: 'note.open', label: tr('cmd.openNote'), keys: ['Ctrl', 'P'], run: () => switchTo('') },
       { id: 'note.heading', label: tr('cmd.goToHeading'), when: md, run: () => switchTo('#') },
       { id: 'search', label: tr('cmd.searchAll'), keys: ['Ctrl', 'Shift', 'F'], run: () => { store.searching = true; store.toggleBar('left', true); } },

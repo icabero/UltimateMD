@@ -18,7 +18,7 @@ use ultimatemd_core::word_settings::{self, WordSettings};
 use ultimatemd_core::{
     Error, McpAccess, Note, Registry, Result, SearchHit, TreeNode, Vault, VaultFs, WriteMode, search,
 };
-use ultimatemd_core::{docx, templates};
+use ultimatemd_core::{docx, note_templates, templates};
 
 const SEARCH_LIMIT: usize = 200;
 /// In an export plan, the template kept in the vault itself.
@@ -139,6 +139,27 @@ pub fn create_dir(id: String, path: String) -> Result<()> {
 /// Moves or renames, rewriting the links that would otherwise break.
 pub fn rename_path(id: String, from: String, to: String) -> Result<links::LinkUpdate> {
     links::move_path(&fs(&id)?, &from, &to)
+}
+
+/// The names of the vault's note templates.
+#[tauri::command(async)]
+pub fn note_templates(id: String) -> Result<Vec<String>> {
+    note_templates::list(fs(&id)?.root())
+}
+
+#[tauri::command(async)]
+pub fn note_template(id: String, name: String) -> Result<String> {
+    note_templates::read(fs(&id)?.root(), &name)
+}
+
+#[tauri::command(async)]
+pub fn save_note_template(id: String, name: String, content: String) -> Result<()> {
+    note_templates::save(fs(&id)?.root(), &name, &content)
+}
+
+#[tauri::command(async)]
+pub fn delete_note_template(id: String, name: String) -> Result<()> {
+    note_templates::delete(fs(&id)?.root(), &name)
 }
 
 /// Saves an image pasted or dropped into a note. Its path in the vault.

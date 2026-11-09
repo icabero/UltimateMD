@@ -765,6 +765,51 @@ test('dropped images keep their name, never replace a file and can go beside the
   await expect(prose(page).locator('img')).toHaveCount(2);
 });
 
+async function runAction(page: Page, words: string) {
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type(words);
+  await page.keyboard.press('Enter');
+}
+
+test('a note saved as a template fills in a new note', async ({ page }) => {
+  await page.evaluate(() => (window as any).__test.externalWrite('a', 'Modelo.md', '# {{titulo}}\n\nVault: {{vault}}\nFecha: {{fecha}}\nQueda: {{desconocido}}\n'));
+  await open(page, 'Modelo');
+  await runAction(page, 'guardar como plantilla');
+  const form = page.getByRole('form', { name: 'Nombre de la plantilla' });
+  await form.getByRole('textbox').fill('Acta');
+  await form.getByRole('button', { name: 'Guardar' }).click();
+  await expect(page.getByRole('status')).toHaveText('Plantilla «Acta» guardada');
+
+  await runAction(page, 'desde plantilla');
+  const picker = page.getByRole('dialog', { name: 'Nueva nota desde plantilla' });
+  await expect(picker.getByRole('option')).toHaveText(['Nota en blanco', 'Acta']);
+  await picker.getByRole('button', { name: 'Acta', exact: true }).click();
+  await page.getByRole('form', { name: 'Nombre de la nota' }).getByRole('textbox').fill('Reunión lunes');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main footer')).toContainText('Trabajo / Reunión lunes.md');
+  const text = await disk(page, 'a', 'Reunión lunes.md');
+  const today = await page.evaluate(() => new Date().toLocaleDateString('es'));
+  expect(text).toBe(`# Reunión lunes\n\nVault: Trabajo\nFecha: ${today}\nQueda: {{desconocido}}\n`);
+});
+
+test('the template list offers a blank note and deletes templates', async ({ page }) => {
+  await page.locator('aside').getByRole('button', { name: 'Trabajo', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Nueva nota desde plantilla' }).click();
+  const picker = page.getByRole('dialog', { name: 'Nueva nota desde plantilla' });
+  await expect(picker).toContainText('Este vault aún no tiene plantillas');
+  // Enter takes the first option, a blank note.
+  await page.keyboard.press('Enter');
+  await page.getByRole('form', { name: 'Nombre de la nota' }).getByRole('textbox').fill('Vacía');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main footer')).toContainText('Trabajo / Vacía.md');
+  expect(await disk(page, 'a', 'Vacía.md')).toBe('');
+  await page.evaluate(() => (window as any).__TAURI_INTERNALS__.invoke('save_note_template', { id: 'a', name: 'Ficha', content: 'x' }));
+  await runAction(page, 'desde plantilla');
+  await picker.getByTitle('Borrar la plantilla «Ficha»').click();
+  await page.getByRole('form', { name: '¿Borrar la plantilla «Ficha»?' }).getByRole('button', { name: 'Eliminar' }).click();
+  await expect(picker.getByRole('option')).toHaveText(['Nota en blanco']);
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();

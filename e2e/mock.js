@@ -41,6 +41,7 @@
   };
   const listeners = {};
   const staged = {};
+  const noteTemplates = { a: {}, b: {} };
 
   function tree(id) {
     const root = [];
@@ -140,6 +141,13 @@
       delete staged[token];
       return Object.keys(moved)[0];
     },
+    note_templates: ({ id }) => Object.keys(noteTemplates[id]).sort(),
+    note_template: ({ id, name }) => {
+      if (!(name in noteTemplates[id])) throw `not found: ${name}`;
+      return noteTemplates[id][name];
+    },
+    save_note_template: ({ id, name, content }) => void (noteTemplates[id][name] = content),
+    delete_note_template: ({ id, name }) => void delete noteTemplates[id][name],
     // Like the backend: a free name, numbered if taken.
     save_image: ({ id, dir, name }) => {
       const [stem, ext] = [name.replace(/\.[^.]+$/, ''), name.split('.').pop()];

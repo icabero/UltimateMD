@@ -7,6 +7,7 @@
   import Export from './lib/components/Export.svelte';
   import Modal from './lib/components/Modal.svelte';
   import WindowControls from './lib/components/WindowControls.svelte';
+  import TemplatePicker from './lib/components/TemplatePicker.svelte';
   import { IS_MAC, frame } from './lib/frame.svelte';
   import NotePanel from './lib/components/NotePanel.svelte';
   import Palette from './lib/components/Palette.svelte';
@@ -201,6 +202,7 @@
 {#if store.about}<About />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
 {#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
+{#if store.templatePicker}<TemplatePicker {...store.templatePicker} />{/if}
 {#if store.exporting && tab}<Export {tab} />{/if}
 {#if store.dialog}
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}
