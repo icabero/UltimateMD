@@ -155,6 +155,8 @@ npm run dev     # abre la app
 npm run build   # crea los instaladores para tu sistema
 ```
 
+Las capturas de `site/img` salen de la interfaz real, con un vault de ejemplo inventado: `npm run screenshots` las vuelve a generar.
+
 ## Contribuir
 
 El código es abierto y puedes usarlo, estudiarlo o adaptarlo con su licencia. El desarrollo es privado por ahora: no se aceptan pull requests sin acuerdo previo. Si encuentras un fallo o tienes una idea, abre una [issue](https://github.com/icabero/UltimateMD/issues). Para avisar de un problema de seguridad, sigue la [política de seguridad](SECURITY.md).
