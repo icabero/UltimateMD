@@ -30,6 +30,12 @@ export interface VaultHit {
   hit: { path: string; line: number; text: string; score: number };
 }
 
+/** Links rewritten by a move, and the notes they are in, at their new paths. */
+export interface LinkUpdate {
+  links: number;
+  notes: string[];
+}
+
 export interface LinkInfo {
   outgoing: string[];
   unresolved: string[];
@@ -121,7 +127,8 @@ export const api = {
     invoke<string>('write_note', { id, path, content, expected }),
   create: (id: string, path: string, content: string) => invoke<string>('create_note', { id, path, content }),
   createDir: (id: string, path: string) => invoke<void>('create_dir', { id, path }),
-  rename: (id: string, from: string, to: string) => invoke<void>('rename_path', { id, from, to }),
+  /** Moves or renames, rewriting the links that would break. */
+  rename: (id: string, from: string, to: string) => invoke<LinkUpdate>('rename_path', { id, from, to }),
   trash: (id: string, path: string) => invoke<void>('trash_path', { id, path }),
   search: (query: string) => invoke<VaultHit[]>('search_all', { query }),
   links: (id: string, path: string) => invoke<LinkInfo>('note_links', { id, path }),

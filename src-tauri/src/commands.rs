@@ -134,8 +134,9 @@ pub fn create_dir(id: String, path: String) -> Result<()> {
 }
 
 #[tauri::command(async)]
-pub fn rename_path(id: String, from: String, to: String) -> Result<()> {
-    fs(&id)?.rename(&from, &to)
+/// Moves or renames, rewriting the links that would otherwise break.
+pub fn rename_path(id: String, from: String, to: String) -> Result<links::LinkUpdate> {
+    links::move_path(&fs(&id)?, &from, &to)
 }
 
 #[tauri::command(async)]

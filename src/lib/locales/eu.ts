@@ -70,6 +70,9 @@ export const eu: Record<Key, string> = {
 
   'search.placeholder': 'Bilatu irekitako vaultetan',
   'search.empty': 'Emaitzarik ez',
+  'links.updatedOne': 'Esteka bat eguneratu da: «{note}»',
+  'links.updatedNote': '{links} esteka eguneratu dira: «{note}»',
+  'links.updatedMany': '{links} esteka eguneratu dira {notes} oharretan',
 
   'preview.pngFailed': 'Ezin izan da PNGa sortu. Saiatu SVG gisa esportatzen.',
   'preview.createMissing': '«{name}» oharra ez dago. Sortu nahi duzu?',

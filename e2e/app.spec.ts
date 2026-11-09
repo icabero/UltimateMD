@@ -170,6 +170,20 @@ test('the quick switcher ignores accents', async ({ page }) => {
   await expect(page.locator('main footer')).toContainText('Trabajo / dir/sub/Hondo.md');
 });
 
+test('renaming a note updates the links to it, also in open tabs', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.locator('aside').getByRole('button', { name: 'dir', exact: true }).click();
+  await page.locator('aside').getByRole('button', { name: 'Destino', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Renombrar' }).click();
+  await page.getByRole('form', { name: 'Nuevo nombre' }).getByRole('textbox').fill('Meta.md');
+  await page.getByRole('form', { name: 'Nuevo nombre' }).getByRole('button', { name: 'Renombrar' }).click();
+  await expect(page.getByRole('status')).toHaveText('Se actualizó un enlace en «Inicio»');
+  expect(await disk(page, 'a', 'Inicio.md')).toContain('Ver [[Meta]] y [[Falta]].');
+  await page.getByRole('tab', { name: /Inicio/ }).click();
+  await expect(page.locator('.cm-content')).toContainText('Ver [[Meta]] y [[Falta]].');
+  await expect(page.locator('main footer')).toContainText('Trabajo / Inicio.md');
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();

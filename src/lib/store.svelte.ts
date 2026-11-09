@@ -495,12 +495,13 @@ class Store {
     }
   }
 
-  /** Moves a file or folder and repoints any tabs inside it. */
+  /** Moves a file or folder, repoints any tabs inside it and rewrites the links that would break. */
   async move(vaultId: string, from: string, to: string) {
     if (from === to) return;
     await this.saveAll();
+    let update;
     try {
-      await api.rename(vaultId, from, to);
+      update = await api.rename(vaultId, from, to);
     } catch (e) {
       this.notify(e);
       return;
@@ -515,8 +516,14 @@ class Store {
         if (wasActive) this.activeKey = tab.key;
       }
     }
-    await this.refreshTree(vaultId);
+    // Open tabs of the notes rewritten show the new links.
+    await this.onChanged({ vaultId, paths: update.notes });
     this.persist();
+    const { links, notes } = update;
+    if (links === 0) return;
+    const note = baseName(notes[0]).replace(/\.(md|markdown)$/i, '');
+    if (notes.length > 1) this.notify(tr('links.updatedMany', { links, notes: notes.length }));
+    else this.notify(tr(links === 1 ? 'links.updatedOne' : 'links.updatedNote', { links, note }));
   }
 
   async renameEntry(vaultId: string, path: string, name: string) {
