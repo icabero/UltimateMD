@@ -388,6 +388,7 @@ impl ExportPlan {
             template: template.as_deref(),
             settings: &word_settings::load(root.root()),
             inline_numbering,
+            language: &self.language,
         })
     }
 

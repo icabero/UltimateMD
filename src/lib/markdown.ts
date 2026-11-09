@@ -5,6 +5,7 @@ import taskLists from 'markdown-it-task-lists';
 import hljs from 'highlight.js/lib/common';
 import DOMPurify from 'dompurify';
 import { fileUrl } from './api';
+import { shapeCallouts } from './callouts';
 import { splitFence } from './diagramStyle';
 import { dirName, kindOf, resolveLink, resolveRelative } from './paths';
 
@@ -173,6 +174,7 @@ export function renderMarkdown(text: string, ctx: RenderContext): DocumentFragme
     ADD_ATTR: ['data-lang', 'data-src', 'data-style', 'data-embed', 'data-wikilink'],
     FORBID_TAGS: ['form', 'iframe', 'object', 'embed', 'base', 'link', 'meta'],
   });
+  shapeCallouts(fragment);
   linkContent(fragment, ctx);
   return fragment;
 }

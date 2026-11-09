@@ -637,6 +637,43 @@ test('typing [[note# suggests its headings', async ({ page }) => {
   await expect(page.locator('.cm-activeLine')).toHaveText('[[Larga#Segunda parte]]');
 });
 
+const CALLOUTS = '# Avisos\n\n> [!warning] Hielo fino\n> No cruzar de noche.\n\n> [!tip]\n> Llevar crampones.\n\n> [!faq]- Plegado\n> Oculto al abrir.\n\n> [!note] **Negrita** y más\n> Cuerpo.\n\n> Una cita normal.\n';
+
+async function calloutNote(page: Page) {
+  await page.evaluate((text) => (window as any).__test.externalWrite('a', 'Avisos.md', text), CALLOUTS);
+  await page.locator('aside').getByRole('button', { name: 'Avisos', exact: true }).click();
+}
+
+test('callouts show as coloured boxes with their title', async ({ page }) => {
+  await calloutNote(page);
+  const boxes = prose(page).locator('.callout');
+  await expect(boxes).toHaveCount(4);
+  await expect(boxes.locator('.callout-title')).toHaveText(['Hielo fino', 'Consejo', 'Plegado', 'Negrita y más']);
+  await expect(boxes.nth(0)).toHaveAttribute('data-callout', 'warning');
+  await expect(boxes.nth(2)).toHaveAttribute('data-callout', 'important');
+  await expect(boxes.nth(0).locator('.callout-body')).toHaveText('No cruzar de noche.');
+  await expect(boxes.nth(1).locator('.callout-body')).toHaveText('Llevar crampones.');
+  // A folded one opens on a click.
+  await expect(boxes.nth(2).getByText('Oculto al abrir.')).toBeHidden();
+  await boxes.nth(2).locator('summary').click();
+  await expect(boxes.nth(2).getByText('Oculto al abrir.')).toBeVisible();
+  await expect(prose(page).locator('blockquote')).toHaveText('Una cita normal.');
+  await expect(page.locator('.cm-line.cm-v-callout')).toHaveCount(0);
+  await page.getByTitle('Visual', { exact: true }).click();
+  await expect(page.locator('.cm-line.cm-v-callout-warning').first()).toBeVisible();
+});
+
+test('an HTML export keeps callouts and opens folded ones', async ({ page }) => {
+  await calloutNote(page);
+  await exportAs(page, 'HTML');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+  const html = await page.evaluate(() => (window as any).__exported.text);
+  expect(html).toContain('data-callout="warning"');
+  expect(html).toMatch(/<details[^>]*open/);
+  expect(html).toContain('.callout[data-callout');
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();

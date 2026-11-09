@@ -251,6 +251,8 @@ export async function buildContent(tab: Tab, options: ExportOptions, onProgress?
     shiftHeadings(part, section.shift);
     root.append(part);
   }
+  // A document shows folded callouts open.
+  for (const box of root.querySelectorAll('details')) box.open = true;
   // Drawing diagrams and reading images is the slow part.
   const slow = root.querySelectorAll('.diagram, [data-path]').length;
   let done = 0;
