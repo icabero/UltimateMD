@@ -195,7 +195,98 @@ impl Vault {
         // trash expects the ordinary form.
         trash::delete(dunce::simplified(&path)).map_err(|e| Error::Trash(e.to_string()))
     }
+
+    /// Moves a file or folder aside, so a deletion can be undone for a while.
+    /// Returns the token that undoes it or sends it to the trash for good.
+    pub fn trash_later(&self, rel: &str) -> Result<String> {
+        let origin = normalize(rel)?;
+        if origin.is_empty() {
+            return Err(Error::PathNotAllowed(rel.to_string()));
+        }
+        let src = resolve(&self.root, rel)?;
+        if !src.exists() {
+            return Err(Error::NotFound(rel.to_string()));
+        }
+        let token = uuid::Uuid::new_v4().simple().to_string();
+        let dir = self.root.join(STAGING).join(&token);
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(dir.join(ORIGIN), &origin)?;
+        let name = src.file_name().ok_or_else(|| Error::PathNotAllowed(rel.to_string()))?;
+        if let Err(e) = retry_locked(|| std::fs::rename(&src, dir.join(name))) {
+            let _ = std::fs::remove_dir_all(&dir);
+            return Err(e.into());
+        }
+        Ok(token)
+    }
+
+    /// What a token set aside: its folder, the item in it and where it came from.
+    fn staged(&self, token: &str) -> Result<(PathBuf, PathBuf, String)> {
+        if token.len() != 32 || !token.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(Error::PathNotAllowed(token.to_string()));
+        }
+        let dir = self.root.join(STAGING).join(token);
+        let origin = std::fs::read_to_string(dir.join(ORIGIN)).map_err(|e| not_found(e, token))?;
+        let item = std::fs::read_dir(&dir)?
+            .flatten()
+            .map(|e| e.path())
+            .find(|p| p.file_name().is_some_and(|n| n != ORIGIN))
+            .ok_or_else(|| Error::NotFound(origin.clone()))?;
+        Ok((dir, item, origin))
+    }
+
+    /// Puts back what `trash_later` set aside. Its path again; fails if something took its place.
+    pub fn undo_trash(&self, token: &str) -> Result<String> {
+        let (dir, item, origin) = self.staged(token)?;
+        let dst = resolve(&self.root, &origin)?;
+        if dst.exists() {
+            return Err(Error::AlreadyExists(origin));
+        }
+        if let Some(parent) = dst.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        retry_locked(|| std::fs::rename(&item, &dst))?;
+        std::fs::remove_dir_all(dir)?;
+        Ok(origin)
+    }
+
+    /// Sends what `trash_later` set aside to the system trash. It goes back to its
+    /// place first when that is free, so restoring it from the trash puts it there.
+    pub fn trash_now(&self, token: &str) -> Result<()> {
+        let (dir, item, origin) = self.staged(token)?;
+        let home = resolve(&self.root, &origin).ok().filter(|p| !p.exists());
+        let target = match home {
+            Some(home)
+                if home.parent().is_some_and(Path::exists)
+                    && retry_locked(|| std::fs::rename(&item, &home)).is_ok() =>
+            {
+                home
+            }
+            _ => item,
+        };
+        trash::delete(dunce::simplified(&target)).map_err(|e| Error::Trash(e.to_string()))?;
+        std::fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    /// Sends to the trash whatever was left aside, such as when the app closed
+    /// before the chance to undo ran out. How many there were.
+    pub fn trash_leftovers(&self) -> Result<usize> {
+        let Ok(entries) = std::fs::read_dir(self.root.join(STAGING)) else { return Ok(0) };
+        let tokens: Vec<String> = entries.flatten().filter_map(|e| e.file_name().into_string().ok()).collect();
+        let mut done = 0;
+        for token in tokens {
+            if self.trash_now(&token).is_ok() {
+                done += 1;
+            }
+        }
+        Ok(done)
+    }
 }
+
+/// Where deleted items wait while they can still be put back.
+const STAGING: &str = ".ultimatemd/borrando";
+/// Inside each waiting folder, the path the item came from.
+const ORIGIN: &str = ".origen";
 
 fn not_found(e: std::io::Error, rel: &str) -> Error {
     if matches!(e.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::InvalidFilename) {
@@ -403,6 +494,57 @@ mod tests {
 
     // Only runs where the trash is real and disposable, such as the CI runners.
     #[cfg(windows)]
+    #[test]
+    fn a_deletion_can_be_undone_while_it_waits() {
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::new(d.path());
+        v.write("dir/n.md", "hola", WriteMode::Create).unwrap();
+        let token = v.trash_later("dir/n.md").unwrap();
+        assert!(v.read("dir/n.md").is_err());
+        assert!(!v.notes().unwrap().contains(&"dir/n.md".to_string()), "hidden while it waits");
+        assert_eq!(v.undo_trash(&token).unwrap(), "dir/n.md");
+        assert_eq!(v.read("dir/n.md").unwrap().content, "hola");
+        assert!(v.undo_trash(&token).is_err(), "a token works once");
+        assert!(!d.path().join(".ultimatemd/borrando").join(&token).exists());
+    }
+
+    #[test]
+    fn undoing_never_overwrites_a_new_file() {
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::new(d.path());
+        v.write("n.md", "vieja", WriteMode::Create).unwrap();
+        let token = v.trash_later("n.md").unwrap();
+        v.write("n.md", "nueva", WriteMode::Create).unwrap();
+        assert!(v.undo_trash(&token).is_err());
+        assert_eq!(v.read("n.md").unwrap().content, "nueva");
+    }
+
+    #[test]
+    fn folders_wait_too_and_leftovers_go_to_the_trash() {
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::new(d.path());
+        v.write("carpeta/a.md", "a", WriteMode::Create).unwrap();
+        v.write("b.md", "b", WriteMode::Create).unwrap();
+        let folder = v.trash_later("carpeta").unwrap();
+        assert!(!d.path().join("carpeta").exists());
+        assert_eq!(v.undo_trash(&folder).unwrap(), "carpeta");
+        assert_eq!(v.read("carpeta/a.md").unwrap().content, "a");
+        v.trash_later("b.md").unwrap();
+        assert_eq!(v.trash_leftovers().unwrap(), 1);
+        assert!(!d.path().join("b.md").exists());
+        assert!(std::fs::read_dir(d.path().join(".ultimatemd/borrando")).unwrap().next().is_none());
+    }
+
+    #[test]
+    fn tokens_cannot_reach_outside_the_waiting_folder() {
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::new(d.path());
+        for token in ["../..", "", "a/b", "0123456789abcdef0123456789abcdeg"] {
+            assert!(v.undo_trash(token).is_err(), "{token}");
+            assert!(v.trash_now(token).is_err(), "{token}");
+        }
+    }
+
     #[test]
     fn trash_handles_canonical_windows_paths() {
         let (d, v) = vault();

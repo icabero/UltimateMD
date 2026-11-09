@@ -40,6 +40,7 @@
     return (versions[`${id}:${path}`] = `v${Date.now()}${Math.random()}`);
   };
   const listeners = {};
+  const staged = {};
 
   function tree(id) {
     const root = [];
@@ -119,6 +120,29 @@
           .sort((a, b) => b.modified - a.modified)
           .slice(0, 8),
       };
+    },
+    // Deletions wait aside until undone or finished, like the backend.
+    trash_path: ({ id, path }) => {
+      const token = `t${Object.keys(staged).length}`;
+      const moved = {};
+      for (const p of Object.keys(files[id])) {
+        if (p !== path && !p.startsWith(`${path}/`)) continue;
+        moved[p] = files[id][p];
+        delete files[id][p];
+      }
+      staged[token] = moved;
+      return token;
+    },
+    undo_trash: ({ id, token }) => {
+      const moved = staged[token];
+      if (Object.keys(moved).some((p) => p in files[id])) throw 'the path already exists';
+      Object.assign(files[id], moved);
+      delete staged[token];
+      return Object.keys(moved)[0];
+    },
+    finish_trash: ({ token }) => {
+      window.__trashed = [...(window.__trashed ?? []), ...Object.keys(staged[token])];
+      delete staged[token];
     },
     // Like the backend, for [[wikilinks]] by name.
     note_links: ({ id, path }) => {

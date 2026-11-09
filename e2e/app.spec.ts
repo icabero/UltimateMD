@@ -526,6 +526,36 @@ test('a long export shows how far it has gone', async ({ page }) => {
   await expect(page.getByRole('status')).toHaveText('Exportado');
 });
 
+async function trashFromTree(page: Page, name: string) {
+  await page.locator('aside').getByRole('button', { name, exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Enviar a la papelera' }).click();
+}
+
+test('a deleted note can be brought back from the notice', async ({ page }) => {
+  await open(page, 'Otra');
+  await typeInEditor(page, ' última frase');
+  await trashFromTree(page, 'Otra');
+  await expect(page.locator('aside').getByRole('button', { name: 'Otra', exact: true })).toHaveCount(0);
+  await expect(page.locator('[role=tab]')).toHaveCount(0);
+  const notice = page.getByRole('group', { name: 'Aviso' });
+  await expect(notice.getByRole('status')).toHaveText('«Otra» enviado a la papelera');
+  await notice.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(page.locator('aside').getByRole('button', { name: 'Otra', exact: true })).toBeVisible();
+  // The tab comes back with the text saved before deleting.
+  await expect(page.locator('.cm-content')).toContainText('# Otra última frase');
+  expect(await page.evaluate(() => (window as any).__trashed)).toBeUndefined();
+});
+
+test('a deletion goes to the trash once its notice goes', async ({ page }) => {
+  await trashFromTree(page, 'Otra');
+  await page.getByRole('group', { name: 'Aviso' }).getByTitle('Cerrar el aviso').click();
+  await expect.poll(() => page.evaluate(() => (window as any).__trashed)).toEqual(['Otra.md']);
+  // A second deletion finishes the first one waiting.
+  await trashFromTree(page, 'Rara');
+  await trashFromTree(page, 'Propia');
+  await expect.poll(() => page.evaluate(() => (window as any).__trashed)).toEqual(['Otra.md', 'Rara.md']);
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();

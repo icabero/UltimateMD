@@ -48,9 +48,7 @@
         {
           label: tr('sidebar.trash'),
           danger: true,
-          run: async () => {
-            if (await store.confirm(tr('sidebar.trashConfirm', { name: node.name }), tr('sidebar.trash'), true)) await store.trash(id, node.path);
-          },
+          run: () => store.trash(id, node.path),
         },
       ],
     };

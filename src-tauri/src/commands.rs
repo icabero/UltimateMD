@@ -141,9 +141,22 @@ pub fn rename_path(id: String, from: String, to: String) -> Result<links::LinkUp
     links::move_path(&fs(&id)?, &from, &to)
 }
 
+/// Sets a file or folder aside, to be undone or trashed for good. Its token.
 #[tauri::command(async)]
-pub fn trash_path(id: String, path: String) -> Result<()> {
-    fs(&id)?.trash(&path)
+pub fn trash_path(id: String, path: String) -> Result<String> {
+    fs(&id)?.trash_later(&path)
+}
+
+/// Puts back a deletion. The path it is at again.
+#[tauri::command(async)]
+pub fn undo_trash(id: String, token: String) -> Result<String> {
+    fs(&id)?.undo_trash(&token)
+}
+
+/// Sends a deletion to the system trash once it can no longer be undone.
+#[tauri::command(async)]
+pub fn finish_trash(id: String, token: String) -> Result<()> {
+    fs(&id)?.trash_now(&token)
 }
 
 #[derive(Serialize)]

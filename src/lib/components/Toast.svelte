@@ -10,8 +10,8 @@
   const hover = (inside: boolean) => store.holdToast(inside || open);
 
   function run(action: () => void) {
-    store.toast = null;
     action();
+    store.dismissToast();
   }
 
   function toggle() {
@@ -30,7 +30,7 @@
       <button class="action" onclick={() => run(a.run)}>{a.label}</button>
     {/each}
     {#if toast.actions.length || toast.details}
-      <button class="x" title={tr('toast.close')} onclick={() => (store.toast = null)}><Icon name="close" size={14} /></button>
+      <button class="x" title={tr('toast.close')} onclick={() => store.dismissToast()}><Icon name="close" size={14} /></button>
     {/if}
   </div>
   {#if open && toast.details}<pre>{toast.details}</pre>{/if}

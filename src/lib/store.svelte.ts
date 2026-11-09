@@ -59,6 +59,8 @@ export interface Toast {
   message: string;
   details: string | null;
   actions: ToastAction[];
+  /** Runs once when the notice goes, however it goes. */
+  onDone?: () => void;
 }
 
 const TOAST_TIME = 4500;
@@ -278,14 +280,24 @@ class Store {
     return flatten(this.trees[vaultId] ?? []);
   }
 
-  notify(message: unknown, options: { actions?: ToastAction[]; details?: string } = {}) {
+  notify(message: unknown, options: { actions?: ToastAction[]; details?: string; onDone?: () => void } = {}) {
     const text = String(message);
     const firstLine = text.split(/\r?\n/)[0];
     const long = text.length > TOAST_SHORT || firstLine !== text;
     const message_ = long ? `${firstLine.slice(0, TOAST_SHORT).trimEnd()}${firstLine.length > TOAST_SHORT ? '…' : ''}` : text;
     const details = options.details ?? (long ? text : null);
-    this.toast = { id: (this.toast?.id ?? 0) + 1, message: message_, details, actions: options.actions ?? [] };
+    const before = this.toast;
+    this.toast = { id: (before?.id ?? 0) + 1, message: message_, details, actions: options.actions ?? [], onDone: options.onDone };
+    before?.onDone?.();
     this.holdToast(false);
+  }
+
+  /** Takes the notice away, letting whatever waited on it finish. */
+  dismissToast() {
+    clearTimeout(this.#toastTimer);
+    const gone = this.toast;
+    this.toast = null;
+    gone?.onDone?.();
   }
 
   /** Keeps the notice while the pointer is over it or its details are open; lets it go otherwise. */
@@ -293,7 +305,7 @@ class Store {
     clearTimeout(this.#toastTimer);
     if (hold || !this.toast) return;
     const time = this.toast.actions.length || this.toast.details ? TOAST_TIME_ACTIONS : TOAST_TIME;
-    this.#toastTimer = setTimeout(() => (this.toast = null), time);
+    this.#toastTimer = setTimeout(() => this.dismissToast(), time);
   }
 
   /** The notice after an export, with ways to reach the file. */
@@ -668,18 +680,48 @@ class Store {
     await this.move(vaultId, path, join(dirName(path), name));
   }
 
+  /**
+   * Deletes a file or folder with a chance to undo it: it waits aside while
+   * the notice shows, and goes to the system trash when the notice goes.
+   */
   async trash(vaultId: string, path: string) {
+    // Saved first, so undoing brings back the latest text.
+    await this.saveAll();
+    let token: string;
     try {
-      await api.trash(vaultId, path);
+      token = await api.trash(vaultId, path);
     } catch (e) {
       this.notify(e);
       return;
     }
-    for (const tab of this.tabs.filter((t) => t.vaultId === vaultId && (t.path === path || t.path.startsWith(`${path}/`)))) {
+    const inside = (t: Tab) => t.vaultId === vaultId && (t.path === path || t.path.startsWith(`${path}/`));
+    const closed = this.tabs.filter(inside).map((t) => ({ path: t.path, view: t.view }));
+    for (const tab of this.tabs.filter(inside)) {
       tab.dirty = false;
       await this.close(tab);
     }
     await this.refreshTree(vaultId);
+    let undone = false;
+    const undo = async () => {
+      undone = true;
+      try {
+        await api.undoTrash(vaultId, token);
+      } catch (e) {
+        this.notify(e);
+        return;
+      }
+      await this.refreshTree(vaultId);
+      for (const t of closed) {
+        await this.openFile(vaultId, t.path);
+        if (this.active) this.active.view = t.view;
+      }
+    };
+    this.notify(tr('store.trashed', { name: baseName(path).replace(/\.(md|markdown)$/i, '') }), {
+      actions: [{ label: tr('common.undo'), run: () => void undo() }],
+      onDone: () => {
+        if (!undone) void api.finishTrash(vaultId, token).catch((e) => this.notify(e));
+      },
+    });
   }
 
   persist() {
