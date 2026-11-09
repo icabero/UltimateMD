@@ -156,6 +156,7 @@ export const es = {
   'links.updatedOne': 'Se actualizó un enlace en «{note}»',
   'links.updatedNote': 'Se actualizaron {links} enlaces en «{note}»',
   'links.updatedMany': 'Se actualizaron {links} enlaces en {notes} notas',
+  'links.anchorMissing': 'No se encuentra «{anchor}» en «{note}»',
 
   'preview.pngFailed': 'No se pudo generar el PNG. Prueba a exportar en SVG.',
   'preview.createMissing': 'La nota «{name}» no existe. ¿Crearla?',

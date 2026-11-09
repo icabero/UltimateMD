@@ -2,7 +2,9 @@ import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { anchorLabel, findAnchor, parseAnchor } from './anchors';
 import { api, type TreeNode, type Vault, type VaultThemes } from './api';
+import { fold } from './fold';
 import { withColors, type DiagramStyle } from './diagramStyle';
 import { tr } from './i18n.svelte';
 import { baseName, dirName, join, kindOf, resolveLink, type FileKind } from './paths';
@@ -234,10 +236,30 @@ class Store {
   }
 
   /** Follows a `[[link]]` written in a note, offering to create it if it is missing. */
-  async followLink(tab: Tab, name: string) {
-    const path = resolveLink(name, tab.path, this.files(tab.vaultId));
-    if (path) return this.openFile(tab.vaultId, path);
-    if (await this.confirm(tr('preview.createMissing', { name }), tr('common.create'))) await this.createNote(tab.vaultId, dirName(tab.path), name);
+  /** Follows a link written in `tab`. An empty name means the same note; `anchor` is `#Heading` or `^block`. */
+  async followLink(tab: Tab, name: string, anchor?: string | null) {
+    const target = name.trim();
+    if (!target) return this.goToAnchor(tab.vaultId, tab.path, anchor);
+    const path = resolveLink(target, tab.path, this.files(tab.vaultId));
+    if (path) return this.openNoteAt(tab.vaultId, path, anchor);
+    if (await this.confirm(tr('preview.createMissing', { name: target }), tr('common.create'))) await this.createNote(tab.vaultId, dirName(tab.path), target);
+  }
+
+  /** Opens a note and goes to a heading or block in it. */
+  async openNoteAt(vaultId: string, path: string, anchor?: string | null) {
+    await this.openFile(vaultId, path);
+    this.goToAnchor(vaultId, path, anchor);
+  }
+
+  goToAnchor(vaultId: string, path: string, raw?: string | null) {
+    const anchor = parseAnchor(raw);
+    const tab = this.tabs.find((t) => t.key === tabKey(vaultId, path));
+    if (!anchor || !tab) return;
+    const found = findAnchor(tab.content, anchor);
+    if (!found) return this.notify(tr('links.anchorMissing', { anchor: anchorLabel(anchor), note: baseName(path).replace(/\.(md|markdown)$/i, '') }));
+    // A block is found in the preview by its marker, a heading by its place.
+    const terms = anchor.kind === 'block' ? [fold(`^${anchor.id}`)] : [];
+    this.reveal = { key: tab.key, line: found.line, terms, heading: found.heading };
   }
 
   async loadVaultThemes(id: string) {

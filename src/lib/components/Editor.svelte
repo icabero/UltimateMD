@@ -21,7 +21,7 @@
   import { store, type Tab } from '../store.svelte';
   import { frontmatterChange, frontmatterValue } from '../themes';
   import { EDIT_DIAGRAM, visualMode } from '../visual';
-  import { linkAt, noteCompletions, wikilinks } from '../wikilinks';
+  import { headingCompletions, linkAt, noteCompletions, wikilinks } from '../wikilinks';
 
   let { tab, onscroll }: { tab: Tab; onscroll?: (ratio: number) => void } = $props();
 
@@ -104,7 +104,7 @@
       const link = pos === null ? null : linkAt(target.state, pos);
       if (!link) return false;
       event.preventDefault();
-      void store.followLink(tab, link.target);
+      void store.followLink(tab, link.target, link.anchor);
       return true;
     },
   });
@@ -120,7 +120,7 @@
         language.of(languageFor(current.kind)),
         mode.of(PLAIN),
         found,
-        ...(current.kind === 'md' ? [wikilinks, followWithCtrl, autocompletion({ override: [noteCompletions], icons: false })] : []),
+        ...(current.kind === 'md' ? [wikilinks, followWithCtrl, autocompletion({ override: [noteCompletions, headingCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
           if (u.docChanged || u.selectionSet) publishPosition(u.state);

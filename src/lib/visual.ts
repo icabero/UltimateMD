@@ -384,7 +384,7 @@ const followLinks = EditorView.domEventHandlers({
     const tab = store.active;
     if (!link || !tab || touchesCursor(view.state, link.from, link.to)) return false;
     event.preventDefault();
-    void store.followLink(tab, link.target);
+    void store.followLink(tab, link.target, link.anchor);
     return true;
   },
 });

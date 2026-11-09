@@ -157,6 +157,7 @@ export const en: Record<Key, string> = {
   'links.updatedOne': 'Updated one link in “{note}”',
   'links.updatedNote': 'Updated {links} links in “{note}”',
   'links.updatedMany': 'Updated {links} links in {notes} notes',
+  'links.anchorMissing': '“{anchor}” is not in “{note}”',
 
   'preview.pngFailed': 'Could not create the PNG. Try exporting as SVG.',
   'preview.createMissing': 'The note “{name}” does not exist. Create it?',

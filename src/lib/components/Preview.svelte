@@ -165,17 +165,15 @@
     const a = e.composedPath().find((n) => n instanceof HTMLAnchorElement) as HTMLAnchorElement | undefined;
     if (!a) return;
     const href = a.getAttribute('href') ?? '';
-    if (href.startsWith('#') && !a.dataset.wikilink) {
-      e.preventDefault();
-      if (href.length > 1) root.getElementById(decodeURIComponent(href.slice(1)))?.scrollIntoView();
+    e.preventDefault();
+    // Footnotes keep their own ids within the preview.
+    if (/^#fn/.test(href)) {
+      root.getElementById(decodeURIComponent(href.slice(1)))?.scrollIntoView();
       return;
     }
-    e.preventDefault();
-    if (a.dataset.note) return store.openFile(tab.vaultId, a.dataset.note);
+    if (a.dataset.note) return store.openNoteAt(tab.vaultId, a.dataset.note, a.dataset.anchor);
     if (a.dataset.external && /^(https?|mailto):/i.test(a.dataset.external)) return openUrl(a.dataset.external);
-    if (a.dataset.wikilink) {
-      await store.followLink(tab, a.dataset.wikilink);
-    }
+    if (a.dataset.wikilink !== undefined) await store.followLink(tab, a.dataset.wikilink, a.dataset.anchor);
   }
 
   onMount(() => {

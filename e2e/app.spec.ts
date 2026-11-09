@@ -584,6 +584,59 @@ test('text size and line width change notes on screen but not exports', async ({
   await expect(page.getByRole('dialog', { name: 'Exportar' }).locator('.html article')).toHaveCSS('font-size', '16px');
 });
 
+/** A note full of links into the long note of `sections`. */
+async function linking(page: Page) {
+  await sections(page);
+  await page.evaluate(() => {
+    const filler = (n: number) => Array.from({ length: n }, (_, i) => `Párrafo ${i + 1}.`).join('\n\n');
+    const long = `---\ntema: claro\n---\n# Larga\n\n${filler(30)}\n\nLa frase clave. ^clave\n\n## Segunda parte\n\n${filler(30)}\n\n### Detalle [[Destino|el destino]]\n\nFin.\n`;
+    (window as any).__test.externalWrite('a', 'Larga.md', long);
+    const links = '# Fuente\n\n[[Larga#Segunda parte]] y [[Larga^clave]] y [[Larga#No existe]] y [md](Larga.md#segunda-parte)\n\n[[#Abajo]]\n\n' + 'relleno\n\n'.repeat(40) + '## Abajo\n';
+    (window as any).__test.externalWrite('a', 'Fuente.md', links);
+  });
+  await expect(page.locator('aside').getByRole('button', { name: 'Fuente', exact: true })).toBeVisible();
+  await page.locator('aside').getByRole('button', { name: 'Fuente', exact: true }).click();
+}
+
+test('a link to a heading opens the note at that heading', async ({ page }) => {
+  await linking(page);
+  await prose(page).getByText('Larga#Segunda parte').click();
+  await expect(page.locator('main footer')).toContainText('Trabajo / Larga.md');
+  await expect(page.locator('.cm-activeLine')).toHaveText('## Segunda parte');
+  await expect(page.locator('.cm-activeLine')).toBeInViewport();
+});
+
+test('links reach blocks, slugs and headings of the same note', async ({ page }) => {
+  await linking(page);
+  await prose(page).getByText('Larga^clave').click();
+  await expect(page.locator('.cm-activeLine')).toHaveText('La frase clave. ^clave');
+  await page.getByRole('tab', { name: /Fuente/ }).click();
+  await prose(page).getByText('md', { exact: true }).click();
+  await expect(page.locator('.cm-activeLine')).toHaveText('## Segunda parte');
+  await page.getByRole('tab', { name: /Fuente/ }).click();
+  await prose(page).getByText('#Abajo', { exact: true }).click();
+  await expect(page.locator('.cm-activeLine')).toHaveText('## Abajo');
+});
+
+test('a missing heading says so and the editor follows links with Ctrl+click', async ({ page }) => {
+  await linking(page);
+  await prose(page).getByText('Larga#No existe').click();
+  await expect(page.getByRole('status')).toHaveText('No se encuentra «No existe» en «Larga»');
+  await page.getByRole('tab', { name: /Fuente/ }).click();
+  await page.locator('.cm-wikilink', { hasText: 'Larga#Segunda parte' }).click({ modifiers: ['ControlOrMeta'] });
+  await expect(page.locator('.cm-activeLine')).toHaveText('## Segunda parte');
+});
+
+test('typing [[note# suggests its headings', async ({ page }) => {
+  await linking(page);
+  await typeInEditor(page, '\n[[Larga#Seg');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('Segunda parte');
+  // The editor ignores Enter for a moment after a suggestion appears, so it is never taken by accident.
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.cm-activeLine')).toHaveText('[[Larga#Segunda parte]]');
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();

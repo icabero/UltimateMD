@@ -50,19 +50,20 @@ md.inline.ruler.before('link', 'wikilink', (state: any, silent: boolean) => {
   if (end < 0 || src.slice(start, end).includes('\n')) return false;
   if (!silent) {
     const [target, alias] = src.slice(start, end).split('|');
+    const [, name, anchor] = /^([^#^]*)([#^].*)?$/.exec(target) ?? [];
     const token = state.push('wikilink', '', 0);
-    token.meta = { target: target.split('#')[0].trim(), label: (alias ?? target).trim(), embed };
+    token.meta = { target: (name ?? target).trim(), anchor: anchor?.trim() ?? '', label: (alias ?? target).trim(), embed };
   }
   state.pos = end + 2;
   return true;
 });
 
 md.renderer.rules.wikilink = (tokens: any, idx: number) => {
-  const { target, label, embed } = tokens[idx].meta;
+  const { target, anchor, label, embed } = tokens[idx].meta;
   const t = escapeHtml(target);
   return embed && kindOf(target) === 'image'
     ? `<img data-embed="${t}" alt="${escapeHtml(label)}">`
-    : `<a data-wikilink="${t}" href="#">${escapeHtml(label)}</a>`;
+    : `<a data-wikilink="${t}" data-anchor="${escapeHtml(anchor)}" href="#">${escapeHtml(label)}</a>`;
 };
 
 function splitFrontmatter(text: string): { meta: string | null; body: string } {
@@ -98,18 +99,28 @@ function linkContent(root: DocumentFragment, ctx: RenderContext) {
     }
   }
   for (const a of root.querySelectorAll<HTMLAnchorElement>('a[data-wikilink]')) {
-    const path = resolveLink(a.dataset.wikilink!, ctx.path, ctx.files);
+    // `[[#heading]]` points into the same note.
+    const path = a.dataset.wikilink ? resolveLink(a.dataset.wikilink, ctx.path, ctx.files) : ctx.path;
     if (path) a.dataset.note = path;
     else a.classList.add('broken');
   }
   for (const a of root.querySelectorAll<HTMLAnchorElement>('a[href]:not([data-wikilink])')) {
     const href = a.getAttribute('href')!;
-    if (isExternal(href)) a.dataset.external = href;
-    else if (!href.startsWith('#')) {
-      const path = resolveRelative(dir, decode(href.split('#')[0]));
-      if (path && ctx.files.includes(path)) a.dataset.note = path;
-      else a.classList.add('broken');
+    if (isExternal(href)) {
+      a.dataset.external = href;
+      continue;
     }
+    // Footnote references and back links stay within the preview.
+    if (/^#fn/.test(href)) continue;
+    const [file, fragment] = href.split('#');
+    if (fragment) a.dataset.anchor = `#${decode(fragment)}`;
+    if (!file) {
+      a.dataset.note = ctx.path;
+      continue;
+    }
+    const path = resolveRelative(dir, decode(file));
+    if (path && ctx.files.includes(path)) a.dataset.note = path;
+    else a.classList.add('broken');
   }
 }
 

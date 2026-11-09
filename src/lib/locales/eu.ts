@@ -157,6 +157,7 @@ export const eu: Record<Key, string> = {
   'links.updatedOne': 'Esteka bat eguneratu da: «{note}»',
   'links.updatedNote': '{links} esteka eguneratu dira: «{note}»',
   'links.updatedMany': '{links} esteka eguneratu dira {notes} oharretan',
+  'links.anchorMissing': 'Ez dago «{anchor}» «{note}» oharrean',
 
   'preview.pngFailed': 'Ezin izan da PNGa sortu. Saiatu SVG gisa esportatzen.',
   'preview.createMissing': '«{name}» oharra ez dago. Sortu nahi duzu?',
