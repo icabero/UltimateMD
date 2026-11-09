@@ -15,7 +15,6 @@
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
   import { applyInstallerLanguage, tr } from './lib/i18n.svelte';
-  import { dirName } from './lib/paths';
   import { store, type ViewMode } from './lib/store.svelte';
   import { applyTheme } from './lib/themes';
   import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -55,28 +54,23 @@
     });
   });
 
-  async function newNote() {
-    const vaultId = tab?.vaultId ?? store.openVaults[0]?.id;
-    if (!vaultId) return store.notify(tr('app.openVaultFirst'));
-    const name = await store.prompt(tr('sidebar.noteName'), '', tr('common.create'));
-    if (name?.trim()) await store.createNote(vaultId, tab ? dirName(tab.path) : '', name.trim());
-  }
 
   function onKey(e: KeyboardEvent) {
     const key = e.key.toLowerCase();
     if (key === 'escape') {
       if (store.tutorial) store.closeTutorial();
-      store.palette = store.settings = store.exporting = store.about = false;
+      store.settings = store.exporting = store.about = false;
+      store.palette = null;
       store.themeEditor = null;
       return;
     }
     if (!(e.ctrlKey || e.metaKey)) return;
     const actions: Record<string, () => void> = {
-      p: () => (store.palette = true),
+      p: () => (store.palette = ''),
       e: () => {
         if (tab?.kind === 'md') store.exporting = true;
       },
-      n: () => void newNote(),
+      n: () => void store.newNote(),
       s: () => void store.saveAll(),
       w: () => tab && void store.close(tab),
       '\\': () => {
@@ -89,6 +83,7 @@
         store.searching = true;
         store.toggleBar('left', true);
       },
+      p: () => (store.palette = '>'),
       e: () => store.toggleBar('left'),
       o: () => {
         if (tab?.kind === 'md') store.toggleBar('right');
@@ -188,7 +183,7 @@
   {/if}
 </div>
 
-{#if store.palette}<Palette />{/if}
+{#if store.palette !== null}<Palette initial={store.palette} />{/if}
 {#if store.settings}<Settings />{/if}
 {#if store.about}<About />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}

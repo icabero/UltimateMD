@@ -112,6 +112,45 @@ test('the quick switcher finds notes in every vault', async ({ page }) => {
   await expect(page.locator('main footer')).toContainText('Personal / Otra.md');
 });
 
+const palette = (page: Page) => page.getByRole('dialog', { name: 'Abrir nota' });
+
+test('the command palette runs actions and shows their shortcuts', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+Shift+p');
+  await expect(palette(page).getByRole('combobox')).toHaveValue('>');
+  await page.keyboard.type('exportar');
+  const first = palette(page).getByRole('option').first();
+  await expect(first).toContainText('Exportar la nota');
+  await expect(first.locator('kbd')).toHaveText(['Ctrl', 'E']);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Exportar' })).toBeVisible();
+});
+
+test('actions are found without accents and the last used come first', async ({ page }) => {
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('tema medianoche');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'medianoche');
+  await page.keyboard.press('Control+Shift+p');
+  await expect(palette(page).getByRole('option').first()).toHaveText('Tema: Medianoche');
+  // Shortcuts name the Shift key in the interface language.
+  await page.keyboard.type('barra lateral');
+  await expect(palette(page).getByRole('option').first().locator('kbd')).toHaveText(['Ctrl', 'Mayús', 'E']);
+});
+
+test('the quick switcher turns into actions with > and headings with #', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+p');
+  await expect(palette(page)).toContainText('Escribe > para ver acciones');
+  await page.keyboard.type('>');
+  await expect(palette(page).getByRole('combobox')).toHaveAttribute('placeholder', 'Buscar una acción…');
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('#');
+  await expect(palette(page).getByRole('option')).toHaveText(['Inicio H1']);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.cm-activeLine')).toHaveText('# Inicio');
+});
+
 test('global search covers every vault', async ({ page }) => {
   await page.keyboard.press('Control+Shift+f');
   await page.getByPlaceholder('Buscar en los vaults abiertos').fill('#');

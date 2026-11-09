@@ -129,7 +129,8 @@ class Store {
   systemDark = $state(matchMedia('(prefers-color-scheme: dark)').matches);
   themeChoice = $state(loadThemeChoice());
 
-  palette = $state(false);
+  /** The quick switcher's starting text while it is open: `>` for actions, `#` for headings. */
+  palette = $state<string | null>(null);
   settings = $state(false);
   searching = $state(false);
   exporting = $state(false);
@@ -439,6 +440,15 @@ class Store {
     } catch {
       // Only a convenience.
     }
+  }
+
+  /** Asks for a name and creates a note beside the one open, or in the first vault. */
+  async newNote() {
+    const tab = this.active;
+    const vaultId = tab?.vaultId ?? this.openVaults[0]?.id;
+    if (!vaultId) return this.notify(tr('app.openVaultFirst'));
+    const name = await this.prompt(tr('sidebar.noteName'), '', tr('common.create'));
+    if (name?.trim()) await this.createNote(vaultId, tab ? dirName(tab.path) : '', name.trim());
   }
 
   /** Opens a note at a line, with the words of a search marked. */
