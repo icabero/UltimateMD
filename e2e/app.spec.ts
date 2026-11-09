@@ -395,6 +395,32 @@ test('a folder can be exported on its own', async ({ page }) => {
   expect(plan.sections[1]).toMatchObject({ path: 'dir/Destino.md', shift: 1 });
 });
 
+test('the export dialog remembers the last options of each vault', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'Word');
+  await page.getByLabel('Plantilla').selectOption('Corporativa');
+  await scope(page, 'Vault');
+  await page.getByLabel('Nivel 2', { exact: true }).selectOption('heading:3');
+  await page.getByRole('checkbox', { name: 'Usar el nombre de cada nota como título' }).check();
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+
+  await page.keyboard.press('Control+e');
+  const pressed = (group: string) => page.getByRole('group', { name: group }).locator('button.on');
+  await expect(pressed('Formato')).toHaveText('Word');
+  await expect(pressed('Alcance')).toHaveText('Vault');
+  await expect(page.getByLabel('Plantilla')).toHaveValue('Corporativa');
+  await expect(page.getByLabel('Nivel 2', { exact: true })).toHaveValue('heading:3');
+  await expect(page.getByRole('checkbox', { name: 'Usar el nombre de cada nota como título' })).toBeChecked();
+  await page.getByRole('dialog', { name: 'Exportar' }).getByTitle('Cerrar').click();
+
+  // Another vault starts from the defaults.
+  await open(page, 'Otra');
+  await page.keyboard.press('Control+e');
+  await expect(pressed('Formato')).toHaveText('PDF');
+  await expect(pressed('Alcance')).toHaveText('Esta nota');
+});
+
 test('word offers the example template, its styles and a preview of the file', async ({ page }) => {
   await open(page, 'Inicio');
   await exportAs(page, 'Word');
