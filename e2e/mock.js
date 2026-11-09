@@ -37,7 +37,14 @@
 
   function tree(id) {
     const root = [];
-    for (const path of Object.keys(files[id]).sort()) {
+    // Folders first, as the backend sorts them.
+    const sortKey = (path) => path.split('/').map((part, i, all) => `${i < all.length - 1 ? 0 : 1}${part.toLowerCase()}`);
+    const paths = Object.keys(files[id]).sort((a, b) => {
+      const [x, y] = [sortKey(a), sortKey(b)];
+      for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+      return x.length - y.length;
+    });
+    for (const path of paths) {
       const parts = path.split('/');
       let level = root;
       parts.forEach((name, i) => {
@@ -64,16 +71,42 @@
       files[id][path] = content;
       return bump(id, path);
     },
+    // Moves a note or folder and, like the backend, rewrites [[name]] links to a renamed note.
+    rename_path: ({ id, from, to }) => {
+      const notes = files[id];
+      for (const path of Object.keys(notes)) {
+        if (path !== from && !path.startsWith(`${from}/`)) continue;
+        notes[to + path.slice(from.length)] = notes[path];
+        delete notes[path];
+      }
+      const stem = (p) => p.split('/').pop().replace(/\.md$/, '');
+      const update = { links: 0, notes: [] };
+      if (stem(from) === stem(to)) return update;
+      for (const [path, text] of Object.entries(notes)) {
+        const found = text.split(`[[${stem(from)}]]`).length - 1;
+        if (!found) continue;
+        notes[path] = text.replaceAll(`[[${stem(from)}]]`, `[[${stem(to)}]]`);
+        bump(id, path);
+        update.links += found;
+        update.notes.push(path);
+      }
+      return update;
+    },
     set_vault_access: ({ id, mcp }) => {
       vaults.find((v) => v.id === id).mcp = mcp;
     },
     mcp_info: () => ({ binary: 'C:\\Program Files\\UltimateMD\\ultimatemd-mcp.exe', available: true }),
-    search_all: ({ query }) =>
-      Object.entries(files).flatMap(([vaultId, notes]) =>
-        Object.entries(notes)
-          .filter(([, text]) => text.includes(query))
-          .map(([path]) => ({ vaultId, hit: { path, line: 1, text: query } })),
-      ),
+    // Like the backend: every word, ignoring case and accents, one hit per line.
+    search_all: ({ query }) => {
+      const fold = (t) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+      const words = fold(query).split(/\s+/).filter(Boolean);
+      const matches = (t) => words.every((w) => fold(t).includes(w));
+      return Object.entries(files).flatMap(([vaultId, notes]) =>
+        Object.entries(notes).flatMap(([path, text]) =>
+          text.split('\n').flatMap((line, i) => (matches(line) ? [{ vaultId, hit: { path, line: i + 1, text: line.trim(), score: 1 } }] : [])),
+        ),
+      );
+    },
     'plugin:event|listen': ({ event, handler }) => {
       listeners[event] = handler;
       return 1;
@@ -174,6 +207,7 @@
 
   window.__test = {
     files,
+    vaults,
     vaultThemes,
     /** Simulates another program, such as the MCP server, changing a file. */
     externalWrite(id, path, content) {

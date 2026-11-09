@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Annotation, Compartment, EditorState, type Extension } from '@codemirror/state';
-  import { EditorView, drawSelection, highlightActiveLine, keymap, lineNumbers } from '@codemirror/view';
+  import { Annotation, Compartment, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
+  import { Decoration, EditorView, drawSelection, highlightActiveLine, keymap, lineNumbers, type DecorationSet } from '@codemirror/view';
   import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
   import { HighlightStyle, indentOnInput, syntaxHighlighting, bracketMatching } from '@codemirror/language';
   import { autocompletion } from '@codemirror/autocomplete';
@@ -15,6 +15,7 @@
   import Toolbar from './Toolbar.svelte';
   import { parseSource } from '../diagramBuilder';
   import { fenceLine, parseStyle, splitFence } from '../diagramStyle';
+  import { findTerms } from '../fold';
   import { fenceAt, insertBlock, insertLink, wrap } from '../formatting';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
@@ -53,6 +54,21 @@
     '.cm-selectionBackground, &.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { background: 'var(--selection) !important' },
     '.cm-panels': { background: 'var(--panel)', color: 'var(--text)', borderColor: 'var(--line)' },
     '.cm-searchMatch': { background: 'var(--accent-soft)' },
+    '.cm-found': { background: 'color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: '2px' },
+  });
+
+  // The words of a search, marked until the next edit.
+  const setFound = StateEffect.define<[number, number][]>();
+  const foundMark = Decoration.mark({ class: 'cm-found' });
+  const found = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update(marks, tr) {
+      for (const e of tr.effects) {
+        if (e.is(setFound)) return Decoration.set(e.value.filter(([a, b]) => b > a).map(([a, b]) => foundMark.range(a, b)));
+      }
+      return tr.docChanged ? Decoration.none : marks;
+    },
+    provide: (f) => EditorView.decorations.from(f),
   });
 
   let host: HTMLDivElement;
@@ -103,6 +119,7 @@
         syntaxHighlighting(highlight), baseTheme, EditorView.lineWrapping,
         language.of(languageFor(current.kind)),
         mode.of(PLAIN),
+        found,
         ...(current.kind === 'md' ? [wikilinks, followWithCtrl, autocompletion({ override: [noteCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
@@ -193,11 +210,35 @@
 
   onDestroy(() => view?.destroy());
 
+  /** Goes to the line a search asked for, unless the editor is hidden behind the preview. */
+  function reveal() {
+    const want = store.reveal;
+    if (!view || !want || want.key !== tab.key || shownKey !== tab.key || tab.view === 'preview') return;
+    store.reveal = null;
+    const doc = view.state.doc;
+    const line = want.line > 0 ? doc.line(Math.min(want.line, doc.lines)) : null;
+    const marks = findTerms(doc.toString(), want.terms);
+    const first = line ? marks.find(([a]) => a >= line.from && a <= line.to) : null;
+    const anchor = first?.[0] ?? line?.from ?? 0;
+    view.dispatch({
+      selection: { anchor },
+      effects: [setFound.of(marks), EditorView.scrollIntoView(anchor, { y: line ? 'center' : 'start' })],
+    });
+    view.focus();
+  }
+
   $effect(() => {
     tab.content;
     tab.revision;
     tab.view;
     show(tab);
+  });
+
+  $effect(() => {
+    store.reveal;
+    tab.key;
+    tab.view;
+    reveal();
   });
 </script>
 

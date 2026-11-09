@@ -115,7 +115,73 @@ test('the quick switcher finds notes in every vault', async ({ page }) => {
 test('global search covers every vault', async ({ page }) => {
   await page.keyboard.press('Control+Shift+f');
   await page.getByPlaceholder('Buscar en los vaults abiertos').fill('#');
-  await expect(page.locator('.results button')).toHaveCount(6);
+  await expect(page.locator('.results .note')).toHaveCount(6);
+});
+
+/** A long note whose match is far down, for the search tests. */
+async function longNote(page: Page) {
+  await page.evaluate(() => {
+    const filler = Array.from({ length: 80 }, (_, i) => `Línea de relleno ${i + 1}`);
+    filler[59] = 'Acta de la Reunión de marzo';
+    (window as any).__test.files.a['Larga.md'] = ['# Larga', '', ...filler, ''].join('\n');
+  });
+}
+
+async function searchFor(page: Page, query: string) {
+  await page.keyboard.press('Control+Shift+f');
+  await page.getByPlaceholder('Buscar en los vaults abiertos').fill(query);
+}
+
+test('search ignores accents and marks the words found', async ({ page }) => {
+  await longNote(page);
+  await searchFor(page, 'reunion MARZO');
+  const note = page.locator('.results .note');
+  await expect(note).toHaveCount(1);
+  await expect(note.locator('.title')).toHaveText('Larga');
+  await expect(note.locator('.line mark')).toHaveText(['Reunión', 'marzo']);
+});
+
+test('a search result opens the note at the line found', async ({ page }) => {
+  await longNote(page);
+  await searchFor(page, 'reunion');
+  await page.locator('.results .line').click();
+  await expect(page.locator('.cm-activeLine')).toContainText('Acta de la Reunión de marzo');
+  await expect(page.locator('.cm-activeLine')).toBeInViewport();
+  await expect(page.locator('.cm-found')).toHaveText('Reunión');
+  // Marks last until the note is edited.
+  await page.keyboard.type('x');
+  await expect(page.locator('.cm-found')).toHaveCount(0);
+});
+
+test('in reading view a search result scrolls the preview to the match', async ({ page }) => {
+  await longNote(page);
+  await open(page, 'Inicio');
+  await page.getByTitle('Vista previa', { exact: true }).click();
+  await searchFor(page, 'reunion');
+  await page.locator('.results .line').click();
+  await expect.poll(() => page.evaluate(() => (CSS as any).highlights.get('umd-found')?.size ?? 0)).toBe(1);
+  await expect(prose(page).getByText('Acta de la Reunión de marzo')).toBeInViewport();
+});
+
+test('the quick switcher ignores accents', async ({ page }) => {
+  await page.keyboard.press('Control+p');
+  await page.getByPlaceholder('Abrir nota…').fill('hóndo');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main footer')).toContainText('Trabajo / dir/sub/Hondo.md');
+});
+
+test('renaming a note updates the links to it, also in open tabs', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.locator('aside').getByRole('button', { name: 'dir', exact: true }).click();
+  await page.locator('aside').getByRole('button', { name: 'Destino', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Renombrar' }).click();
+  await page.getByRole('form', { name: 'Nuevo nombre' }).getByRole('textbox').fill('Meta.md');
+  await page.getByRole('form', { name: 'Nuevo nombre' }).getByRole('button', { name: 'Renombrar' }).click();
+  await expect(page.getByRole('status')).toHaveText('Se actualizó un enlace en «Inicio»');
+  expect(await disk(page, 'a', 'Inicio.md')).toContain('Ver [[Meta]] y [[Falta]].');
+  await page.getByRole('tab', { name: /Inicio/ }).click();
+  await expect(page.locator('.cm-content')).toContainText('Ver [[Meta]] y [[Falta]].');
+  await expect(page.locator('main footer')).toContainText('Trabajo / Inicio.md');
 });
 
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
@@ -327,6 +393,32 @@ test('a folder can be exported on its own', async ({ page }) => {
   expect(plan.title).toBe('dir');
   expect(plan.sections[0]).toMatchObject({ kind: 'heading', text: 'dir', level: 1 });
   expect(plan.sections[1]).toMatchObject({ path: 'dir/Destino.md', shift: 1 });
+});
+
+test('the export dialog remembers the last options of each vault', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'Word');
+  await page.getByLabel('Plantilla').selectOption('Corporativa');
+  await scope(page, 'Vault');
+  await page.getByLabel('Nivel 2', { exact: true }).selectOption('heading:3');
+  await page.getByRole('checkbox', { name: 'Usar el nombre de cada nota como título' }).check();
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+
+  await page.keyboard.press('Control+e');
+  const pressed = (group: string) => page.getByRole('group', { name: group }).locator('button.on');
+  await expect(pressed('Formato')).toHaveText('Word');
+  await expect(pressed('Alcance')).toHaveText('Vault');
+  await expect(page.getByLabel('Plantilla')).toHaveValue('Corporativa');
+  await expect(page.getByLabel('Nivel 2', { exact: true })).toHaveValue('heading:3');
+  await expect(page.getByRole('checkbox', { name: 'Usar el nombre de cada nota como título' })).toBeChecked();
+  await page.getByRole('dialog', { name: 'Exportar' }).getByTitle('Cerrar').click();
+
+  // Another vault starts from the defaults.
+  await open(page, 'Otra');
+  await page.keyboard.press('Control+e');
+  await expect(pressed('Formato')).toHaveText('PDF');
+  await expect(pressed('Alcance')).toHaveText('Esta nota');
 });
 
 test('word offers the example template, its styles and a preview of the file', async ({ page }) => {

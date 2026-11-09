@@ -69,6 +69,9 @@ export const es = {
 
   'search.placeholder': 'Buscar en los vaults abiertos',
   'search.empty': 'Sin resultados',
+  'links.updatedOne': 'Se actualizó un enlace en «{note}»',
+  'links.updatedNote': 'Se actualizaron {links} enlaces en «{note}»',
+  'links.updatedMany': 'Se actualizaron {links} enlaces en {notes} notas',
 
   'preview.pngFailed': 'No se pudo generar el PNG. Prueba a exportar en SVG.',
   'preview.createMissing': 'La nota «{name}» no existe. ¿Crearla?',

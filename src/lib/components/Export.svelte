@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import DocxSheet from './DocxSheet.svelte';
   import Icon from './Icon.svelte';
   import { api, type TemplateStyle } from '../api';
@@ -19,15 +19,53 @@
   /** The backend reads this one from the vault. */
   const VAULT_TEMPLATE = ':vault';
   const PREVIEW_DELAY = 400;
+  const MEMORY_KEY = 'ultimatemd.export';
+
+  /** The options of the last export, kept per vault in this computer. */
+  interface Remembered {
+    format: Format;
+    scope: Scope;
+    folder: string;
+    levels: LevelChoice[];
+    noteTitles: boolean;
+    noteBreak: boolean;
+    cover: boolean;
+    template: string;
+  }
 
   let { tab }: { tab: Tab } = $props();
-  let format = $state<Format>('pdf');
-  let scope = $state<Scope>('note');
-  let folder = $state('');
-  let levels = $state<LevelChoice[]>([]);
-  let noteTitles = $state(false);
-  let noteBreak = $state(false);
-  let cover = $state(false);
+  const memoryId = untrack(() => (tab.loose ? ':loose' : tab.vaultId));
+
+  function loadMemory(): Partial<Remembered> {
+    try {
+      return JSON.parse(localStorage.getItem(MEMORY_KEY) ?? '{}')[memoryId] ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveMemory(value: Remembered) {
+    try {
+      const all = JSON.parse(localStorage.getItem(MEMORY_KEY) ?? '{}');
+      localStorage.setItem(MEMORY_KEY, JSON.stringify({ ...all, [memoryId]: value }));
+    } catch {
+      // Next time starts from the defaults.
+    }
+  }
+
+  const memory = loadMemory();
+  const remembered = untrack(() => {
+    const wide = !tab.loose && (memory.scope === 'vault' || (memory.scope === 'folder' && foldersOf(store.trees[tab.vaultId] ?? []).includes(memory.folder ?? '')));
+    return { scope: wide ? memory.scope! : 'note', folder: wide ? (memory.folder ?? '') : '' };
+  });
+
+  let format = $state<Format>(FORMATS.some((f) => f.id === memory.format) ? memory.format! : 'pdf');
+  let scope = $state<Scope>(remembered.scope);
+  let folder = $state(remembered.folder);
+  let levels = $state<LevelChoice[]>(remembered.scope === 'note' ? [] : (memory.levels ?? []));
+  let noteTitles = $state(memory.noteTitles ?? false);
+  let noteBreak = $state(memory.noteBreak ?? false);
+  let cover = $state(remembered.scope === 'note' ? false : (memory.cover ?? true));
   let templates = $state<string[]>([]);
   let template = $state(EXAMPLE);
   let vaultTemplate = $state(false);
@@ -55,9 +93,12 @@
 
   onMount(async () => {
     await loadTemplates();
-    if (tab.loose) return;
-    vaultTemplate = await api.wordConfig(tab.vaultId).then((c) => c.hasTemplate).catch(() => false);
-    if (vaultTemplate) template = VAULT_TEMPLATE;
+    if (!tab.loose) vaultTemplate = await api.wordConfig(tab.vaultId).then((c) => c.hasTemplate).catch(() => false);
+    // The template used last time while it still exists, else the vault's own.
+    const last = memory.template;
+    const exists = last === EXAMPLE || (last === VAULT_TEMPLATE ? vaultTemplate : !!last && templates.includes(last));
+    if (exists) template = last!;
+    else if (vaultTemplate) template = VAULT_TEMPLATE;
   });
 
   // One row per depth of folders; a new row titles folders at that depth.
@@ -151,6 +192,7 @@
     });
     busy = false;
     if (done) {
+      saveMemory({ format, scope, folder, levels: $state.snapshot(levels), noteTitles, noteBreak, cover, template });
       store.exporting = false;
       store.notify(tr('export.done'));
     }

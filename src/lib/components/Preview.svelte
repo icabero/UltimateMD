@@ -4,6 +4,7 @@
   import { api, fileUrl } from '../api';
   import { parseStyle } from '../diagramStyle';
   import { renderDiagram, toPng, toSvgBytes } from '../diagrams';
+  import { findTerms } from '../fold';
   import { tr } from '../i18n.svelte';
   import { renderMarkdown } from '../markdown';
   import { store, type Tab } from '../store.svelte';
@@ -21,6 +22,8 @@
   let timer: ReturnType<typeof setTimeout>;
   let run = 0;
   let drawnWith = '';
+  let rendered = $state(false);
+  const FOUND = 'umd-found';
 
   export function scrollTo(ratio: number) {
     if (scroller) scroller.scrollTop = ratio * (scroller.scrollHeight - scroller.clientHeight);
@@ -87,9 +90,48 @@
       const previous = old.get(`${el.dataset.lang}:${el.dataset.style}:${el.dataset.src}`);
       if (previous) el.innerHTML = previous.innerHTML;
     }
+    if ('highlights' in CSS) CSS.highlights.delete(FOUND);
     body.replaceChildren(fragment);
+    rendered = true;
+    reveal();
     void hydrate(id);
   }
+
+  /** Marks the words of a search and scrolls to the match nearest the line found. */
+  function reveal() {
+    const want = store.reveal;
+    if (!rendered || !scroller || !want || want.key !== tab.key || tab.view !== 'preview') return;
+    store.reveal = null;
+    const ranges: Range[] = [];
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      for (const [a, b] of findTerms(node.textContent ?? '', want.terms)) {
+        const range = new Range();
+        range.setStart(node, a);
+        range.setEnd(node, b);
+        ranges.push(range);
+      }
+    }
+    if ('highlights' in CSS) CSS.highlights.set(FOUND, new Highlight(...ranges));
+    if (!want.line) return void (scroller.scrollTop = 0);
+    // Where the line would fall if text were spread evenly; the nearest match wins.
+    const lines = Math.max(tab.content.split(/\r?\n/).length - 1, 1);
+    const guess = ((want.line - 1) / lines) * scroller.scrollHeight;
+    const origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
+    let target = guess;
+    let best = Infinity;
+    for (const r of ranges) {
+      const y = r.getBoundingClientRect().top - origin;
+      if (Math.abs(y - guess) < best) [best, target] = [Math.abs(y - guess), y];
+    }
+    scroller.scrollTop = target - scroller.clientHeight / 3;
+  }
+
+  $effect(() => {
+    store.reveal;
+    tab.view;
+    reveal();
+  });
 
   async function onClick(e: MouseEvent) {
     const a = e.composedPath().find((n) => n instanceof HTMLAnchorElement) as HTMLAnchorElement | undefined;
@@ -112,7 +154,8 @@
     if (tab.kind !== 'md') return;
     root = host!.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
-    style.textContent = previewCss;
+    style.textContent = `${previewCss}
+::highlight(${FOUND}) { background: color-mix(in srgb, var(--accent) 30%, transparent); }`;
     body = document.createElement('article');
     body.className = 'prose';
     root.append(style, body);

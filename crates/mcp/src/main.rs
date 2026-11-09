@@ -88,6 +88,8 @@ struct MoveArg {
     from: String,
     /// New note path. It must not exist
     to: String,
+    /// Rewrite the links that would break. Defaults to true
+    update_links: Option<bool>,
 }
 
 /// Loads a vault, enforcing the access level the user set for it. Vaults with
@@ -162,7 +164,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Search note names and contents. Returns matching lines; line 0 means the file name matched.",
+        description = "Search note names and contents, ignoring case and accents. Returns matching lines, best notes first; line 0 means the file name matched.",
         annotations(read_only_hint = true)
     )]
     async fn search_notes(&self, Parameters(a): Parameters<SearchArg>) -> Result<CallToolResult, ErrorData> {
@@ -180,8 +182,13 @@ impl Server {
             let mut results = Vec::new();
             for name in names {
                 let hits = search::search(&open(&name, false)?, &a.query, limit)?;
-                results.extend(hits.into_iter().map(|h| json!({ "vault": name, "hit": h })));
+                results.extend(hits.into_iter().map(|h| (name.clone(), h)));
             }
+            // Best notes first across vaults. Stable, so each note's lines stay together.
+            results.sort_by_key(|(_, h)| std::cmp::Reverse(h.score));
+            results.truncate(limit);
+            let results: Vec<_> =
+                results.into_iter().map(|(vault, hit)| json!({ "vault": vault, "hit": hit })).collect();
             Ok(json!({ "results": results }))
         })())
     }
@@ -239,14 +246,19 @@ impl Server {
     }
 
     #[tool(
-        description = "Move or rename a note. Never overwrites. Links pointing to it are not updated. Needs write access.",
+        description = "Move or rename a note. Never overwrites. By default rewrites the links that would break, in other notes and in the note itself, and reports how many. Needs write access.",
         annotations(read_only_hint = false, destructive_hint = false)
     )]
     async fn move_note(&self, Parameters(a): Parameters<MoveArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let (from, to) = (note_path(&a.from)?, note_path(&with_extension(&a.to))?);
-            open(&a.vault, true)?.rename(&from, &to)?;
-            Ok(json!({ "path": to }))
+            let vault = open(&a.vault, true)?;
+            if a.update_links == Some(false) {
+                vault.rename(&from, &to)?;
+                return Ok(json!({ "path": to }));
+            }
+            let update = links::move_path(&vault, &from, &to)?;
+            Ok(json!({ "path": to, "linksUpdated": update.links, "notesUpdated": update.notes }))
         })())
     }
 
