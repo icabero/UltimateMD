@@ -88,9 +88,7 @@ pub fn extract(content: &str) -> Vec<String> {
             let target = &content[l.start..l.end];
             match l.kind {
                 Kind::Wiki => Some(target.to_string()),
-                Kind::Markdown if !target.contains("://") && is_note_file(target) => {
-                    Some(target.replace("%20", " "))
-                }
+                Kind::Markdown if !target.contains("://") && is_note_file(target) => Some(target.replace("%20", " ")),
                 Kind::Markdown => None,
             }
         })
