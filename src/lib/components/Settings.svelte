@@ -1,6 +1,6 @@
 <script lang="ts">
   import { frame } from '../frame.svelte';
-  import { LINE_WIDTHS, TEXT_SCALES, type LineWidth } from '../store.svelte';
+  import { IMAGE_FOLDER, LINE_WIDTHS, TEXT_SCALES, type ImagePlace, type LineWidth } from '../store.svelte';
   import { dim, pop } from '../motion';
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
@@ -126,6 +126,14 @@
     <select aria-label={tr('settings.language')} value={language()} onchange={(e) => setLanguage(e.currentTarget.value as Language)}>
       {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
     </select>
+  </section>
+  <section>
+    <h3>{tr('images.title')}</h3>
+    <select aria-label={tr('images.title')} value={store.imagePlace} onchange={(e) => store.setImagePlace(e.currentTarget.value as ImagePlace)}>
+      <option value="vault">{tr('images.vault', { folder: IMAGE_FOLDER })}</option>
+      <option value="note">{tr('images.note')}</option>
+    </select>
+    <p class="hint">{tr('images.hint')}</p>
   </section>
   <section>
     <h3>{tr('tutorial.label')}</h3>

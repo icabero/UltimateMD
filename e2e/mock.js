@@ -140,6 +140,18 @@
       delete staged[token];
       return Object.keys(moved)[0];
     },
+    // Like the backend: a free name, numbered if taken.
+    save_image: ({ id, dir, name }) => {
+      const [stem, ext] = [name.replace(/\.[^.]+$/, ''), name.split('.').pop()];
+      for (let n = 1; ; n++) {
+        const candidate = n === 1 ? name : `${stem}-${n}.${ext}`;
+        const path = dir ? `${dir}/${candidate}` : candidate;
+        if (!(path in files[id])) {
+          files[id][path] = '';
+          return path;
+        }
+      }
+    },
     finish_trash: ({ token }) => {
       window.__trashed = [...(window.__trashed ?? []), ...Object.keys(staged[token])];
       delete staged[token];

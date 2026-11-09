@@ -181,6 +181,11 @@ export const en: Record<Key, string> = {
 
   'settings.title': 'Settings',
   'settings.language': 'Language',
+  'images.title': 'Pasted or dropped images',
+  'images.vault': 'In the vault’s “{folder}” folder',
+  'images.note': 'Beside the note',
+  'images.hint': 'Pasting a screenshot or dropping an image into a note saves it in the vault and links it in the note.',
+  'images.looseOnly': 'Images can only be pasted into notes of a vault.',
   'settings.tutorial': 'Show the tutorial',
   'settings.appearance': 'Appearance',
   'settings.followSystem': 'Follow the system',

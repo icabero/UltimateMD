@@ -111,6 +111,7 @@ fn main() {
             commands::mcp_info,
             commands::export_file,
             commands::undo_trash,
+            commands::save_image,
             commands::finish_trash,
             commands::open_exported,
             commands::reveal_exported,

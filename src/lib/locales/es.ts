@@ -180,6 +180,11 @@ export const es = {
 
   'settings.title': 'Ajustes',
   'settings.language': 'Idioma',
+  'images.title': 'Imágenes pegadas o arrastradas',
+  'images.vault': 'En la carpeta «{folder}» del vault',
+  'images.note': 'Junto a la nota',
+  'images.hint': 'Al pegar una captura o soltar una imagen en una nota, se guarda en el vault y se enlaza en la nota.',
+  'images.looseOnly': 'Las imágenes solo se pueden pegar en notas de un vault.',
   'settings.tutorial': 'Ver el tutorial',
   'settings.appearance': 'Apariencia',
   'settings.followSystem': 'Seguir al sistema',

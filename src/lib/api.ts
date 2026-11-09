@@ -138,6 +138,8 @@ export const api = {
   /** Sets a file or folder aside and returns the token that undoes it or trashes it for good. */
   trash: (id: string, path: string) => invoke<string>('trash_path', { id, path }),
   undoTrash: (id: string, token: string) => invoke<string>('undo_trash', { id, token }),
+  /** Saves an image in `dir` under `name`, or a numbered variant. Its path in the vault. */
+  saveImage: (id: string, dir: string, name: string, data: Uint8Array) => invoke<string>('save_image', { id, dir, name, data: Array.from(data) }),
   finishTrash: (id: string, token: string) => invoke<void>('finish_trash', { id, token }),
   search: (query: string) => invoke<VaultHit[]>('search_all', { query }),
   homeInfo: () => invoke<HomeInfo>('home_info'),

@@ -120,12 +120,37 @@
     paste(event, target) {
       const plain = plainPaste;
       plainPaste = false;
+      const images = [...(event.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+      if (images.length) {
+        event.preventDefault();
+        void insertImages(target, images, target.state.selection.main.from, target.state.selection.main.to);
+        return true;
+      }
       const html = event.clipboardData?.getData('text/html');
       if (plain || !html) return false;
       const markdown = htmlToMarkdown(html);
       if (markdown === null) return false;
       event.preventDefault();
       target.dispatch(target.state.replaceSelection(markdown), { scrollIntoView: true, userEvent: 'input.paste' });
+      return true;
+    },
+  });
+
+  /** Saves images in the vault and links them where they were pasted or dropped. */
+  async function insertImages(target: EditorView, files: File[], from: number, to: number) {
+    const markdown = await store.saveImages(tab, files);
+    if (markdown === null) return;
+    target.dispatch({ changes: { from, to, insert: markdown }, selection: { anchor: from + markdown.length }, userEvent: 'input.paste' });
+    target.focus();
+  }
+
+  const dropImages = EditorView.domEventHandlers({
+    drop(event, target) {
+      const images = [...(event.dataTransfer?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+      if (!images.length) return false;
+      event.preventDefault();
+      const at = target.posAtCoords({ x: event.clientX, y: event.clientY }) ?? target.state.selection.main.head;
+      void insertImages(target, images, at, at);
       return true;
     },
   });
@@ -141,7 +166,7 @@
         language.of(languageFor(current.kind)),
         mode.of(PLAIN),
         found,
-        ...(current.kind === 'md' ? [wikilinks, followWithCtrl, pasteMarkdown, autocompletion({ override: [noteCompletions, headingCompletions], icons: false })] : []),
+        ...(current.kind === 'md' ? [wikilinks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
           if (u.docChanged || u.selectionSet) publishPosition(u.state);

@@ -181,6 +181,11 @@ export const eu: Record<Key, string> = {
 
   'settings.title': 'Ezarpenak',
   'settings.language': 'Hizkuntza',
+  'images.title': 'Itsatsitako edo arrastatutako irudiak',
+  'images.vault': 'Vaulteko «{folder}» karpetan',
+  'images.note': 'Oharraren ondoan',
+  'images.hint': 'Pantaila-argazki bat itsatsi edo irudi bat ohar batean jaregitean, vaultean gordetzen da eta oharrean estekatzen da.',
+  'images.looseOnly': 'Irudiak vault bateko oharretan bakarrik itsats daitezke.',
   'settings.tutorial': 'Ikusi tutoriala',
   'settings.appearance': 'Itxura',
   'settings.followSystem': 'Jarraitu sistemari',

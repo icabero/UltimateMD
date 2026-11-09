@@ -7,7 +7,7 @@ import { api, type TreeNode, type Vault, type VaultThemes } from './api';
 import { fold } from './fold';
 import { withColors, type DiagramStyle } from './diagramStyle';
 import { tr } from './i18n.svelte';
-import { baseName, dirName, join, kindOf, resolveLink, type FileKind } from './paths';
+import { baseName, dirName, join, kindOf, linkFrom, resolveLink, type FileKind } from './paths';
 import { checksAtStart, isNewer, latestVersion } from './updates';
 import { THEMES, applyTheme, frontmatterValue, resolveTheme, themeById, type Theme } from './themes';
 
@@ -87,6 +87,10 @@ const TUTORIAL_KEY = 'ultimatemd.tutorial';
 const VIEW_KEY = 'ultimatemd.view';
 const LAYOUT_KEY = 'ultimatemd.layout';
 const READING_KEY = 'ultimatemd.reading';
+const IMAGES_KEY = 'ultimatemd.images';
+/** Where pasted and dropped images go: a folder at the vault root, or beside the note. */
+export type ImagePlace = 'vault' | 'note';
+export const IMAGE_FOLDER = 'adjuntos';
 export const ZOOM = { min: 0.6, max: 2, step: 0.1 };
 export const TEXT_SCALES = [0.9, 1, 1.15, 1.3] as const;
 export const LINE_WIDTHS = { narrow: '600px', normal: null, wide: '960px', full: 'none' } as const;
@@ -128,6 +132,14 @@ function loadReading(): Reading {
   }
 }
 
+function loadImagePlace(): ImagePlace {
+  try {
+    return localStorage.getItem(IMAGES_KEY) === 'note' ? 'note' : 'vault';
+  } catch {
+    return 'vault';
+  }
+}
+
 function loadLayout(): Layout {
   const fallback: Layout = { left: true, right: false, panelTab: 'outline', rightWidth: 280 };
   try {
@@ -165,6 +177,17 @@ function flatten(nodes: TreeNode[], out: string[] = []) {
   return out;
 }
 
+const IMAGE_TYPES: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/svg+xml': 'svg', 'image/avif': 'avif', 'image/bmp': 'bmp' };
+
+/** A screenshot gets a dated name; a dropped file keeps its own, without characters systems refuse. */
+function imageName(file: File) {
+  const ext = IMAGE_TYPES[file.type] ?? 'png';
+  // eslint-disable-next-line no-control-regex -- control characters are not valid in file names
+  if (file.name && !/^image\.\w+$/i.test(file.name)) return file.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-');
+  const stamp = new Date().toISOString().slice(0, 19).replace('T', '-').replace(/:/g, '');
+  return `pegado-${stamp}.${ext}`;
+}
+
 class Store {
   vaults = $state<Vault[]>([]);
   trees = $state<Record<string, TreeNode[]>>({});
@@ -194,6 +217,7 @@ class Store {
   reveal = $state<Reveal | null>(null);
   layout = $state(loadLayout());
   reading = $state(loadReading());
+  imagePlace = $state<ImagePlace>(loadImagePlace());
   windowWidth = $state(innerWidth);
   /** A bar shown by hand while the window is too narrow for it. It folds again once the width changes enough. */
   peek = $state({ left: false, right: false });
@@ -561,6 +585,40 @@ class Store {
     } catch {
       // Outside the app, in the interface tests.
     }
+  }
+
+  setImagePlace(place: ImagePlace) {
+    this.imagePlace = place;
+    try {
+      localStorage.setItem(IMAGES_KEY, place);
+    } catch {
+      // Lasts for this session only.
+    }
+  }
+
+  /**
+   * Saves pasted or dropped images in the vault and returns their Markdown,
+   * one per line, linked from the note. Null when they cannot be saved here.
+   */
+  async saveImages(tab: Tab, files: File[]): Promise<string | null> {
+    if (tab.loose) {
+      this.notify(tr('images.looseOnly'));
+      return null;
+    }
+    const dir = this.imagePlace === 'note' ? dirName(tab.path) : IMAGE_FOLDER;
+    const links: string[] = [];
+    for (const file of files) {
+      const name = imageName(file);
+      try {
+        const path = await api.saveImage(tab.vaultId, dir, name, new Uint8Array(await file.arrayBuffer()));
+        links.push(`![](${linkFrom(tab.path, path)})`);
+      } catch (e) {
+        this.notify(e);
+      }
+    }
+    if (!links.length) return null;
+    await this.refreshTree(tab.vaultId);
+    return links.join('\n');
   }
 
   setReading(change: Partial<Reading>) {

@@ -141,6 +141,12 @@ pub fn rename_path(id: String, from: String, to: String) -> Result<links::LinkUp
     links::move_path(&fs(&id)?, &from, &to)
 }
 
+/// Saves an image pasted or dropped into a note. Its path in the vault.
+#[tauri::command(async)]
+pub fn save_image(id: String, dir: String, name: String, data: Vec<u8>) -> Result<String> {
+    fs(&id)?.save_image(&dir, &name, &data)
+}
+
 /// Sets a file or folder aside, to be undone or trashed for good. Its token.
 #[tauri::command(async)]
 pub fn trash_path(id: String, path: String) -> Result<String> {

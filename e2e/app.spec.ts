@@ -724,6 +724,47 @@ test('Ctrl+Shift+V pastes plain text', async ({ page }) => {
   expect(text).not.toContain('**');
 });
 
+/** Pastes or drops an image file into the editor, as the system would. */
+async function giveImage(page: Page, how: 'paste' | 'drop', name: string) {
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.evaluate(([how, name]) => {
+    const content = document.querySelector('.cm-content')!;
+    const data = new DataTransfer();
+    data.items.add(new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], name, { type: 'image/png' }));
+    const box = content.getBoundingClientRect();
+    const event =
+      how === 'paste'
+        ? new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })
+        : new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true, clientX: box.left + 10, clientY: box.bottom - 5 });
+    content.dispatchEvent(event);
+  }, [how, name] as const);
+}
+
+test('a pasted screenshot is saved in the vault and linked', async ({ page }) => {
+  await open(page, 'dir');
+  await open(page, 'Destino');
+  await giveImage(page, 'paste', 'image.png');
+  // Saving the image takes a moment, and the note is saved after it.
+  await expect.poll(() => disk(page, 'a', 'dir/Destino.md'), { timeout: 5000 }).toMatch(/!\[\]\(\.\.\/adjuntos\/pegado-\d{4}-\d{2}-\d{2}-\d{6}\.png\)/);
+  await expect(page.locator('aside').getByRole('button', { name: 'adjuntos', exact: true })).toBeVisible();
+});
+
+test('dropped images keep their name, never replace a file and can go beside the note', async ({ page }) => {
+  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByRole('dialog', { name: 'Ajustes' }).getByLabel('Imágenes pegadas o arrastradas').selectOption('note');
+  await page.keyboard.press('Escape');
+  await open(page, 'dir');
+  await open(page, 'Destino');
+  await giveImage(page, 'drop', 'mapa (ruta).png');
+  await giveImage(page, 'drop', 'mapa (ruta).png');
+  await expect.poll(() => disk(page, 'a', 'dir/Destino.md'), { timeout: 5000 }).toContain('-2.png');
+  const text = await disk(page, 'a', 'dir/Destino.md');
+  expect(text).toContain('![](mapa%20%28ruta%29.png)');
+  expect(text).toContain('![](mapa%20%28ruta%29-2.png)');
+  await expect(prose(page).locator('img')).toHaveCount(2);
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();

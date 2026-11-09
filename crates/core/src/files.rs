@@ -1,6 +1,6 @@
 //! File operations inside one vault.
 
-use crate::paths::{check_new_path, is_note, normalize, resolve, to_rel};
+use crate::paths::{check_new_name, check_new_path, is_image, is_note, normalize, resolve, to_rel};
 use crate::{Error, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -194,6 +194,38 @@ impl Vault {
         // Canonical Windows paths are `\\?\C:\...`; the shell API behind the
         // trash expects the ordinary form.
         trash::delete(dunce::simplified(&path)).map_err(|e| Error::Trash(e.to_string()))
+    }
+
+    /// Saves an image pasted or dropped into a note, in `dir`, under `name` or a
+    /// numbered variant of it if that is taken. Only images, never over a file.
+    /// Returns its path.
+    pub fn save_image(&self, dir: &str, name: &str, bytes: &[u8]) -> Result<String> {
+        let dir = normalize(dir)?;
+        check_new_name(name)?;
+        if !is_image(name) {
+            return Err(Error::PathNotAllowed(name.to_string()));
+        }
+        if !dir.is_empty() {
+            check_new_path(&dir)?;
+        }
+        let (stem, ext) = name.rsplit_once('.').unwrap_or((name, ""));
+        let folder = resolve(&self.root, &dir)?;
+        std::fs::create_dir_all(&folder)?;
+        for n in 1..1000 {
+            let candidate = if n == 1 { name.to_string() } else { format!("{stem}-{n}.{ext}") };
+            let rel = if dir.is_empty() { candidate.clone() } else { format!("{dir}/{candidate}") };
+            let path = resolve(&self.root, &rel)?;
+            // `create_new` never replaces a file that appeared meanwhile.
+            match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(mut file) => {
+                    std::io::Write::write_all(&mut file, bytes)?;
+                    return Ok(rel);
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Err(Error::AlreadyExists(name.to_string()))
     }
 
     /// Moves a file or folder aside, so a deletion can be undone for a while.
@@ -494,6 +526,19 @@ mod tests {
 
     // Only runs where the trash is real and disposable, such as the CI runners.
     #[cfg(windows)]
+    #[test]
+    fn pasted_images_are_saved_without_replacing_anything() {
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::new(d.path());
+        assert_eq!(v.save_image("adjuntos", "captura.png", b"uno").unwrap(), "adjuntos/captura.png");
+        assert_eq!(v.save_image("adjuntos", "captura.png", b"dos").unwrap(), "adjuntos/captura-2.png");
+        assert_eq!(std::fs::read(d.path().join("adjuntos/captura.png")).unwrap(), b"uno");
+        assert_eq!(v.save_image("", "raiz.jpg", b"x").unwrap(), "raiz.jpg");
+        assert!(v.save_image("adjuntos", "nota.md", b"x").is_err(), "only images");
+        assert!(v.save_image("adjuntos", "a/b.png", b"x").is_err(), "a name, not a path");
+        assert!(v.save_image("../fuera", "c.png", b"x").is_err(), "never outside the vault");
+    }
+
     #[test]
     fn a_deletion_can_be_undone_while_it_waits() {
         let d = tempfile::tempdir().unwrap();
