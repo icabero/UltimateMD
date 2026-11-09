@@ -105,7 +105,7 @@ pub fn search(vault: &VaultFs, query: &str, limit: usize) -> Result<Vec<SearchHi
         }
     }
     // Stable, so notes that score the same keep the vault's order.
-    found.sort_by(|a, b| b.0.cmp(&a.0));
+    found.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
     Ok(found
         .into_iter()
         .flat_map(|(score, hits)| hits.into_iter().map(move |h| SearchHit { score, ..h }))

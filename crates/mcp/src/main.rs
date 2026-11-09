@@ -201,7 +201,8 @@ impl Server {
             // Best notes first across vaults. Stable, so each note's lines stay together.
             results.sort_by_key(|(_, h)| std::cmp::Reverse(h.score));
             results.truncate(limit);
-            let results: Vec<_> = results.into_iter().map(|(vault, hit)| json!({ "vault": vault, "hit": hit })).collect();
+            let results: Vec<_> =
+                results.into_iter().map(|(vault, hit)| json!({ "vault": vault, "hit": hit })).collect();
             Ok(json!({ "results": results }))
         })())
     }
