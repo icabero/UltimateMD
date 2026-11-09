@@ -64,6 +64,27 @@
       files[id][path] = content;
       return bump(id, path);
     },
+    // Moves a note or folder and, like the backend, rewrites [[name]] links to a renamed note.
+    rename_path: ({ id, from, to }) => {
+      const notes = files[id];
+      for (const path of Object.keys(notes)) {
+        if (path !== from && !path.startsWith(`${from}/`)) continue;
+        notes[to + path.slice(from.length)] = notes[path];
+        delete notes[path];
+      }
+      const stem = (p) => p.split('/').pop().replace(/\.md$/, '');
+      const update = { links: 0, notes: [] };
+      if (stem(from) === stem(to)) return update;
+      for (const [path, text] of Object.entries(notes)) {
+        const found = text.split(`[[${stem(from)}]]`).length - 1;
+        if (!found) continue;
+        notes[path] = text.replaceAll(`[[${stem(from)}]]`, `[[${stem(to)}]]`);
+        bump(id, path);
+        update.links += found;
+        update.notes.push(path);
+      }
+      return update;
+    },
     set_vault_access: ({ id, mcp }) => {
       vaults.find((v) => v.id === id).mcp = mcp;
     },
