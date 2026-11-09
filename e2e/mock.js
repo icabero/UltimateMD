@@ -37,7 +37,14 @@
 
   function tree(id) {
     const root = [];
-    for (const path of Object.keys(files[id]).sort()) {
+    // Folders first, as the backend sorts them.
+    const sortKey = (path) => path.split('/').map((part, i, all) => `${i < all.length - 1 ? 0 : 1}${part.toLowerCase()}`);
+    const paths = Object.keys(files[id]).sort((a, b) => {
+      const [x, y] = [sortKey(a), sortKey(b)];
+      for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+      return x.length - y.length;
+    });
+    for (const path of paths) {
       const parts = path.split('/');
       let level = root;
       parts.forEach((name, i) => {
@@ -174,6 +181,7 @@
 
   window.__test = {
     files,
+    vaults,
     vaultThemes,
     /** Simulates another program, such as the MCP server, changing a file. */
     externalWrite(id, path, content) {
