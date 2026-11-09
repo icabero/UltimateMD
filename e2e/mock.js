@@ -68,12 +68,17 @@
       vaults.find((v) => v.id === id).mcp = mcp;
     },
     mcp_info: () => ({ binary: 'C:\\Program Files\\UltimateMD\\ultimatemd-mcp.exe', available: true }),
-    search_all: ({ query }) =>
-      Object.entries(files).flatMap(([vaultId, notes]) =>
-        Object.entries(notes)
-          .filter(([, text]) => text.includes(query))
-          .map(([path]) => ({ vaultId, hit: { path, line: 1, text: query } })),
-      ),
+    // Like the backend: every word, ignoring case and accents, one hit per line.
+    search_all: ({ query }) => {
+      const fold = (t) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+      const words = fold(query).split(/\s+/).filter(Boolean);
+      const matches = (t) => words.every((w) => fold(t).includes(w));
+      return Object.entries(files).flatMap(([vaultId, notes]) =>
+        Object.entries(notes).flatMap(([path, text]) =>
+          text.split('\n').flatMap((line, i) => (matches(line) ? [{ vaultId, hit: { path, line: i + 1, text: line.trim(), score: 1 } }] : [])),
+        ),
+      );
+    },
     'plugin:event|listen': ({ event, handler }) => {
       listeners[event] = handler;
       return 1;

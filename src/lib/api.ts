@@ -26,7 +26,8 @@ export interface Note {
 
 export interface VaultHit {
   vaultId: string;
-  hit: { path: string; line: number; text: string };
+  /** `score` ranks the note as a whole; line 0 means the name matched. */
+  hit: { path: string; line: number; text: string; score: number };
 }
 
 export interface LinkInfo {

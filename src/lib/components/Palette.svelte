@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fold } from '../fold';
   import { tr } from '../i18n.svelte';
   import { store } from '../store.svelte';
 
@@ -8,9 +9,9 @@
 
   const all = $derived(store.openVaults.flatMap((v) => store.files(v.id).map((path) => ({ vault: v, path }))));
 
-  /** Subsequence match. Tighter matches and matches in the file name rank higher. */
+  /** Subsequence match, ignoring case and accents. Tighter matches and matches in the file name rank higher. */
   function score(text: string, q: string) {
-    const lower = text.toLowerCase();
+    const lower = fold(text);
     let at = -1, gaps = 0;
     for (const c of q) {
       const next = lower.indexOf(c, at + 1);
@@ -22,7 +23,7 @@
   }
 
   const results = $derived.by(() => {
-    const q = query.toLowerCase().replace(/\s+/g, '');
+    const q = fold(query).replace(/\s+/g, '');
     if (!q) return all.slice(0, MAX);
     return all
       .map((f) => ({ f, s: score(f.path, q) }))

@@ -159,6 +159,9 @@ pub fn search_all(query: String) -> Result<Vec<VaultHit>> {
         let Ok(hits) = search::search(&VaultFs::new(&vault.path), &query, SEARCH_LIMIT) else { continue };
         out.extend(hits.into_iter().map(|hit| VaultHit { vault_id: vault.id.clone(), hit }));
     }
+    // Best notes first across vaults. Stable, so each note's lines stay together.
+    out.sort_by_key(|h| std::cmp::Reverse(h.hit.score));
+    out.truncate(SEARCH_LIMIT);
     Ok(out)
 }
 
