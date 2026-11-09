@@ -231,6 +231,7 @@
           <button class="plain" onclick={deleteTemplate}>{tr('common.delete')}</button>
         {/if}
       </div>
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -- our own translation, with markup -->
       <p>{@html tr('export.templateHelp')}</p>
     {/if}
 

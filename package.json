@@ -11,7 +11,8 @@
     "build": "tauri build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test:e2e": "playwright test",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",
@@ -42,14 +43,22 @@
     "mermaid": "^12.3.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.64.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tauri-apps/cli": "^2.12.4",
     "@tsconfig/svelte": "^5.0.8",
     "@types/markdown-it": "^14.2.0",
+    "eslint": "^10.14.0",
+    "eslint-plugin-svelte": "^3.24.1",
+    "globals": "^17.14.0",
     "svelte": "^5.57.3",
     "svelte-check": "^4.7.8",
     "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1",
     "vite": "^8.3.6"
+  },
+  "overrides": {
+    "minimatch": "^11.0.5"
   }
 }

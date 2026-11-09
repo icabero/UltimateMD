@@ -97,8 +97,10 @@
   let style = $state<DiagramStyle>({ ...start?.style });
   /** Set when working on the code itself, for the types with no form. */
   let code = $state<{ template: string; lang: string; source: string } | null>(handWritten ? { template: '', lang: start.lang, source: start.source.replace(/\n$/, '') } : null);
-  /** Work on each type, so that trying another one loses nothing. */
+  /** Work on each type, so that trying another one loses nothing. Never drawn, so not reactive. */
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const drafts = new Map<Kind, Diagram>();
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const codeDrafts = new Map<string, string>();
 
   let svg = $state('');
@@ -424,6 +426,7 @@
   </div>
 
   <div class="preview" aria-label={tr('export.preview')}>
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -- renderDiagram sanitizes the SVG -->
     <div class="drawing">{@html svg}</div>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     {#if !code}
