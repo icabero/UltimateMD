@@ -175,7 +175,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Search note names and contents. Returns matching lines; line 0 means the file name matched.",
+        description = "Search note names and contents, ignoring case and accents. Returns matching lines, best notes first; line 0 means the file name matched.",
         annotations(read_only_hint = true)
     )]
     async fn search_notes(
@@ -196,8 +196,13 @@ impl Server {
             let mut results = Vec::new();
             for name in names {
                 let hits = search::search(&open(&name, false)?, &a.query, limit)?;
-                results.extend(hits.into_iter().map(|h| json!({ "vault": name, "hit": h })));
+                results.extend(hits.into_iter().map(|h| (name.clone(), h)));
             }
+            // Best notes first across vaults. Stable, so each note's lines stay together.
+            results.sort_by_key(|(_, h)| std::cmp::Reverse(h.score));
+            results.truncate(limit);
+            let results: Vec<_> =
+                results.into_iter().map(|(vault, hit)| json!({ "vault": vault, "hit": hit })).collect();
             Ok(json!({ "results": results }))
         })())
     }

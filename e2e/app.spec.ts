@@ -115,7 +115,59 @@ test('the quick switcher finds notes in every vault', async ({ page }) => {
 test('global search covers every vault', async ({ page }) => {
   await page.keyboard.press('Control+Shift+f');
   await page.getByPlaceholder('Buscar en los vaults abiertos').fill('#');
-  await expect(page.locator('.results button')).toHaveCount(6);
+  await expect(page.locator('.results .note')).toHaveCount(6);
+});
+
+/** A long note whose match is far down, for the search tests. */
+async function longNote(page: Page) {
+  await page.evaluate(() => {
+    const filler = Array.from({ length: 80 }, (_, i) => `Línea de relleno ${i + 1}`);
+    filler[59] = 'Acta de la Reunión de marzo';
+    (window as any).__test.files.a['Larga.md'] = ['# Larga', '', ...filler, ''].join('\n');
+  });
+}
+
+async function searchFor(page: Page, query: string) {
+  await page.keyboard.press('Control+Shift+f');
+  await page.getByPlaceholder('Buscar en los vaults abiertos').fill(query);
+}
+
+test('search ignores accents and marks the words found', async ({ page }) => {
+  await longNote(page);
+  await searchFor(page, 'reunion MARZO');
+  const note = page.locator('.results .note');
+  await expect(note).toHaveCount(1);
+  await expect(note.locator('.title')).toHaveText('Larga');
+  await expect(note.locator('.line mark')).toHaveText(['Reunión', 'marzo']);
+});
+
+test('a search result opens the note at the line found', async ({ page }) => {
+  await longNote(page);
+  await searchFor(page, 'reunion');
+  await page.locator('.results .line').click();
+  await expect(page.locator('.cm-activeLine')).toContainText('Acta de la Reunión de marzo');
+  await expect(page.locator('.cm-activeLine')).toBeInViewport();
+  await expect(page.locator('.cm-found')).toHaveText('Reunión');
+  // Marks last until the note is edited.
+  await page.keyboard.type('x');
+  await expect(page.locator('.cm-found')).toHaveCount(0);
+});
+
+test('in reading view a search result scrolls the preview to the match', async ({ page }) => {
+  await longNote(page);
+  await open(page, 'Inicio');
+  await page.getByTitle('Vista previa', { exact: true }).click();
+  await searchFor(page, 'reunion');
+  await page.locator('.results .line').click();
+  await expect.poll(() => page.evaluate(() => (CSS as any).highlights.get('umd-found')?.size ?? 0)).toBe(1);
+  await expect(prose(page).getByText('Acta de la Reunión de marzo')).toBeInViewport();
+});
+
+test('the quick switcher ignores accents', async ({ page }) => {
+  await page.keyboard.press('Control+p');
+  await page.getByPlaceholder('Abrir nota…').fill('hóndo');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main footer')).toContainText('Trabajo / dir/sub/Hondo.md');
 });
 
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {

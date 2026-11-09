@@ -6123,6 +6123,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "trash",
+ "unicode-normalization",
  "uuid",
  "walkdir",
  "zip",

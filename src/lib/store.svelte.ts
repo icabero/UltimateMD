@@ -28,6 +28,13 @@ export interface Tab {
   loose: { absolute: string; dir: string } | null;
 }
 
+/** A place to show in a tab: a line, with the words of a search marked. Line 0 is the top. */
+export interface Reveal {
+  key: string;
+  line: number;
+  terms: string[];
+}
+
 export interface Dialog {
   title: string;
   /** Text field value. Null for a yes/no question. */
@@ -112,6 +119,8 @@ class Store {
   themeEditor = $state<string | null>(null);
   /** The vault whose Word settings are open. */
   wordScreen = $state<string | null>(null);
+  /** Taken by the editor, or the preview when it shows alone. */
+  reveal = $state<Reveal | null>(null);
 
   #timers = new Map<string, ReturnType<typeof setTimeout>>();
   #toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -358,6 +367,13 @@ class Store {
     });
     this.activeKey = key;
     this.persist();
+  }
+
+  /** Opens a note at a line, with the words of a search marked. */
+  async openAt(vaultId: string, path: string, line: number, terms: string[]) {
+    await this.openFile(vaultId, path);
+    const key = tabKey(vaultId, path);
+    if (this.activeKey === key) this.reveal = { key, line, terms };
   }
 
   edit(tab: Tab, content: string) {
