@@ -17,6 +17,7 @@
   import ThemeEditor from './lib/components/ThemeEditor.svelte';
   import Tutorial from './lib/components/Tutorial.svelte';
   import WordScreen from './lib/components/WordScreen.svelte';
+  import BrokenLinks from './lib/components/BrokenLinks.svelte';
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
   import { applyInstallerLanguage, tr } from './lib/i18n.svelte';
@@ -202,6 +203,7 @@
 {#if store.about}<About />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
 {#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
+{#if store.brokenLinks}<BrokenLinks vaultId={store.brokenLinks} />{/if}
 {#if store.templatePicker}<TemplatePicker {...store.templatePicker} />{/if}
 {#if store.exporting && tab}<Export {tab} />{/if}
 {#if store.dialog}

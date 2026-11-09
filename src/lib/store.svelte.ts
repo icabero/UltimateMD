@@ -212,6 +212,8 @@ class Store {
   dialog = $state<Dialog | null>(null);
   vaultThemes = $state<Record<string, VaultThemes>>({});
   themeEditor = $state<string | null>(null);
+  /** The vault whose broken links are listed. */
+  brokenLinks = $state<string | null>(null);
   /** The vault whose Word settings are open. */
   wordScreen = $state<string | null>(null);
   /** Where a note from a template goes, while choosing the template. */
@@ -798,13 +800,13 @@ class Store {
     }
   }
 
-  async createNote(vaultId: string, dir: string, name: string, content = '') {
+  async createNote(vaultId: string, dir: string, name: string, content = '', open = true) {
     const file = /\.(md|markdown|html?)$/i.test(name) ? name : `${name}.md`;
     const path = join(dir, file);
     try {
       await api.create(vaultId, path, content);
       await this.refreshTree(vaultId);
-      await this.openFile(vaultId, path);
+      if (open) await this.openFile(vaultId, path);
     } catch (e) {
       this.notify(e);
     }

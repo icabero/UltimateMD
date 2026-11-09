@@ -264,6 +264,18 @@ pub fn note_links(id: String, path: String) -> Result<LinkInfo> {
     links::info(&fs(&id)?, &path)
 }
 
+/// Every link in the vault that leads nowhere.
+#[tauri::command(async)]
+pub fn broken_links(id: String) -> Result<Vec<links::BrokenLink>> {
+    links::broken(&fs(&id)?)
+}
+
+/// Points the links of a note written as `target` to another note or file.
+#[tauri::command(async)]
+pub fn repoint_link(id: String, note: String, target: String, to: String) -> Result<usize> {
+    links::repoint(&fs(&id)?, &note, &target, &to)
+}
+
 #[tauri::command(async)]
 pub fn open_with_system(app: AppHandle, id: String, path: String) -> Result<()> {
     let file = fs(&id)?.resolve_file(&path)?;

@@ -120,6 +120,37 @@ test('in visual mode a broken diagram explains itself too', async ({ page }) => 
   await expect(builder(page, 'Editar diagrama').getByLabel('Código del diagrama')).toHaveValue('esto no vale -> {');
 });
 
+test('the broken links of a vault are listed, mended and created', async ({ page }) => {
+  await page.evaluate(() => {
+    (window as any).__test.files.a['Notas.md'] = '# Notas\n\nVer [[Destno]].\n\nY [[Otra cosa]].\n';
+  });
+  await page.locator('aside').getByRole('button', { name: 'Trabajo', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Enlaces rotos' }).click();
+  const screen = page.getByRole('dialog', { name: 'Enlaces rotos · Trabajo' });
+  await expect(screen).toContainText('3 enlaces rotos en 2 notas');
+  const destno = screen.locator('.link', { hasText: 'Destno' });
+  await expect(destno).toContainText('línea 3');
+  await destno.getByRole('button', { name: 'Usar «Destino»' }).click();
+  await expect(screen).toContainText('2 enlaces rotos en 2 notas');
+  expect(await disk(page, 'a', 'Notas.md')).toContain('Ver [[Destino]].');
+
+  await screen.locator('.link', { hasText: 'Otra cosa' }).getByRole('button', { name: 'Crear la nota' }).click();
+  await expect(screen).toContainText('Un enlace roto.');
+  expect(await disk(page, 'a', 'Otra cosa.md')).toBe('');
+
+  await screen.locator('.link', { hasText: 'Falta' }).getByRole('button', { name: /Falta/ }).click();
+  await expect(screen).toBeHidden();
+  await expect(page.locator('main footer')).toContainText('Trabajo / Inicio.md');
+});
+
+test('the links panel of a note leads to every broken link of the vault', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle(/^Panel de la nota/).click();
+  await notePanel(page).getByRole('tab', { name: 'Enlaces' }).click();
+  await notePanel(page).getByRole('button', { name: 'Ver todos los del vault' }).click();
+  await expect(page.getByRole('dialog', { name: 'Enlaces rotos · Trabajo' })).toContainText('Un enlace roto.');
+});
+
 test('engine errors become a line and a reason in the language of the app', async ({ page }) => {
   const problems = await page.evaluate(async () => {
     const { explainDiagramError, describeProblem } = await import('/src/lib/diagramErrors.ts');

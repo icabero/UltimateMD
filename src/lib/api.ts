@@ -64,6 +64,18 @@ export interface VaultThemes {
   invalid: string[];
 }
 
+/** A link that leads nowhere. */
+export interface BrokenLink {
+  note: string;
+  /** What it points to, as written. */
+  target: string;
+  line: number;
+  /** It points to a note, which can be created, rather than a file. */
+  toNote: boolean;
+  /** The closest note or file there is. */
+  suggestion: string | null;
+}
+
 export type PlanSection =
   | { kind: 'heading'; text: string; style: string | null; level: number; pageBreak: boolean }
   | { kind: 'note'; path: string; shift: number; pageBreak: boolean };
@@ -150,6 +162,9 @@ export const api = {
   search: (query: string) => invoke<VaultHit[]>('search_all', { query }),
   homeInfo: () => invoke<HomeInfo>('home_info'),
   links: (id: string, path: string) => invoke<LinkInfo>('note_links', { id, path }),
+  brokenLinks: (id: string) => invoke<BrokenLink[]>('broken_links', { id }),
+  /** How many links it changed. */
+  repointLink: (id: string, note: string, target: string, to: string) => invoke<number>('repoint_link', { id, note, target, to }),
   openWithSystem: (id: string, path: string) => invoke<void>('open_with_system', { id, path }),
   mcpInfo: () => invoke<{ binary: string; available: boolean }>('mcp_info'),
   openPath: (path: string) => invoke<Opened>('open_path', { path }),
