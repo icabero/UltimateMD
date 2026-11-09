@@ -19,7 +19,7 @@
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
   import { applyInstallerLanguage, tr } from './lib/i18n.svelte';
-  import { store, type ViewMode } from './lib/store.svelte';
+  import { LINE_WIDTHS, ZOOM, store, type ViewMode } from './lib/store.svelte';
   import { applyTheme } from './lib/themes';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
@@ -49,6 +49,7 @@
     }
     store.init().catch((e) => store.notify(e));
     void frame.watch();
+    void store.applyZoom();
     // The window starts hidden so it first appears with the right theme, language and frame.
     void Promise.all([applyInstallerLanguage(), frame.apply()]).finally(() => {
       try {
@@ -82,6 +83,10 @@
         if (tab) store.setView(tab, VIEWS[(VIEWS.indexOf(tab.view) + 1) % VIEWS.length]);
       },
       tab: () => store.cycleTab(e.shiftKey ? -1 : 1),
+      '+': () => store.setZoom(store.reading.zoom + ZOOM.step),
+      '=': () => store.setZoom(store.reading.zoom + ZOOM.step),
+      '-': () => store.setZoom(store.reading.zoom - ZOOM.step),
+      '0': () => store.setZoom(null),
     };
     const shifted: Record<string, () => void> = {
       f: () => {
@@ -94,6 +99,8 @@
         if (tab?.kind === 'md') store.toggleBar('right');
       },
       tab: actions.tab,
+      // On some keyboards + needs Shift.
+      '+': actions['+'],
     };
     const run = e.shiftKey ? shifted[key] : actions[key];
     if (!run) return;
@@ -152,7 +159,7 @@
     {:else if tab?.missing}
       <div class="banner" role="alert"><span>{tr('app.missingBanner')}</span></div>
     {/if}
-    <div class="content">
+    <div class="content" style:--text-scale={store.reading.textScale} style:--prose-width={LINE_WIDTHS[store.reading.lineWidth]}>
       {#if !tab}
         <Welcome />
       {:else if tab.kind === 'image'}

@@ -1,5 +1,6 @@
 import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { api, type TreeNode, type Vault, type VaultThemes } from './api';
 import { withColors, type DiagramStyle } from './diagramStyle';
@@ -83,6 +84,18 @@ const THEME_KEY = 'ultimatemd.theme';
 const TUTORIAL_KEY = 'ultimatemd.tutorial';
 const VIEW_KEY = 'ultimatemd.view';
 const LAYOUT_KEY = 'ultimatemd.layout';
+const READING_KEY = 'ultimatemd.reading';
+export const ZOOM = { min: 0.6, max: 2, step: 0.1 };
+export const TEXT_SCALES = [0.9, 1, 1.15, 1.3] as const;
+export const LINE_WIDTHS = { narrow: '600px', normal: null, wide: '960px', full: 'none' } as const;
+export type LineWidth = keyof typeof LINE_WIDTHS;
+
+/** How someone likes to read: the interface zoom, the notes' text size and line width. */
+interface Reading {
+  zoom: number;
+  textScale: number;
+  lineWidth: LineWidth;
+}
 /** Below these window widths a side bar folds away by itself. */
 const LEFT_MIN = 760;
 const RIGHT_MIN = 1080;
@@ -99,6 +112,15 @@ function loadThemeChoice(): ThemeChoice {
   const fallback = { fixed: null, light: 'claro', dark: 'oscuro' };
   try {
     return { ...fallback, ...JSON.parse(localStorage.getItem(THEME_KEY) ?? '{}') };
+  } catch {
+    return fallback;
+  }
+}
+
+function loadReading(): Reading {
+  const fallback: Reading = { zoom: 1, textScale: 1, lineWidth: 'normal' };
+  try {
+    return { ...fallback, ...JSON.parse(localStorage.getItem(READING_KEY) ?? '{}') };
   } catch {
     return fallback;
   }
@@ -169,6 +191,7 @@ class Store {
   /** Taken by the editor, or the preview when it shows alone. */
   reveal = $state<Reveal | null>(null);
   layout = $state(loadLayout());
+  reading = $state(loadReading());
   windowWidth = $state(innerWidth);
   /** A bar shown by hand while the window is too narrow for it. It folds again once the width changes enough. */
   peek = $state({ left: false, right: false });
@@ -500,6 +523,31 @@ class Store {
     this.layout.panelTab = tab;
     this.toggleBar('right', true);
     this.saveLayout();
+  }
+
+  /** Zooms the whole interface, as a browser does. `null` goes back to 100 %. */
+  setZoom(zoom: number | null, announce = true) {
+    const next = zoom === null ? 1 : Math.round(Math.min(ZOOM.max, Math.max(ZOOM.min, zoom)) * 10) / 10;
+    this.setReading({ zoom: next });
+    void this.applyZoom();
+    if (announce) this.notify(tr('zoom.level', { n: Math.round(next * 100) }));
+  }
+
+  async applyZoom() {
+    try {
+      await getCurrentWebview().setZoom(this.reading.zoom);
+    } catch {
+      // Outside the app, in the interface tests.
+    }
+  }
+
+  setReading(change: Partial<Reading>) {
+    this.reading = { ...this.reading, ...change };
+    try {
+      localStorage.setItem(READING_KEY, JSON.stringify(this.reading));
+    } catch {
+      // Lasts for this session only.
+    }
   }
 
   saveLayout() {

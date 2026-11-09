@@ -261,6 +261,7 @@
     commands[`plugin:window|${name}`] = (args) => void window.__windowCalls.push({ name, value: args?.value });
   }
   commands['plugin:window|is_maximized'] = () => false;
+  commands['plugin:webview|set_webview_zoom'] = ({ value }) => void (window.__zoom = value);
 
   window.__TAURI_INTERNALS__ = {
     metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },

@@ -556,6 +556,34 @@ test('a deletion goes to the trash once its notice goes', async ({ page }) => {
   await expect.poll(() => page.evaluate(() => (window as any).__trashed)).toEqual(['Otra.md', 'Rara.md']);
 });
 
+test('the interface zooms with Ctrl + and Ctrl −, and remembers it', async ({ page }) => {
+  await page.keyboard.press('Control+=');
+  await page.keyboard.press('Control+=');
+  await expect(page.getByRole('status')).toHaveText('Zoom 120 %');
+  expect(await page.evaluate(() => (window as any).__zoom)).toBe(1.2);
+  await page.keyboard.press('Control+-');
+  await expect.poll(() => page.evaluate(() => (window as any).__zoom)).toBe(1.1);
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => (window as any).__zoom)).toBe(1.1);
+  await page.keyboard.press('Control+0');
+  await expect(page.getByRole('status')).toHaveText('Zoom 100 %');
+});
+
+test('text size and line width change notes on screen but not exports', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Ajustes y MCP').click();
+  const settings = page.getByRole('dialog', { name: 'Ajustes' });
+  await settings.getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
+  await settings.getByLabel('Tamaño del texto de las notas').selectOption({ label: 'Grande' });
+  await settings.getByLabel('Ancho de línea').selectOption({ label: 'Ancho' });
+  await page.keyboard.press('Escape');
+  await expect(prose(page)).toHaveCSS('font-size', '18.4px');
+  await expect(prose(page)).toHaveCSS('max-width', '960px');
+  await expect(page.locator('.cm-scroller').first()).toHaveCSS('font-size', '15.525px');
+  await exportAs(page, 'HTML');
+  await expect(page.getByRole('dialog', { name: 'Exportar' }).locator('.html article')).toHaveCSS('font-size', '16px');
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();
