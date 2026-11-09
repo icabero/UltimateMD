@@ -98,6 +98,64 @@ test('several D2 diagrams in a note all finish, even with a bad one', async ({ p
   await expect(prose(page).locator('.diagram-error')).toHaveCount(1);
 });
 
+test('a broken diagram says what fails and where, and opens in the builder', async ({ page }) => {
+  await open(page, 'D2');
+  await page.getByTitle('Vista previa', { exact: true }).click();
+  const box = prose(page).locator('.diagram-error');
+  await expect(box).toContainText('Este diagrama tiene un error', { timeout: 15_000 });
+  await expect(box).toContainText('Línea 1: A la conexión le falta el destino. (y 1 más)');
+  await expect(box).not.toContainText('errmsg');
+  await box.getByRole('button', { name: 'Abrir en el creador' }).click();
+  const dialog = builder(page, 'Editar diagrama');
+  await expect(dialog.getByLabel('Código del diagrama')).toHaveValue('esto no vale -> {');
+  await expect(dialog.getByRole('alert')).toContainText('Línea 1: A la conexión le falta el destino. (y 1 más)');
+});
+
+test('in visual mode a broken diagram explains itself too', async ({ page }) => {
+  await open(page, 'D2');
+  await page.getByTitle('Visual', { exact: true }).click();
+  const box = page.locator('.cm-v-diagram .diagram-error');
+  await expect(box).toContainText('Línea 1: A la conexión le falta el destino.', { timeout: 15_000 });
+  await box.getByRole('button', { name: 'Abrir en el creador' }).click();
+  await expect(builder(page, 'Editar diagrama').getByLabel('Código del diagrama')).toHaveValue('esto no vale -> {');
+});
+
+test('engine errors become a line and a reason in the language of the app', async ({ page }) => {
+  const problems = await page.evaluate(async () => {
+    const { explainDiagramError, describeProblem } = await import('/src/lib/diagramErrors.ts');
+    const { renderDiagram } = await import('/src/lib/diagrams.ts');
+    const { themeById } = await import('/src/lib/themes.ts');
+    const cases: [string, string][] = [
+      ['mermaid', '---\ntitle: T\n---\nflowchart LR\n  A --> \n'],
+      ['mermaid', 'mindmap\n  root\n    a\n   b(\n'],
+      ['mermaid', 'flowchar LR\n A-->B\n'],
+      ['mermaid', 'pie title Mascotas\n  "Perros" : x\n'],
+      ['mermaid', '  \n'],
+      ['d2', 'a -> b\nc: {style.colr: red}\nq: {shape: zz}\n'],
+      ['d2', 'a -> \n'],
+    ];
+    const out: string[] = [];
+    for (const [lang, src] of cases) {
+      try {
+        await renderDiagram(lang, src, themeById('claro')!);
+        out.push('dibujado');
+      } catch (e) {
+        out.push(describeProblem(explainDiagramError(lang, src, e)));
+      }
+    }
+    return out;
+  });
+  expect(problems).toEqual([
+    'Línea 5: El código se corta antes de tiempo: falta algo al final.',
+    'Línea 4: Aquí hay algo que no se esperaba.',
+    'Línea 1: No se reconoce el tipo de diagrama. La primera línea dice cuál es, por ejemplo flowchart o sequenceDiagram.',
+    'Línea 2: No se esperaba «x» aquí.',
+    'El diagrama está vacío.',
+    'Línea 2: No existe el estilo «colr». (y 1 más)',
+    'Línea 1: A la conexión le falta el destino.',
+  ]);
+});
+
 test('a new note can be created and opened', async ({ page }) => {
   await page.keyboard.press('Control+n');
   await page.getByRole('textbox').fill('Nueva');

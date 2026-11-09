@@ -5,6 +5,7 @@
   import { freshId, hasD2, toSource, type Diagram, type Engine, type Flow, type Gantt, type Kind, type Mindmap, type Pie, type Sequence, type Shape, type States } from '../diagramBuilder';
   import type { DiagramColor, DiagramStyle } from '../diagramStyle';
   import { TEMPLATES } from '../diagramTemplates';
+  import { describeProblem, explainDiagramError, type DiagramProblem } from '../diagramErrors';
   import { renderDiagram } from '../diagrams';
   import { themeName, tr, type Key } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
@@ -105,7 +106,7 @@
   const codeDrafts = new Map<string, string>();
 
   let svg = $state('');
-  let error = $state('');
+  let error = $state<DiagramProblem | null>(null);
   let timer: ReturnType<typeof setTimeout>;
   let run = 0;
 
@@ -125,9 +126,9 @@
         const drawn = await renderDiagram(language, text, theme, sketch);
         if (id !== run) return;
         svg = drawn;
-        error = '';
+        error = null;
       } catch (e) {
-        if (id === run) error = e instanceof Error ? e.message : String(e);
+        if (id === run) error = explainDiagramError(language, text, e);
       }
     }, DELAY);
   });
@@ -431,7 +432,12 @@
   <div class="preview" aria-label={tr('export.preview')}>
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- renderDiagram sanitizes the SVG -->
     <div class="drawing" class:animated={!!style.animated}>{@html svg}</div>
-    {#if error}<p class="error" role="alert">{error}</p>{/if}
+    {#if error}
+      <div class="error" role="alert">
+        <p>{describeProblem(error)}</p>
+        {#if error.detail}<details><summary>{tr('diagramError.detail')}</summary><pre>{error.detail}</pre></details>{/if}
+      </div>
+    {/if}
     {#if !code}
       <details>
         <summary>{tr('builder.code')}</summary>
@@ -483,7 +489,9 @@
   .preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: var(--space-4); overflow: auto; border-left: 1px solid var(--line); background: var(--bg); }
   .drawing { display: flex; flex: 1; align-items: center; justify-content: center; min-height: 0; }
   .drawing :global(svg) { max-width: 100%; height: auto; }
-  .error { flex: none; max-height: 40%; margin: var(--space-2-5) 0 0; overflow: auto; color: var(--danger); font-size: var(--font-sm); white-space: pre-wrap; }
+  .error { flex: none; max-height: 40%; margin: var(--space-2-5) 0 0; overflow: auto; color: var(--danger); font-size: var(--font-sm); }
+  .error p { margin: 0; }
+  .error pre { color: var(--text-2); white-space: pre-wrap; }
   details:not(.look) { flex: none; margin-top: var(--space-2-5); color: var(--text-2); font-size: var(--font-sm); }
   pre { margin: var(--space-1-5) 0 0; padding: var(--space-2-5); overflow-x: auto; border-radius: var(--radius-md); background: var(--panel); font: var(--font-sm)/1.5 var(--mono); }
 </style>

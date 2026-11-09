@@ -224,6 +224,8 @@ class Store {
   windowWidth = $state(innerWidth);
   /** A bar shown by hand while the window is too narrow for it. It folds again once the width changes enough. */
   peek = $state({ left: false, right: false });
+  /** A diagram to open in the builder, by its order in the note. Taken by the editor. */
+  editDiagram = $state<{ key: string; index: number } | null>(null);
   /** The line with the cursor, or the top of the preview when it shows alone. */
   position = $state<{ key: string; line: number } | null>(null);
 
@@ -312,6 +314,12 @@ class Store {
     } catch {
       // It may show again next time.
     }
+  }
+
+  /** Opens a note's diagram in the builder, showing the editor if only the preview is on screen. */
+  openDiagram(tab: Tab, index: number) {
+    if (tab.view === 'preview') tab.view = 'split';
+    this.editDiagram = { key: tab.key, index };
   }
 
   setView(tab: Tab, view: ViewMode) {
