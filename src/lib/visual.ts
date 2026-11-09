@@ -6,6 +6,7 @@ import { Prec, StateField, Transaction, type EditorState, type Range } from '@co
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet } from '@codemirror/view';
 import { CALLOUT_START, describeCallout } from './callouts';
 import { parseStyle, type DiagramStyle } from './diagramStyle';
+import { diagramErrorBox, explainDiagramError } from './diagramErrors';
 import { renderDiagram } from './diagrams';
 import { tr } from './i18n.svelte';
 import { store } from './store.svelte';
@@ -74,15 +75,18 @@ class DiagramWidget extends WidgetType {
   toDOM(view: EditorView) {
     const el = document.createElement('div');
     el.className = this.animated ? 'cm-v-diagram animated' : 'cm-v-diagram';
-    renderDiagram(this.lang, this.src, this.theme, this.sketch).then(
-      (svg) => (el.innerHTML = svg),
-      () => (el.textContent = tr('preview.diagramUnavailable')),
-    );
-    el.onmousedown = (e) => {
-      e.preventDefault();
+    const edit = () => {
       const start = view.state.doc.lineAt(view.posAtDOM(el));
       view.dispatch({ selection: { anchor: Math.min(start.to + 1, view.state.doc.length) } });
       view.dom.dispatchEvent(new CustomEvent(EDIT_DIAGRAM));
+    };
+    renderDiagram(this.lang, this.src, this.theme, this.sketch).then(
+      (svg) => (el.innerHTML = svg),
+      (e) => el.replaceChildren(diagramErrorBox(explainDiagramError(this.lang, this.src, e), edit)),
+    );
+    el.onmousedown = (e) => {
+      e.preventDefault();
+      edit();
     };
     return el;
   }
@@ -386,6 +390,13 @@ const look = EditorView.theme({
   '.cm-v-table-tools button': { padding: '2px 8px', border: '1px solid var(--line)', borderRadius: '5px', background: 'var(--raised)', color: 'var(--text-2)', fontFamily: 'var(--sans)', fontSize: '11.5px' },
   '.cm-v-diagram': { display: 'flex', justifyContent: 'center', minHeight: '40px', padding: '8px 0', cursor: 'pointer' },
   '.cm-v-diagram svg': { maxWidth: '100%', height: 'auto' },
+  '.cm-v-diagram .diagram-error': { width: '100%', padding: '10px 14px', border: '1px solid var(--line)', borderRadius: '8px', fontFamily: 'var(--sans)', fontSize: '13px', lineHeight: '1.5', cursor: 'default' },
+  '.cm-v-diagram .diagram-error strong': { display: 'block', color: 'var(--danger)' },
+  '.cm-v-diagram .diagram-error p': { margin: '4px 0 0' },
+  '.cm-v-diagram .diagram-error button': { marginTop: '8px', padding: '3px 10px', border: '1px solid var(--line)', borderRadius: '5px', background: 'var(--raised)', color: 'var(--text)', fontFamily: 'var(--sans)', fontSize: '12px', cursor: 'pointer' },
+  '.cm-v-diagram .diagram-error details': { marginTop: '8px', color: 'var(--text-2)', fontSize: '12px' },
+  '.cm-v-diagram .diagram-error summary': { cursor: 'pointer' },
+  '.cm-v-diagram .diagram-error pre': { margin: '4px 0 0', padding: '8px', background: 'var(--hover)', whiteSpace: 'pre-wrap', fontSize: '11.5px' },
 });
 
 // Above the base editor theme, which sets the same properties.

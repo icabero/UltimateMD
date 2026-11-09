@@ -165,6 +165,43 @@
       delete staged[token];
     },
     // Like the backend, for [[wikilinks]] by name.
+    // Wikilinks only, and a suggestion by a close enough name.
+    broken_links: ({ id }) => {
+      const stem = (p) => p.split('/').pop().replace(/\.md$/, '');
+      const notes = Object.keys(files[id]).filter((p) => p.endsWith('.md'));
+      const near = (a, b) => {
+        const row = [...Array(b.length + 1).keys()];
+        for (let i = 1; i <= a.length; i++) {
+          let prev = row[0];
+          row[0] = i;
+          for (let j = 1; j <= b.length; j++) {
+            const next = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, row[j - 1], row[j]);
+            prev = row[j];
+            row[j] = next;
+          }
+        }
+        return row[b.length] <= Math.max(1, Math.floor(a.length / 3));
+      };
+      return notes.flatMap((note) =>
+        files[id][note].split('\n').flatMap((text, i) =>
+          [...text.matchAll(/\[\[([^\]|#]+)/g)]
+            .map((m) => m[1].trim())
+            .filter((t) => !notes.some((n) => stem(n).toLowerCase() === t.replace(/\.md$/, '').toLowerCase()))
+            .filter((t) => /\.md$|^[^.]*$/.test(t) || !Object.keys(files[id]).some((p) => p.split('/').pop() === t))
+            .map((target) => {
+              const toNote = /\.md$|^[^.]*$/.test(target);
+              return { note, target, line: i + 1, toNote, suggestion: toNote ? (notes.find((n) => near(target.toLowerCase(), stem(n).toLowerCase())) ?? null) : null };
+            }),
+        ),
+      );
+    },
+    repoint_link: ({ id, note, target, to }) => {
+      const name = to.split('/').pop().replace(/\.md$/, '');
+      const before = files[id][note];
+      files[id][note] = before.split(`[[${target}`).join(`[[${name}`);
+      bump(id, note);
+      return before === files[id][note] ? 0 : 1;
+    },
     note_links: ({ id, path }) => {
       const stem = (p) => p.split('/').pop().replace(/\.md$/, '');
       const targets = (text) => [...text.matchAll(/\[\[([^\]|#]+)/g)].map((m) => m[1].trim());

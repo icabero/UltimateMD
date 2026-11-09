@@ -150,6 +150,27 @@ export function outline(text: string): Heading[] {
   return out;
 }
 
+export interface DiagramFence {
+  lang: string;
+  src: string;
+  /** The words after the language, which style the diagram. */
+  style: string;
+  /** The line of the opening fence, counting from 1. */
+  line: number;
+}
+
+/** The note's diagrams, in the order the preview draws them. */
+export function diagramFences(text: string): DiagramFence[] {
+  const { meta, body } = splitFrontmatter(text);
+  const offset = meta === null ? 0 : text.slice(0, text.length - body.length).split('\n').length - 1;
+  return md
+    .parse(body, {})
+    .filter((t: any) => t.type === 'fence' && t.map)
+    .map((t: any) => ({ ...splitFence(t.info), src: t.content, line: t.map[0] + 1 + offset }))
+    .filter((f: any) => f.lang === 'mermaid' || f.lang === 'd2')
+    .map(({ lang, words, src, line }: any) => ({ lang, src, style: words, line }));
+}
+
 /** The heading whose section holds `line`: the last one at or above it. */
 export function headingAt(headings: Heading[], line: number) {
   let found = -1;

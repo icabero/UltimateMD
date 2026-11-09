@@ -3,7 +3,7 @@
   import { Annotation, Compartment, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
   import { Decoration, EditorView, drawSelection, highlightActiveLine, keymap, lineNumbers, type DecorationSet } from '@codemirror/view';
   import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-  import { HighlightStyle, indentOnInput, syntaxHighlighting, bracketMatching } from '@codemirror/language';
+  import { HighlightStyle, indentOnInput, syntaxHighlighting, bracketMatching, ensureSyntaxTree, syntaxTree } from '@codemirror/language';
   import { autocompletion } from '@codemirror/autocomplete';
   import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
   import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -223,6 +223,35 @@
     view.dispatch({ selection: { anchor: fence.to } });
     builder = { initial: null, replace: null };
   }
+
+  /** Where the diagram with this order in the note starts, counting only diagrams, as the preview does. */
+  function diagramStart(state: EditorState, index: number) {
+    const tree = ensureSyntaxTree(state, state.doc.length, 1000) ?? syntaxTree(state);
+    let seen = 0;
+    let found: number | null = null;
+    tree.iterate({
+      enter: (node) => {
+        if (found !== null) return false;
+        if (node.name !== 'FencedCode') return;
+        const { lang } = splitFence(state.doc.lineAt(node.from).text.replace(/^\s*[`~]+/, ''));
+        if ((lang === 'mermaid' || lang === 'd2') && seen++ === index) found = node.from;
+        return false;
+      },
+    });
+    return found;
+  }
+
+  // The preview asks for a diagram, for instance one with an error.
+  $effect(() => {
+    const wanted = store.editDiagram;
+    if (!view || wanted?.key !== tab.key) return;
+    store.editDiagram = null;
+    const start = diagramStart(view.state, wanted.index);
+    if (start === null) return;
+    const inside = Math.min(view.state.doc.lineAt(start).to + 1, view.state.doc.length);
+    view.dispatch({ selection: { anchor: inside }, scrollIntoView: true });
+    openBuilder();
+  });
 
   /** Leaves the cursor past the diagram, so that it shows drawn in visual mode. */
   function closeBuilder() {

@@ -212,6 +212,8 @@ class Store {
   dialog = $state<Dialog | null>(null);
   vaultThemes = $state<Record<string, VaultThemes>>({});
   themeEditor = $state<string | null>(null);
+  /** The vault whose broken links are listed. */
+  brokenLinks = $state<string | null>(null);
   /** The vault whose Word settings are open. */
   wordScreen = $state<string | null>(null);
   /** Where a note from a template goes, while choosing the template. */
@@ -224,6 +226,8 @@ class Store {
   windowWidth = $state(innerWidth);
   /** A bar shown by hand while the window is too narrow for it. It folds again once the width changes enough. */
   peek = $state({ left: false, right: false });
+  /** A diagram to open in the builder, by its order in the note. Taken by the editor. */
+  editDiagram = $state<{ key: string; index: number } | null>(null);
   /** The line with the cursor, or the top of the preview when it shows alone. */
   position = $state<{ key: string; line: number } | null>(null);
 
@@ -312,6 +316,12 @@ class Store {
     } catch {
       // It may show again next time.
     }
+  }
+
+  /** Opens a note's diagram in the builder, showing the editor if only the preview is on screen. */
+  openDiagram(tab: Tab, index: number) {
+    if (tab.view === 'preview') tab.view = 'split';
+    this.editDiagram = { key: tab.key, index };
   }
 
   setView(tab: Tab, view: ViewMode) {
@@ -790,13 +800,13 @@ class Store {
     }
   }
 
-  async createNote(vaultId: string, dir: string, name: string, content = '') {
+  async createNote(vaultId: string, dir: string, name: string, content = '', open = true) {
     const file = /\.(md|markdown|html?)$/i.test(name) ? name : `${name}.md`;
     const path = join(dir, file);
     try {
       await api.create(vaultId, path, content);
       await this.refreshTree(vaultId);
-      await this.openFile(vaultId, path);
+      if (open) await this.openFile(vaultId, path);
     } catch (e) {
       this.notify(e);
     }

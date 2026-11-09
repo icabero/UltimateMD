@@ -107,6 +107,8 @@ fn main() {
             commands::search_all,
             commands::home_info,
             commands::note_links,
+            commands::broken_links,
+            commands::repoint_link,
             commands::open_with_system,
             commands::mcp_info,
             commands::export_file,

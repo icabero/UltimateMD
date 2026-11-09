@@ -94,6 +94,10 @@ fn template() -> Vec<u8> {
         (SETTINGS, settings),
         (NUMBERING, numbering),
         ("word/theme/theme1.xml", "<a:theme/>".to_string()),
+        (
+            CORE,
+            r#"<?xml version="1.0"?><cp:coreProperties xmlns:cp="cp" xmlns:dc="dc"><dc:title>Plantilla</dc:title><dc:creator>Quien la hizo</dc:creator></cp:coreProperties>"#.to_string(),
+        ),
         (DOC_RELS, format!(r#"<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId9" Type="{REL_NS}/header" Target="header1.xml"/></Relationships>"#)),
     ]
     .into_iter()
@@ -372,6 +376,19 @@ fn notes_can_reuse_footnote_labels() {
     let notes = text(&folder_document(), FOOTNOTES);
     assert!(notes.contains("pie uno") && notes.contains("pie dos"));
     assert_eq!(notes.matches("<w:footnote ").count(), 4, "two separators and one note each");
+}
+
+#[test]
+fn document_properties_name_this_document_and_its_author() {
+    let core = text(&render_with(Some(&template())), CORE);
+    assert!(core.contains("<dc:title>Informe</dc:title>") && core.contains("<dc:creator>Ane</dc:creator>"), "{core}");
+    assert!(!core.contains("Plantilla") && !core.contains("Quien"));
+
+    let empty = r#"<cp:coreProperties xmlns:dc="dc"><dc:title/></cp:coreProperties>"#;
+    assert_eq!(
+        with_properties(empty, "A & B", "$1"),
+        r#"<cp:coreProperties xmlns:dc="dc"><dc:title>A &amp; B</dc:title><dc:creator>$1</dc:creator></cp:coreProperties>"#
+    );
 }
 
 #[test]

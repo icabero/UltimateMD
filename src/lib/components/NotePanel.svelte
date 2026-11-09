@@ -112,12 +112,15 @@
             <span class="name">{target}</span>
           </button>
         {/each}
+        <button class="all" onclick={() => (store.brokenLinks = tab.vaultId)}>{tr('broken.inVault')}</button>
       {/if}
     {/if}
   </div>
 </aside>
 
 <style>
+  .all { margin: var(--space-1-5) var(--space-2) 0; padding: 0; border: 0; background: none; color: var(--accent-text); font-size: var(--font-sm); text-align: left; }
+  .all:hover { text-decoration: underline; }
   .panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); border-left: 1px solid var(--line); }
   .head { display: flex; align-items: center; gap: var(--space-1); height: 38px; flex: none; padding: 0 var(--space-1-5) 0 var(--space-2); border-bottom: 1px solid var(--line); }
   .frame-gap { height: 38px; flex: none; border-bottom: 1px solid var(--line); }

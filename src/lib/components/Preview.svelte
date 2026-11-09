@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { api, fileUrl } from '../api';
   import { parseStyle } from '../diagramStyle';
+  import { diagramErrorBox, explainDiagramError } from '../diagramErrors';
   import { renderDiagram, toPng, toSvgBytes } from '../diagrams';
   import { findTerms } from '../fold';
   import { tr } from '../i18n.svelte';
@@ -14,7 +15,6 @@
   let { tab }: { tab: Tab } = $props();
 
   const DELAY = 150;
-  const MAX_ERROR = 400;
   let host = $state<HTMLDivElement>();
   let scroller = $state<HTMLDivElement>();
   let root: ShadowRoot;
@@ -67,10 +67,8 @@
         }
       } catch (e) {
         if (id !== run) return;
-        const pre = document.createElement('pre');
-        pre.className = 'diagram-error';
-        pre.textContent = (e instanceof Error ? e.message : String(e)).slice(0, MAX_ERROR);
-        el.replaceChildren(pre);
+        const problem = explainDiagramError(el.dataset.lang!, src, e);
+        el.replaceChildren(diagramErrorBox(problem, tab.kind === 'md' ? () => store.openDiagram(tab, index) : undefined));
       }
     }));
   }

@@ -94,6 +94,7 @@
       { id: 'zoom.reset', label: tr('cmd.zoomReset'), keys: ['Ctrl', '0'], run: () => store.setZoom(null) },
       { id: 'theme.system', label: tr('cmd.themeSystem'), run: () => store.setThemeChoice({ fixed: null }) },
       ...THEMES.map((t) => ({ id: `theme.${t.id}`, label: tr('cmd.theme', { name: themeName(t) }), run: () => store.setThemeChoice({ fixed: t.id }) })),
+      { id: 'vault.broken', label: tr('broken.open'), when: !!tab && !tab.loose, run: () => tab && (store.brokenLinks = tab.vaultId) },
       { id: 'vault.word', label: tr('cmd.wordSettings'), when: !!tab && !tab.loose, run: () => tab && (store.wordScreen = tab.vaultId) },
       { id: 'vault.themes', label: tr('cmd.vaultThemes'), when: !!tab && !tab.loose, run: () => tab && (store.themeEditor = tab.vaultId) },
       { id: 'app.settings', label: tr('cmd.settings'), run: () => (store.settings = true) },

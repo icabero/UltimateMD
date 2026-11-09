@@ -98,6 +98,95 @@ test('several D2 diagrams in a note all finish, even with a bad one', async ({ p
   await expect(prose(page).locator('.diagram-error')).toHaveCount(1);
 });
 
+test('a broken diagram says what fails and where, and opens in the builder', async ({ page }) => {
+  await open(page, 'D2');
+  await page.getByTitle('Vista previa', { exact: true }).click();
+  const box = prose(page).locator('.diagram-error');
+  await expect(box).toContainText('Este diagrama tiene un error', { timeout: 15_000 });
+  await expect(box).toContainText('Línea 1: A la conexión le falta el destino. (y 1 más)');
+  await expect(box).not.toContainText('errmsg');
+  await box.getByRole('button', { name: 'Abrir en el creador' }).click();
+  const dialog = builder(page, 'Editar diagrama');
+  await expect(dialog.getByLabel('Código del diagrama')).toHaveValue('esto no vale -> {');
+  await expect(dialog.getByRole('alert')).toContainText('Línea 1: A la conexión le falta el destino. (y 1 más)');
+});
+
+test('in visual mode a broken diagram explains itself too', async ({ page }) => {
+  await open(page, 'D2');
+  await page.getByTitle('Visual', { exact: true }).click();
+  const box = page.locator('.cm-v-diagram .diagram-error');
+  await expect(box).toContainText('Línea 1: A la conexión le falta el destino.', { timeout: 15_000 });
+  await box.getByRole('button', { name: 'Abrir en el creador' }).click();
+  await expect(builder(page, 'Editar diagrama').getByLabel('Código del diagrama')).toHaveValue('esto no vale -> {');
+});
+
+test('the broken links of a vault are listed, mended and created', async ({ page }) => {
+  await page.evaluate(() => {
+    (window as any).__test.files.a['Notas.md'] = '# Notas\n\nVer [[Destno]].\n\nY [[Otra cosa]].\n';
+  });
+  await page.locator('aside').getByRole('button', { name: 'Trabajo', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Enlaces rotos' }).click();
+  const screen = page.getByRole('dialog', { name: 'Enlaces rotos · Trabajo' });
+  await expect(screen).toContainText('3 enlaces rotos en 2 notas');
+  const destno = screen.locator('.link', { hasText: 'Destno' });
+  await expect(destno).toContainText('línea 3');
+  await destno.getByRole('button', { name: 'Usar «Destino»' }).click();
+  await expect(screen).toContainText('2 enlaces rotos en 2 notas');
+  expect(await disk(page, 'a', 'Notas.md')).toContain('Ver [[Destino]].');
+
+  await screen.locator('.link', { hasText: 'Otra cosa' }).getByRole('button', { name: 'Crear la nota' }).click();
+  await expect(screen).toContainText('Un enlace roto.');
+  expect(await disk(page, 'a', 'Otra cosa.md')).toBe('');
+
+  await screen.locator('.link', { hasText: 'Falta' }).getByRole('button', { name: /Falta/ }).click();
+  await expect(screen).toBeHidden();
+  await expect(page.locator('main footer')).toContainText('Trabajo / Inicio.md');
+});
+
+test('the links panel of a note leads to every broken link of the vault', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle(/^Panel de la nota/).click();
+  await notePanel(page).getByRole('tab', { name: 'Enlaces' }).click();
+  await notePanel(page).getByRole('button', { name: 'Ver todos los del vault' }).click();
+  await expect(page.getByRole('dialog', { name: 'Enlaces rotos · Trabajo' })).toContainText('Un enlace roto.');
+});
+
+test('engine errors become a line and a reason in the language of the app', async ({ page }) => {
+  const problems = await page.evaluate(async () => {
+    const { explainDiagramError, describeProblem } = await import('/src/lib/diagramErrors.ts');
+    const { renderDiagram } = await import('/src/lib/diagrams.ts');
+    const { themeById } = await import('/src/lib/themes.ts');
+    const cases: [string, string][] = [
+      ['mermaid', '---\ntitle: T\n---\nflowchart LR\n  A --> \n'],
+      ['mermaid', 'mindmap\n  root\n    a\n   b(\n'],
+      ['mermaid', 'flowchar LR\n A-->B\n'],
+      ['mermaid', 'pie title Mascotas\n  "Perros" : x\n'],
+      ['mermaid', '  \n'],
+      ['d2', 'a -> b\nc: {style.colr: red}\nq: {shape: zz}\n'],
+      ['d2', 'a -> \n'],
+    ];
+    const out: string[] = [];
+    for (const [lang, src] of cases) {
+      try {
+        await renderDiagram(lang, src, themeById('claro')!);
+        out.push('dibujado');
+      } catch (e) {
+        out.push(describeProblem(explainDiagramError(lang, src, e)));
+      }
+    }
+    return out;
+  });
+  expect(problems).toEqual([
+    'Línea 5: El código se corta antes de tiempo: falta algo al final.',
+    'Línea 4: Aquí hay algo que no se esperaba.',
+    'Línea 1: No se reconoce el tipo de diagrama. La primera línea dice cuál es, por ejemplo flowchart o sequenceDiagram.',
+    'Línea 2: No se esperaba «x» aquí.',
+    'El diagrama está vacío.',
+    'Línea 2: No existe el estilo «colr». (y 1 más)',
+    'Línea 1: A la conexión le falta el destino.',
+  ]);
+});
+
 test('a new note can be created and opened', async ({ page }) => {
   await page.keyboard.press('Control+n');
   await page.getByRole('textbox').fill('Nueva');
@@ -485,17 +574,6 @@ test('on macOS the system buttons sit over the app, which leaves them room', asy
   await expect(page.locator('main > .bar')).toHaveCSS('padding-left', '76px');
 });
 
-test('after an export the notice opens the file or shows its folder', async ({ page }) => {
-  await open(page, 'Inicio');
-  await exportAs(page, 'PDF');
-  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
-  const notice = page.getByRole('group', { name: 'Aviso' });
-  await expect(notice.getByRole('status')).toHaveText('Exportado');
-  await notice.getByRole('button', { name: 'Mostrar en la carpeta' }).click();
-  expect(await page.evaluate(() => (window as any).__revealedExport)).toBe('/exportados/Inicio.pdf');
-  await expect(notice).toHaveCount(0);
-});
-
 test('a long error shows its first line and folds the rest', async ({ page }) => {
   await page.evaluate(() => {
     const long = 'No se pudo leer la plantilla\n' + 'detalle técnico '.repeat(20);
@@ -523,7 +601,7 @@ test('a long export shows how far it has gone', async ({ page }) => {
   const dialog = page.getByRole('dialog', { name: 'Exportar' });
   await expect(dialog.getByRole('progressbar')).toBeVisible();
   await expect(dialog).toContainText('Generando el documento…');
-  await expect(page.getByRole('status')).toHaveText('Exportado');
+  await expect(page.getByRole('dialog', { name: 'Documento exportado' })).toBeVisible();
 });
 
 async function trashFromTree(page: Page, name: string) {
@@ -667,7 +745,7 @@ test('an HTML export keeps callouts and opens folded ones', async ({ page }) => 
   await calloutNote(page);
   await exportAs(page, 'HTML');
   await page.getByRole('button', { name: 'Exportar', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Exportado');
+  await expect(page.getByRole('dialog', { name: 'Documento exportado' })).toBeVisible();
   const html = await page.evaluate(() => (window as any).__exported.text);
   expect(html).toContain('data-callout="warning"');
   expect(html).toMatch(/<details[^>]*open/);
@@ -834,10 +912,11 @@ test('an HTML export keeps the animation; the builder can turn it on', async ({ 
   await animatedNote(page);
   await exportAs(page, 'HTML');
   await page.getByRole('button', { name: 'Exportar', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Exportado');
+  await expect(page.getByRole('dialog', { name: 'Documento exportado' })).toBeVisible();
   const html = await page.evaluate(() => (window as any).__exported.text);
   expect(html).toContain('class="diagram animated"');
   expect(html).toContain('@keyframes umd-flow');
+  await page.getByRole('dialog', { name: 'Documento exportado' }).getByTitle('Cerrar').click();
 
   await page.getByTitle('Editar', { exact: true }).click();
   await page.locator('.cm-line', { hasText: 'c e1@--> d' }).click();
@@ -963,6 +1042,42 @@ async function exportAs(page: Page, format: string) {
   await page.getByRole('group', { name: 'Formato' }).getByRole('button', { name: format }).click();
 }
 
+/** Goes to a step of the export dialog. */
+const step = (page: Page, name: string) => page.getByRole('navigation', { name: 'Pasos' }).getByRole('button', { name }).click();
+
+/** Exports and waits for the card that says it is done. */
+async function exportNow(page: Page) {
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Documento exportado' })).toBeVisible();
+}
+
+test('before exporting, the dialog lists what would come out wrong and leads to it', async ({ page }) => {
+  await page.evaluate(() => {
+    (window as any).__test.externalWrite('a', 'Revisar.md', '# Uno\n\n### Tres\n\n![[nada.png]] ![[imagen.png]]\n\n[[Ninguna]] [[Destino]]\n\n```mermaid\nflowchar LR\n A-->B\n```\n');
+  });
+  await open(page, 'Revisar');
+  await page.keyboard.press('Control+e');
+  await step(page, 'Contenido');
+  const review = page.getByRole('region', { name: 'Antes de exportar' });
+  await expect(review).toContainText('4 cosas que conviene revisar', { timeout: 15_000 });
+  await expect(review.getByRole('listitem')).toHaveText([
+    '«Tres» salta del nivel 1 al 3. Revisar · línea 3',
+    'Falta la imagen «nada.png». Revisar · línea 5',
+    'El enlace a «Ninguna» no lleva a ninguna parte. Revisar · línea 7',
+    /^Un diagrama no se puede dibujar: No se reconoce el tipo de diagrama.*Revisar · línea 10$/,
+  ]);
+  await review.getByRole('button', { name: /Ninguna/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Exportar' })).toBeHidden();
+  await expect(page.locator('main footer')).toContainText('Trabajo / Revisar.md');
+});
+
+test('a note with nothing to fix says so before exporting', async ({ page }) => {
+  await open(page, 'Otra');
+  await page.keyboard.press('Control+e');
+  await step(page, 'Contenido');
+  await expect(page.getByRole('region', { name: 'Antes de exportar' })).toContainText('Todo en orden');
+});
+
 test('export to HTML gives a self-contained page in the print look', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
@@ -970,8 +1085,7 @@ test('export to HTML gives a self-contained page in the print look', async ({ pa
   await page.getByTitle('Cerrar', { exact: true }).click();
   await open(page, 'Inicio');
   await exportAs(page, 'HTML');
-  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Exportado');
+  await exportNow(page);
   const { name, text } = await page.evaluate(() => (window as any).__exported);
   expect(name).toBe('Inicio.html');
   expect(text).toContain('<svg');
@@ -983,9 +1097,9 @@ test('export to HTML gives a self-contained page in the print look', async ({ pa
 test('export to Word sends the template and rendered diagrams', async ({ page }) => {
   await open(page, 'Inicio');
   await exportAs(page, 'Word');
+  await step(page, 'Aspecto');
   await page.getByLabel('Plantilla').selectOption('Corporativa');
-  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Exportado');
+  await exportNow(page);
   const args = await page.evaluate(() => (window as any).__docx);
   expect(args.template).toBe('Corporativa');
   expect(args.diagrams).toHaveLength(1);
@@ -1001,18 +1115,58 @@ test('export to PDF writes the file directly, with no print dialog', async ({ pa
   await open(page, 'Inicio');
   await exportAs(page, 'PDF');
   await expect(page.getByAltText('Página 1')).toBeVisible();
-  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Exportado');
+  await exportNow(page);
   const plan = await page.evaluate(() => (window as any).__pdf);
   expect(plan.sections).toEqual([{ kind: 'note', path: 'Inicio.md', shift: 0, pageBreak: false }]);
   expect(await page.evaluate(() => (window as any).__printed)).toBeUndefined();
+  expect(plan.archive).toBe(false);
 });
 
-const scope = (page: Page, name: string) => page.getByRole('group', { name: 'Alcance' }).getByRole('button', { name }).click();
+test('once exported, a card shows the first page and opens the file or its folder', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'PDF');
+  await expect(page.getByAltText('Página 1')).toBeVisible();
+  await exportNow(page);
+  const done = page.getByRole('dialog', { name: 'Documento exportado' });
+  await expect(done).toContainText('Inicio.pdf');
+  await expect(done.locator('.thumb img')).toHaveCount(1);
+  await done.getByRole('button', { name: 'Abrir', exact: true }).click();
+  expect(await page.evaluate(() => (window as any).__openedExport)).toBe('/exportados/Inicio.pdf');
+  await done.getByRole('button', { name: 'Mostrar en la carpeta' }).click();
+  expect(await page.evaluate(() => (window as any).__revealedExport)).toBe('/exportados/Inicio.pdf');
+  await done.getByRole('button', { name: 'Exportar otra vez' }).click();
+  await expect(page.getByRole('dialog', { name: 'Exportar' })).toBeVisible();
+});
+
+test('the steps of the export dialog show the warnings from any step', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+e');
+  await expect(page.getByRole('navigation', { name: 'Pasos' }).getByRole('button', { name: 'Formato' })).toHaveAttribute('aria-current', 'step');
+  await page.getByRole('button', { name: '1 aviso' }).click();
+  await expect(page.getByRole('region', { name: 'Antes de exportar' })).toContainText('El enlace a «Falta» no lleva a ninguna parte.');
+  await page.getByRole('button', { name: 'Siguiente' }).click();
+  await expect(page.getByLabel('Portada e índice')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Siguiente' })).toHaveCount(0);
+});
+
+test('a PDF can be written for archiving, and the choice is remembered', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'PDF');
+  await page.getByLabel('Para archivar (PDF/A)').check();
+  await exportNow(page);
+  expect((await page.evaluate(() => (window as any).__pdf)).archive).toBe(true);
+  await page.getByRole('dialog', { name: 'Documento exportado' }).getByTitle('Cerrar').click();
+  await page.keyboard.press('Control+e');
+  await expect(page.getByLabel('Para archivar (PDF/A)')).toBeChecked();
+});
+
+async function scope(page: Page, name: string) {
+  await step(page, 'Contenido');
+  await page.getByRole('group', { name: 'Alcance' }).getByRole('button', { name }).click();
+}
 
 async function pdfPlan(page: Page) {
-  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Exportado');
+  await exportNow(page);
   return page.evaluate(() => (window as any).__pdf);
 }
 
@@ -1064,18 +1218,21 @@ test('a folder can be exported on its own', async ({ page }) => {
 test('the export dialog remembers the last options of each vault', async ({ page }) => {
   await open(page, 'Inicio');
   await exportAs(page, 'Word');
+  await step(page, 'Aspecto');
   await page.getByLabel('Plantilla').selectOption('Corporativa');
   await scope(page, 'Vault');
   await page.getByLabel('Nivel 2', { exact: true }).selectOption('heading:3');
   await page.getByRole('checkbox', { name: 'Usar el nombre de cada nota como título' }).check();
-  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Exportado');
+  await exportNow(page);
+  await page.getByRole('dialog', { name: 'Documento exportado' }).getByTitle('Cerrar').click();
 
   await page.keyboard.press('Control+e');
   const pressed = (group: string) => page.getByRole('group', { name: group }).locator('button.on');
-  await expect(pressed('Formato')).toHaveText('Word');
-  await expect(pressed('Alcance')).toHaveText('Vault');
+  await expect(pressed('Formato')).toHaveText(/^Word/);
+  await step(page, 'Aspecto');
   await expect(page.getByLabel('Plantilla')).toHaveValue('Corporativa');
+  await step(page, 'Contenido');
+  await expect(pressed('Alcance')).toHaveText('Vault');
   await expect(page.getByLabel('Nivel 2', { exact: true })).toHaveValue('heading:3');
   await expect(page.getByRole('checkbox', { name: 'Usar el nombre de cada nota como título' })).toBeChecked();
   await page.getByRole('dialog', { name: 'Exportar' }).getByTitle('Cerrar').click();
@@ -1083,21 +1240,22 @@ test('the export dialog remembers the last options of each vault', async ({ page
   // Another vault starts from the defaults.
   await open(page, 'Otra');
   await page.keyboard.press('Control+e');
-  await expect(pressed('Formato')).toHaveText('PDF');
+  await expect(pressed('Formato')).toHaveText(/^PDF/);
+  await step(page, 'Contenido');
   await expect(pressed('Alcance')).toHaveText('Esta nota');
 });
 
 test('word offers the example template, its styles and a preview of the file', async ({ page }) => {
   await open(page, 'Inicio');
   await exportAs(page, 'Word');
+  await step(page, 'Aspecto');
   await expect(page.getByLabel('Plantilla')).toHaveValue('Ejemplo');
   await expect(page.getByRole('button', { name: 'Eliminar' })).toHaveCount(0);
   await scope(page, 'Vault');
   await expect(page.getByLabel('Nivel 1', { exact: true }).locator('option', { hasText: 'Destacado' })).toHaveCount(1);
   await page.getByLabel('Nivel 1', { exact: true }).selectOption('style:Destacado');
   await expect(page.locator('.sheet section')).toContainText('Documento de prueba');
-  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Exportado');
+  await exportNow(page);
   const plan = await page.evaluate(() => (window as any).__docx);
   expect(plan.sections.find((s: any) => s.text === 'dir')).toMatchObject({ style: 'Destacado' });
 });
@@ -1106,6 +1264,7 @@ test('a loose file can only be exported on its own', async ({ page }) => {
   await openFiles(page, '/fuera/nota.md');
   await expect(page.locator('main footer')).toContainText('nota.md');
   await page.keyboard.press('Control+e');
+  await step(page, 'Contenido');
   await expect(page.getByRole('group', { name: 'Alcance' }).getByRole('button', { name: 'Vault' })).toBeDisabled();
 });
 
@@ -1266,7 +1425,7 @@ test('exports follow the language of the interface', async ({ page }) => {
   await open(page, 'Inicio');
   await page.keyboard.press('Control+e');
   await page.getByRole('dialog', { name: 'Export' }).getByRole('button', { name: 'Export', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Exported');
+  await expect(page.getByRole('dialog', { name: 'Document exported' })).toBeVisible();
   const plan = await page.evaluate(() => (window as any).__pdf);
   expect(plan).toMatchObject({ language: 'en', contents: 'Contents' });
 });
@@ -1767,7 +1926,7 @@ test('a chosen diagram style reaches the export, a plain one stays in the print 
   await open(page, 'Inicio');
   await exportAs(page, 'HTML');
   await page.getByRole('button', { name: 'Exportar', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Exportado');
+  await expect(page.getByRole('dialog', { name: 'Documento exportado' })).toBeVisible();
   const { text } = await page.evaluate(() => (window as any).__exported);
   expect(text).toMatch(/#00ff00/i);
   expect(text).toContain(fillOf('claro'));
@@ -1916,5 +2075,6 @@ test('a vault with its own template offers it first when exporting', async ({ pa
   await page.evaluate(() => ((window as any).__wordTemplate = true));
   await open(page, 'Inicio');
   await exportAs(page, 'Word');
+  await step(page, 'Aspecto');
   await expect(page.getByLabel('Plantilla')).toHaveValue(':vault');
 });
