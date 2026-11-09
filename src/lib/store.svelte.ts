@@ -1,9 +1,14 @@
 import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { anchorLabel, findAnchor, parseAnchor } from './anchors';
 import { api, type TreeNode, type Vault, type VaultThemes } from './api';
+import { fold } from './fold';
+import { fillTemplate } from './noteTemplates';
 import { withColors, type DiagramStyle } from './diagramStyle';
 import { tr } from './i18n.svelte';
-import { baseName, dirName, join, kindOf, resolveLink, type FileKind } from './paths';
+import { baseName, dirName, join, kindOf, linkFrom, resolveLink, type FileKind } from './paths';
 import { checksAtStart, isNewer, latestVersion } from './updates';
 import { THEMES, applyTheme, frontmatterValue, resolveTheme, themeById, type Theme } from './themes';
 
@@ -33,7 +38,39 @@ export interface Reveal {
   key: string;
   line: number;
   terms: string[];
+  /** Set when going to a heading: its place among the note's headings, for the preview. */
+  heading?: number;
 }
+
+export type PanelTab = 'outline' | 'links' | 'properties';
+
+/** Which side bars someone wants. A narrow window hides them anyway. */
+interface Layout {
+  left: boolean;
+  right: boolean;
+  panelTab: PanelTab;
+  rightWidth: number;
+}
+
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
+/** A notice at the bottom. Long texts, such as errors, show their first line and fold the rest. */
+export interface Toast {
+  id: number;
+  message: string;
+  details: string | null;
+  actions: ToastAction[];
+  /** Runs once when the notice goes, however it goes. */
+  onDone?: () => void;
+}
+
+const TOAST_TIME = 4500;
+/** Longer when there is something to do with it. */
+const TOAST_TIME_ACTIONS = 9000;
+const TOAST_SHORT = 140;
 
 export interface Dialog {
   title: string;
@@ -49,6 +86,26 @@ const SESSION_KEY = 'ultimatemd.session';
 const THEME_KEY = 'ultimatemd.theme';
 const TUTORIAL_KEY = 'ultimatemd.tutorial';
 const VIEW_KEY = 'ultimatemd.view';
+const LAYOUT_KEY = 'ultimatemd.layout';
+const READING_KEY = 'ultimatemd.reading';
+const IMAGES_KEY = 'ultimatemd.images';
+/** Where pasted and dropped images go: a folder at the vault root, or beside the note. */
+export type ImagePlace = 'vault' | 'note';
+export const IMAGE_FOLDER = 'adjuntos';
+export const ZOOM = { min: 0.6, max: 2, step: 0.1 };
+export const TEXT_SCALES = [0.9, 1, 1.15, 1.3] as const;
+export const LINE_WIDTHS = { narrow: '600px', normal: null, wide: '960px', full: 'none' } as const;
+export type LineWidth = keyof typeof LINE_WIDTHS;
+
+/** How someone likes to read: the interface zoom, the notes' text size and line width. */
+interface Reading {
+  zoom: number;
+  textScale: number;
+  lineWidth: LineWidth;
+}
+/** Below these window widths a side bar folds away by itself. */
+const LEFT_MIN = 760;
+const RIGHT_MIN = 1080;
 const VIEWS: ViewMode[] = ['visual', 'edit', 'split', 'preview'];
 
 /** `fixed` null means following the system, with one theme for each mode. */
@@ -62,6 +119,32 @@ function loadThemeChoice(): ThemeChoice {
   const fallback = { fixed: null, light: 'claro', dark: 'oscuro' };
   try {
     return { ...fallback, ...JSON.parse(localStorage.getItem(THEME_KEY) ?? '{}') };
+  } catch {
+    return fallback;
+  }
+}
+
+function loadReading(): Reading {
+  const fallback: Reading = { zoom: 1, textScale: 1, lineWidth: 'normal' };
+  try {
+    return { ...fallback, ...JSON.parse(localStorage.getItem(READING_KEY) ?? '{}') };
+  } catch {
+    return fallback;
+  }
+}
+
+function loadImagePlace(): ImagePlace {
+  try {
+    return localStorage.getItem(IMAGES_KEY) === 'note' ? 'note' : 'vault';
+  } catch {
+    return 'vault';
+  }
+}
+
+function loadLayout(): Layout {
+  const fallback: Layout = { left: true, right: false, panelTab: 'outline', rightWidth: 280 };
+  try {
+    return { ...fallback, ...JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}') };
   } catch {
     return fallback;
   }
@@ -95,16 +178,28 @@ function flatten(nodes: TreeNode[], out: string[] = []) {
   return out;
 }
 
+const IMAGE_TYPES: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/svg+xml': 'svg', 'image/avif': 'avif', 'image/bmp': 'bmp' };
+
+/** A screenshot gets a dated name; a dropped file keeps its own, without characters systems refuse. */
+function imageName(file: File) {
+  const ext = IMAGE_TYPES[file.type] ?? 'png';
+  // eslint-disable-next-line no-control-regex -- control characters are not valid in file names
+  if (file.name && !/^image\.\w+$/i.test(file.name)) return file.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-');
+  const stamp = new Date().toISOString().slice(0, 19).replace('T', '-').replace(/:/g, '');
+  return `pegado-${stamp}.${ext}`;
+}
+
 class Store {
   vaults = $state<Vault[]>([]);
   trees = $state<Record<string, TreeNode[]>>({});
   tabs = $state<Tab[]>([]);
   activeKey = $state<string | null>(null);
-  toast = $state<string | null>(null);
+  toast = $state<Toast | null>(null);
   systemDark = $state(matchMedia('(prefers-color-scheme: dark)').matches);
   themeChoice = $state(loadThemeChoice());
 
-  palette = $state(false);
+  /** The quick switcher's starting text while it is open: `>` for actions, `#` for headings. */
+  palette = $state<string | null>(null);
   settings = $state(false);
   searching = $state(false);
   exporting = $state(false);
@@ -117,10 +212,24 @@ class Store {
   dialog = $state<Dialog | null>(null);
   vaultThemes = $state<Record<string, VaultThemes>>({});
   themeEditor = $state<string | null>(null);
+  /** The vault whose broken links are listed. */
+  brokenLinks = $state<string | null>(null);
   /** The vault whose Word settings are open. */
   wordScreen = $state<string | null>(null);
+  /** Where a note from a template goes, while choosing the template. */
+  templatePicker = $state<{ vaultId: string; dir: string } | null>(null);
   /** Taken by the editor, or the preview when it shows alone. */
   reveal = $state<Reveal | null>(null);
+  layout = $state(loadLayout());
+  reading = $state(loadReading());
+  imagePlace = $state<ImagePlace>(loadImagePlace());
+  windowWidth = $state(innerWidth);
+  /** A bar shown by hand while the window is too narrow for it. It folds again once the width changes enough. */
+  peek = $state({ left: false, right: false });
+  /** A diagram to open in the builder, by its order in the note. Taken by the editor. */
+  editDiagram = $state<{ key: string; index: number } | null>(null);
+  /** The line with the cursor, or the top of the preview when it shows alone. */
+  position = $state<{ key: string; line: number } | null>(null);
 
   #timers = new Map<string, ReturnType<typeof setTimeout>>();
   #toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -158,10 +267,30 @@ class Store {
   }
 
   /** Follows a `[[link]]` written in a note, offering to create it if it is missing. */
-  async followLink(tab: Tab, name: string) {
-    const path = resolveLink(name, tab.path, this.files(tab.vaultId));
-    if (path) return this.openFile(tab.vaultId, path);
-    if (await this.confirm(tr('preview.createMissing', { name }), tr('common.create'))) await this.createNote(tab.vaultId, dirName(tab.path), name);
+  /** Follows a link written in `tab`. An empty name means the same note; `anchor` is `#Heading` or `^block`. */
+  async followLink(tab: Tab, name: string, anchor?: string | null) {
+    const target = name.trim();
+    if (!target) return this.goToAnchor(tab.vaultId, tab.path, anchor);
+    const path = resolveLink(target, tab.path, this.files(tab.vaultId));
+    if (path) return this.openNoteAt(tab.vaultId, path, anchor);
+    if (await this.confirm(tr('preview.createMissing', { name: target }), tr('common.create'))) await this.createNote(tab.vaultId, dirName(tab.path), target);
+  }
+
+  /** Opens a note and goes to a heading or block in it. */
+  async openNoteAt(vaultId: string, path: string, anchor?: string | null) {
+    await this.openFile(vaultId, path);
+    this.goToAnchor(vaultId, path, anchor);
+  }
+
+  goToAnchor(vaultId: string, path: string, raw?: string | null) {
+    const anchor = parseAnchor(raw);
+    const tab = this.tabs.find((t) => t.key === tabKey(vaultId, path));
+    if (!anchor || !tab) return;
+    const found = findAnchor(tab.content, anchor);
+    if (!found) return this.notify(tr('links.anchorMissing', { anchor: anchorLabel(anchor), note: baseName(path).replace(/\.(md|markdown)$/i, '') }));
+    // A block is found in the preview by its marker, a heading by its place.
+    const terms = anchor.kind === 'block' ? [fold(`^${anchor.id}`)] : [];
+    this.reveal = { key: tab.key, line: found.line, terms, heading: found.heading };
   }
 
   async loadVaultThemes(id: string) {
@@ -187,6 +316,12 @@ class Store {
     } catch {
       // It may show again next time.
     }
+  }
+
+  /** Opens a note's diagram in the builder, showing the editor if only the preview is on screen. */
+  openDiagram(tab: Tab, index: number) {
+    if (tab.view === 'preview') tab.view = 'split';
+    this.editDiagram = { key: tab.key, index };
   }
 
   setView(tab: Tab, view: ViewMode) {
@@ -227,10 +362,43 @@ class Store {
     return flatten(this.trees[vaultId] ?? []);
   }
 
-  notify(message: unknown) {
-    this.toast = String(message);
+  notify(message: unknown, options: { actions?: ToastAction[]; details?: string; onDone?: () => void } = {}) {
+    const text = String(message);
+    const firstLine = text.split(/\r?\n/)[0];
+    const long = text.length > TOAST_SHORT || firstLine !== text;
+    const message_ = long ? `${firstLine.slice(0, TOAST_SHORT).trimEnd()}${firstLine.length > TOAST_SHORT ? '…' : ''}` : text;
+    const details = options.details ?? (long ? text : null);
+    const before = this.toast;
+    this.toast = { id: (before?.id ?? 0) + 1, message: message_, details, actions: options.actions ?? [], onDone: options.onDone };
+    before?.onDone?.();
+    this.holdToast(false);
+  }
+
+  /** Takes the notice away, letting whatever waited on it finish. */
+  dismissToast() {
     clearTimeout(this.#toastTimer);
-    this.#toastTimer = setTimeout(() => (this.toast = null), 4500);
+    const gone = this.toast;
+    this.toast = null;
+    gone?.onDone?.();
+  }
+
+  /** Keeps the notice while the pointer is over it or its details are open; lets it go otherwise. */
+  holdToast(hold: boolean) {
+    clearTimeout(this.#toastTimer);
+    if (hold || !this.toast) return;
+    const time = this.toast.actions.length || this.toast.details ? TOAST_TIME_ACTIONS : TOAST_TIME;
+    this.#toastTimer = setTimeout(() => this.dismissToast(), time);
+  }
+
+  /** The notice after an export, with ways to reach the file. */
+  notifyExported(path: string | null) {
+    if (!path) return;
+    this.notify(tr('export.done'), {
+      actions: [
+        { label: tr('export.openFile'), run: () => void api.openExported(path).catch((e) => this.notify(e)) },
+        { label: tr('export.showInFolder'), run: () => void api.revealExported(path).catch((e) => this.notify(e)) },
+      ],
+    });
   }
 
   #ask(title: string, value: string | null, action: string, danger: boolean) {
@@ -281,6 +449,20 @@ class Store {
       this.trees[id] = [];
       this.notify(e);
     }
+  }
+
+  /** Asks where and how to call a new vault, then creates it. */
+  async createVaultDialog() {
+    const parent = await openDialog({ directory: true, title: tr('sidebar.createVaultWhere') });
+    if (typeof parent !== 'string') return;
+    const name = await this.prompt(tr('sidebar.vaultName'), '', tr('common.create'));
+    if (name?.trim()) await this.addVault(() => api.createVault(parent, name.trim()));
+  }
+
+  /** Asks for a folder and opens it as a vault. */
+  async openVaultDialog() {
+    const path = await openDialog({ directory: true, title: tr('sidebar.openAsVault') });
+    if (typeof path === 'string') await this.addVault(() => api.openVault(path));
   }
 
   async addVault(run: () => Promise<Vault>) {
@@ -367,6 +549,150 @@ class Store {
     });
     this.activeKey = key;
     this.persist();
+  }
+
+  get showLeft() {
+    return this.windowWidth >= LEFT_MIN ? this.layout.left : this.peek.left;
+  }
+
+  get showRight() {
+    return this.windowWidth >= RIGHT_MIN ? this.layout.right : this.peek.right;
+  }
+
+  /** Shows or hides a side bar. In a narrow window the change lasts until it widens. */
+  toggleBar(side: 'left' | 'right', show?: boolean) {
+    const min = side === 'left' ? LEFT_MIN : RIGHT_MIN;
+    const next = show ?? !(side === 'left' ? this.showLeft : this.showRight);
+    if (this.windowWidth >= min) {
+      this.layout[side] = next;
+      this.saveLayout();
+    } else {
+      this.peek[side] = next;
+    }
+  }
+
+  setWindowWidth(width: number) {
+    // Crossing a threshold forgets bars shown by hand while it was narrow.
+    if ((this.windowWidth < LEFT_MIN) !== (width < LEFT_MIN)) this.peek.left = false;
+    if ((this.windowWidth < RIGHT_MIN) !== (width < RIGHT_MIN)) this.peek.right = false;
+    this.windowWidth = width;
+  }
+
+  openPanel(tab: PanelTab) {
+    this.layout.panelTab = tab;
+    this.toggleBar('right', true);
+    this.saveLayout();
+  }
+
+  /** Zooms the whole interface, as a browser does. `null` goes back to 100 %. */
+  setZoom(zoom: number | null, announce = true) {
+    const next = zoom === null ? 1 : Math.round(Math.min(ZOOM.max, Math.max(ZOOM.min, zoom)) * 10) / 10;
+    this.setReading({ zoom: next });
+    void this.applyZoom();
+    if (announce) this.notify(tr('zoom.level', { n: Math.round(next * 100) }));
+  }
+
+  async applyZoom() {
+    try {
+      await getCurrentWebview().setZoom(this.reading.zoom);
+    } catch {
+      // Outside the app, in the interface tests.
+    }
+  }
+
+  setImagePlace(place: ImagePlace) {
+    this.imagePlace = place;
+    try {
+      localStorage.setItem(IMAGES_KEY, place);
+    } catch {
+      // Lasts for this session only.
+    }
+  }
+
+  /**
+   * Saves pasted or dropped images in the vault and returns their Markdown,
+   * one per line, linked from the note. Null when they cannot be saved here.
+   */
+  async saveImages(tab: Tab, files: File[]): Promise<string | null> {
+    if (tab.loose) {
+      this.notify(tr('images.looseOnly'));
+      return null;
+    }
+    const dir = this.imagePlace === 'note' ? dirName(tab.path) : IMAGE_FOLDER;
+    const links: string[] = [];
+    for (const file of files) {
+      const name = imageName(file);
+      try {
+        const path = await api.saveImage(tab.vaultId, dir, name, new Uint8Array(await file.arrayBuffer()));
+        links.push(`![](${linkFrom(tab.path, path)})`);
+      } catch (e) {
+        this.notify(e);
+      }
+    }
+    if (!links.length) return null;
+    await this.refreshTree(tab.vaultId);
+    return links.join('\n');
+  }
+
+  setReading(change: Partial<Reading>) {
+    this.reading = { ...this.reading, ...change };
+    try {
+      localStorage.setItem(READING_KEY, JSON.stringify(this.reading));
+    } catch {
+      // Lasts for this session only.
+    }
+  }
+
+  saveLayout() {
+    try {
+      localStorage.setItem(LAYOUT_KEY, JSON.stringify(this.layout));
+    } catch {
+      // Only a convenience.
+    }
+  }
+
+  /** Asks for a name and creates a note beside the one open, or in the first vault. */
+  async newNote() {
+    const tab = this.active;
+    const vaultId = tab?.vaultId ?? this.openVaults[0]?.id;
+    if (!vaultId) return this.notify(tr('app.openVaultFirst'));
+    const name = await this.prompt(tr('sidebar.noteName'), '', tr('common.create'));
+    if (name?.trim()) await this.createNote(vaultId, tab ? dirName(tab.path) : '', name.trim());
+  }
+
+  /** Chooses a template for a new note beside the one open, or in the first vault. */
+  newNoteFromTemplate(vaultId?: string, dir?: string) {
+    const tab = this.active;
+    const vault = vaultId ?? (tab && !tab.loose ? tab.vaultId : this.openVaults[0]?.id);
+    if (!vault) return this.notify(tr('app.openVaultFirst'));
+    this.templatePicker = { vaultId: vault, dir: dir ?? (tab && tab.vaultId === vault ? dirName(tab.path) : '') };
+  }
+
+  /** Asks for a name and creates the note, filled from a template or blank. */
+  async createFromTemplate(vaultId: string, dir: string, template: string | null) {
+    const name = (await this.prompt(tr('sidebar.noteName'), '', tr('common.create')))?.trim();
+    if (!name) return;
+    let content = '';
+    if (template) {
+      try {
+        content = fillTemplate(await api.noteTemplate(vaultId, template), { titulo: name.replace(/\.md$/i, ''), vault: this.vault(vaultId)?.name ?? '' });
+      } catch (e) {
+        return this.notify(e);
+      }
+    }
+    await this.createNote(vaultId, dir, name, content);
+  }
+
+  /** Keeps the note open as a template of its vault. */
+  async saveAsTemplate(tab: Tab) {
+    const name = (await this.prompt(tr('templates.name'), baseName(tab.path).replace(/\.(md|markdown)$/i, ''), tr('common.save')))?.trim();
+    if (!name) return;
+    try {
+      await api.saveNoteTemplate(tab.vaultId, name, tab.content);
+      this.notify(tr('templates.saved', { name }));
+    } catch (e) {
+      this.notify(e);
+    }
   }
 
   /** Opens a note at a line, with the words of a search marked. */
@@ -474,13 +800,13 @@ class Store {
     }
   }
 
-  async createNote(vaultId: string, dir: string, name: string) {
+  async createNote(vaultId: string, dir: string, name: string, content = '', open = true) {
     const file = /\.(md|markdown|html?)$/i.test(name) ? name : `${name}.md`;
     const path = join(dir, file);
     try {
-      await api.create(vaultId, path, '');
+      await api.create(vaultId, path, content);
       await this.refreshTree(vaultId);
-      await this.openFile(vaultId, path);
+      if (open) await this.openFile(vaultId, path);
     } catch (e) {
       this.notify(e);
     }
@@ -530,18 +856,48 @@ class Store {
     await this.move(vaultId, path, join(dirName(path), name));
   }
 
+  /**
+   * Deletes a file or folder with a chance to undo it: it waits aside while
+   * the notice shows, and goes to the system trash when the notice goes.
+   */
   async trash(vaultId: string, path: string) {
+    // Saved first, so undoing brings back the latest text.
+    await this.saveAll();
+    let token: string;
     try {
-      await api.trash(vaultId, path);
+      token = await api.trash(vaultId, path);
     } catch (e) {
       this.notify(e);
       return;
     }
-    for (const tab of this.tabs.filter((t) => t.vaultId === vaultId && (t.path === path || t.path.startsWith(`${path}/`)))) {
+    const inside = (t: Tab) => t.vaultId === vaultId && (t.path === path || t.path.startsWith(`${path}/`));
+    const closed = this.tabs.filter(inside).map((t) => ({ path: t.path, view: t.view }));
+    for (const tab of this.tabs.filter(inside)) {
       tab.dirty = false;
       await this.close(tab);
     }
     await this.refreshTree(vaultId);
+    let undone = false;
+    const undo = async () => {
+      undone = true;
+      try {
+        await api.undoTrash(vaultId, token);
+      } catch (e) {
+        this.notify(e);
+        return;
+      }
+      await this.refreshTree(vaultId);
+      for (const t of closed) {
+        await this.openFile(vaultId, t.path);
+        if (this.active) this.active.view = t.view;
+      }
+    };
+    this.notify(tr('store.trashed', { name: baseName(path).replace(/\.(md|markdown)$/i, '') }), {
+      actions: [{ label: tr('common.undo'), run: () => void undo() }],
+      onDone: () => {
+        if (!undone) void api.finishTrash(vaultId, token).catch((e) => this.notify(e));
+      },
+    });
   }
 
   persist() {

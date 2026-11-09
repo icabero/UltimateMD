@@ -1,8 +1,9 @@
 //! Turns notes into Typst source. All text is emitted as string literals.
 
 use crate::Input;
-use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::collections::HashMap;
+use ultimatemd_core::callouts;
 use ultimatemd_core::docx::{Section, normalize_wikilinks, split_frontmatter};
 
 /// Width of the text area on A4 with these margins, in points.
@@ -188,7 +189,15 @@ impl Writer<'_> {
                 let level = (heading_number(level) + self.shift).min(6);
                 self.wrap(move |c| format!("#heading(level: {level})[{c}]\n\n"));
             }
-            Tag::BlockQuote(_) => self.wrap(|c| format!("#quote(block: true)[{c}]\n\n")),
+            Tag::BlockQuote(None) => self.wrap(|c| format!("#quote(block: true)[{c}]\n\n")),
+            Tag::BlockQuote(Some(kind)) => {
+                let (line, fill) = callout_colors(kind);
+                self.wrap(move |c| {
+                    format!(
+                        "#block(width: 100%, inset: (x: 10pt, y: 8pt), radius: 2pt, fill: rgb(\"#{fill}\"), stroke: (left: 3pt + rgb(\"#{line}\")))[{c}]\n\n"
+                    )
+                })
+            }
             Tag::CodeBlock(kind) => {
                 let language = match kind {
                     CodeBlockKind::Fenced(info) => info.split_whitespace().next().unwrap_or("").to_lowercase(),
@@ -294,13 +303,18 @@ fn resolve_footnotes(content: &str, notes: &HashMap<String, String>) -> String {
     out
 }
 
-fn cover(title: &str, date: &str, contents: &str) -> String {
+fn cover(title: &str, author: &str, date: &str, contents: &str) -> String {
+    let byline = if author.is_empty() {
+        String::new()
+    } else {
+        format!("  #v(0.8em)\n  #align(center)[#text(14pt, {})]\n", quoted(author))
+    };
     let (title, date, contents) = (quoted(title), quoted(date), quoted(contents));
     format!(
         r#"#page(footer: none)[
   #v(1fr)
   #align(center)[#text(28pt, weight: "bold", {title})]
-  #v(0.6em)
+{byline}  #v(0.6em)
   #align(center)[#text(12pt, fill: luma(90), {date})]
   #v(1.3fr)
 ]
@@ -310,18 +324,37 @@ fn cover(title: &str, date: &str, contents: &str) -> String {
     )
 }
 
+/// The author stated by the first note that states one, as in Word.
+pub fn author(sections: &[Section]) -> String {
+    sections
+        .iter()
+        .find_map(|section| match section {
+            Section::Note { markdown, .. } => {
+                let meta = split_frontmatter(markdown).0;
+                meta.get("autor").or(meta.get("author")).filter(|a| !a.is_empty()).cloned()
+            }
+            Section::Heading { .. } => None,
+        })
+        .unwrap_or_default()
+}
+
 /// Returns the Typst source and the images it refers to.
 pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
+    let author = author(input.sections);
+    let metadata = if author.is_empty() { String::new() } else { format!(", author: {}", quoted(&author)) };
     let mut source = format!(
-        "#set document(title: {})\n{PREAMBLE}\n#set text(lang: {})\n",
+        "#set document(title: {}{metadata})\n{PREAMBLE}\n#set text(lang: {})\n",
         quoted(input.title),
         quoted(input.language)
     );
     if input.cover {
-        source.push_str(&cover(input.title, input.date, input.contents));
+        source.push_str(&cover(input.title, &author, input.date, input.contents));
     }
-    let options =
-        Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
+    let options = Options::ENABLE_TABLES
+        | Options::ENABLE_FOOTNOTES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_GFM;
     let mut writer = Writer {
         input,
         note: String::new(),
@@ -350,7 +383,8 @@ pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
                 writer.note = path.clone();
                 writer.shift = *shift;
                 writer.notes.clear();
-                let body = normalize_wikilinks(split_frontmatter(markdown).1);
+                let body = callouts::normalize(split_frontmatter(markdown).1, input.language);
+                let body = normalize_wikilinks(&body);
                 for event in Parser::new_ext(&body, options) {
                     writer.event(event);
                 }
@@ -360,4 +394,15 @@ pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
         }
     }
     (source, writer.images)
+}
+
+/// The line and fill colours of each kind of callout, the same as in Word.
+fn callout_colors(kind: BlockQuoteKind) -> (&'static str, &'static str) {
+    match kind {
+        BlockQuoteKind::Note => ("2563EB", "EFF6FF"),
+        BlockQuoteKind::Tip => ("16A34A", "F0FDF4"),
+        BlockQuoteKind::Important => ("7C3AED", "F5F3FF"),
+        BlockQuoteKind::Warning => ("D97706", "FFFBEB"),
+        BlockQuoteKind::Caution => ("DC2626", "FEF2F2"),
+    }
 }

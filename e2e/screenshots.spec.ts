@@ -105,7 +105,9 @@ test('export dialog', async ({ page }) => {
   await page.keyboard.press('Control+e');
   // The PDF and Word previews come from the backend; HTML is drawn here, in the browser.
   await page.getByRole('group', { name: 'Formato' }).getByRole('button', { name: 'HTML' }).click();
+  await page.getByRole('navigation', { name: 'Pasos' }).getByRole('button', { name: 'Contenido' }).click();
   await page.getByRole('group', { name: 'Alcance' }).getByRole('button', { name: 'Vault' }).click();
+  await expect(page.getByRole('region', { name: 'Antes de exportar' })).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 });
   const preview = page.getByRole('dialog', { name: 'Exportar' });
   await expect(preview.locator('.html svg').first()).toBeVisible({ timeout: 30_000 });
   await settle(page);

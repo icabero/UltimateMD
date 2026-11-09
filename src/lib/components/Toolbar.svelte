@@ -76,14 +76,14 @@
 </div>
 
 <style>
-  .bar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 2px 10px; padding: 4px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .bar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: var(--space-0-5) var(--space-2-5); padding: var(--space-1) var(--space-2-5); border-bottom: 1px solid var(--line); background: var(--panel); }
   .group { display: flex; gap: 1px; }
-  .headings { flex: none; width: 104px; height: 26px; padding: 0 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text-2); font: inherit; font-size: 12.5px; }
-  button { display: flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 5px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 12.5px; }
+  .headings { flex: none; width: 104px; height: 26px; padding: 0 var(--space-1); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text-2); font: inherit; font-size: var(--font-sm); }
+  button { display: flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 var(--space-1-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); }
   button:hover { background: var(--hover); color: var(--text); }
   .t-B { font-weight: 700; }
   .t-I { font-family: var(--serif); font-style: italic; }
   .t-S { text-decoration: line-through; }
-  .actions { display: flex; gap: 4px; margin-left: auto; }
-  .labelled { gap: 5px; padding: 0 9px; border: 1px solid var(--line); white-space: nowrap; }
+  .actions { display: flex; gap: var(--space-1); margin-left: auto; }
+  .labelled { gap: var(--space-1-5); padding: 0 var(--space-2-5); border: 1px solid var(--line); white-space: nowrap; }
 </style>

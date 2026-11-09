@@ -15,7 +15,7 @@ use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World};
 use typst_layout::PagedDocument;
-use typst_pdf::PdfOptions;
+use typst_pdf::{PdfOptions, PdfStandard, PdfStandards, Timestamp};
 use typst_render::RenderOptions;
 use ultimatemd_core::docx::Section;
 use ultimatemd_core::{Error, Result};
@@ -30,6 +30,8 @@ pub struct Input<'a> {
     pub contents: &'a str,
     /// Adds a cover page and a table of contents.
     pub cover: bool,
+    /// Writes PDF/A-2b, the archiving standard.
+    pub archive: bool,
     /// Rendered diagrams as PNG, in the order they appear. Empty if rendering failed.
     pub diagrams: &'a [Vec<u8>],
     /// Loads an image: note path, then the reference written in it.
@@ -99,10 +101,37 @@ fn compile(input: &Input) -> Result<PagedDocument> {
     })
 }
 
+/// The current time in UTC, which PDF/A requires as the creation date.
+fn now() -> Option<Timestamp> {
+    let seconds = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_secs() as i64;
+    let (days, rest) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
+    // Days since 1970-01-01 to a civil date (Howard Hinnant's algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = (doy - (153 * mp + 2) / 5 + 1) as u8;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u8;
+    let year = (yoe + era * 400 + i64::from(month <= 2)) as i32;
+    let (hour, minute, second) = ((rest / 3_600) as u8, (rest / 60 % 60) as u8, (rest % 60) as u8);
+    Datetime::from_ymd_hms(year, month, day, hour, minute, second).map(Timestamp::new_utc)
+}
+
+fn pdf_options(input: &Input) -> Result<PdfOptions> {
+    if !input.archive {
+        return Ok(PdfOptions::default());
+    }
+    let standards = PdfStandards::new(&[PdfStandard::A_2b])
+        .map_err(|e| Error::Vault(format!("could not set up PDF/A: {}", e.message())))?;
+    Ok(PdfOptions { standards, timestamp: now(), ..PdfOptions::default() })
+}
+
 /// Generates the PDF.
 pub fn render(input: &Input) -> Result<Vec<u8>> {
     let document = compile(input)?;
-    typst_pdf::pdf(&document, &PdfOptions::default())
+    typst_pdf::pdf(&document, &pdf_options(input)?)
         .map_err(|e| Error::Vault(format!("could not write the PDF: {:?}", e.first().map(|d| d.message.to_string()))))
 }
 

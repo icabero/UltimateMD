@@ -2,6 +2,22 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "The app's own window. Vault content never runs here: HTML notes load in a sandboxed frame.",
-  "windows": ["main"],
-  "permissions": ["core:default", "core:window:allow-show", "dialog:allow-open", "opener:allow-open-url"]
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "dialog:allow-open",
+    "opener:allow-open-url",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-is-maximized",
+    "core:window:allow-set-decorations",
+    "core:window:allow-set-title-bar-style",
+    "core:webview:allow-set-webview-zoom"
+  ]
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dim, pop } from '../motion';
   import { onMount } from 'svelte';
   import DocxSheet from './DocxSheet.svelte';
   import Icon from './Icon.svelte';
@@ -100,8 +101,8 @@
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape' && !store.dialog) close(); }} />
 
-<button class="scrim top" aria-label={tr('common.close')} onclick={close}></button>
-<div class="modal" role="dialog" aria-label={tr('word.title', { name: vaultName })}>
+<button in:dim class="scrim top" aria-label={tr('common.close')} onclick={close}></button>
+<div in:pop class="modal" role="dialog" aria-label={tr('word.title', { name: vaultName })}>
   <div class="config">
     <header>
       <h2>{tr('word.title', { name: vaultName })}</h2>
@@ -170,26 +171,26 @@
 </div>
 
 <style>
-  .top { z-index: 32; }
-  .modal { position: fixed; top: 50%; left: 50%; z-index: 33; display: grid; grid-template-columns: 360px 1fr; width: min(1120px, calc(100vw - 32px)); height: min(760px, calc(100vh - 32px)); overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translate(-50%, -50%); }
-  .config { min-height: 0; padding: 8px 18px 16px; overflow-y: auto; }
+  .top { z-index: var(--z-nested-scrim); }
+  .modal { position: fixed; top: 50%; left: 50%; z-index: var(--z-nested); display: grid; grid-template-columns: 360px 1fr; width: min(1120px, calc(100vw - 32px)); height: min(760px, calc(100vh - 32px)); overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-lg); transform: translate(-50%, -50%); }
+  .config { min-height: 0; padding: var(--space-2) var(--space-5) var(--space-4); overflow-y: auto; }
   header { display: flex; align-items: center; justify-content: space-between; }
-  h2 { margin: 8px 0; font-size: 15px; font-weight: 650; }
-  h3 { margin: 16px 0 6px; font-size: 12px; font-weight: 650; }
-  p { margin: 0; color: var(--text-2); font-size: 12px; line-height: 1.5; }
-  .hint { margin-bottom: 6px; }
-  .buttons { display: flex; gap: 6px; }
-  .plain { padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text); font-size: 12.5px; }
+  h2 { margin: var(--space-2) 0; font-size: var(--font-lg); font-weight: 650; }
+  h3 { margin: var(--space-4) 0 var(--space-1-5); font-size: var(--font-sm); font-weight: 650; }
+  p { margin: 0; color: var(--text-2); font-size: var(--font-sm); line-height: 1.5; }
+  .hint { margin-bottom: var(--space-1-5); }
+  .buttons { display: flex; gap: var(--space-1-5); }
+  .plain { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: none; color: var(--text); font-size: var(--font-sm); }
   .plain:hover { background: var(--hover); }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 5px; color: var(--text-2); font-size: 12.5px; }
-  .pair { display: flex; align-items: center; gap: 8px; }
-  .check { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 12.5px; }
-  select { flex: none; width: 200px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; font-size: 12.5px; }
-  input.number { flex: none; width: 120px; height: 26px; padding: 0 6px; font-size: 12.5px; }
-  .swatch { width: 30px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; }
-  .link { padding: 0; border: 0; background: none; color: var(--accent-text); font-size: 12px; }
-  .note { margin: 6px 0; color: var(--text-3); font-size: 11.5px; }
-  .preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 10px 20px 16px; overflow: auto; border-left: 1px solid var(--line); background: var(--panel); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2-5); margin-bottom: var(--space-1-5); color: var(--text-2); font-size: var(--font-sm); }
+  .pair { display: flex; align-items: center; gap: var(--space-2); }
+  .check { display: flex; align-items: center; gap: var(--space-1-5); color: var(--text-2); font-size: var(--font-sm); }
+  select { flex: none; width: 200px; padding: var(--space-1) var(--space-1-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; font-size: var(--font-sm); }
+  input.number { flex: none; width: 120px; height: 26px; padding: 0 var(--space-1-5); font-size: var(--font-sm); }
+  .swatch { width: 30px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-xs); background: none; }
+  .link { padding: 0; border: 0; background: none; color: var(--accent-text); font-size: var(--font-sm); }
+  .note { margin: var(--space-1-5) 0; color: var(--text-3); font-size: var(--font-xs); }
+  .preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: var(--space-2-5) var(--space-5) var(--space-4); overflow: auto; border-left: 1px solid var(--line); background: var(--panel); }
   .preview[aria-busy='true'] :global(.sheet) { opacity: .6; }
   .error { color: var(--danger); }
 </style>

@@ -9,10 +9,12 @@ on:
 permissions:
   contents: read
 
-# One run at a time. GitHub keeps only the newest one waiting.
+# One queue per pull request or branch, so branches never wait for each
+# other. A new push cancels the run it replaces, except on main and develop,
+# where every commit is checked.
 concurrency:
-  group: ci
-  cancel-in-progress: false
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
 
 jobs:
   test:

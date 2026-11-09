@@ -3,7 +3,7 @@
   import { Annotation, Compartment, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
   import { Decoration, EditorView, drawSelection, highlightActiveLine, keymap, lineNumbers, type DecorationSet } from '@codemirror/view';
   import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-  import { HighlightStyle, indentOnInput, syntaxHighlighting, bracketMatching } from '@codemirror/language';
+  import { HighlightStyle, indentOnInput, syntaxHighlighting, bracketMatching, ensureSyntaxTree, syntaxTree } from '@codemirror/language';
   import { autocompletion } from '@codemirror/autocomplete';
   import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
   import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -16,12 +16,13 @@
   import { parseSource } from '../diagramBuilder';
   import { fenceLine, parseStyle, splitFence } from '../diagramStyle';
   import { findTerms } from '../fold';
+  import { htmlToMarkdown } from '../paste';
   import { fenceAt, insertBlock, insertLink, wrap } from '../formatting';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
   import { frontmatterChange, frontmatterValue } from '../themes';
   import { EDIT_DIAGRAM, visualMode } from '../visual';
-  import { linkAt, noteCompletions, wikilinks } from '../wikilinks';
+  import { headingCompletions, linkAt, noteCompletions, wikilinks } from '../wikilinks';
 
   let { tab, onscroll }: { tab: Tab; onscroll?: (ratio: number) => void } = $props();
 
@@ -45,16 +46,16 @@
   const baseTheme = EditorView.theme({
     '&': { height: '100%', background: 'var(--bg)', color: 'var(--text)' },
     '&.cm-focused': { outline: 'none' },
-    '.cm-scroller': { fontFamily: 'var(--mono)', fontSize: '13.5px', lineHeight: '1.65', overflow: 'auto' },
+    '.cm-scroller': { fontFamily: 'var(--mono)', fontSize: 'calc(13.5px * var(--text-scale, 1))', lineHeight: '1.65', overflow: 'auto' },
     '.cm-content': { padding: '20px 0 40vh', caretColor: 'var(--accent)' },
     '.cm-line': { padding: '0 22px' },
-    '.cm-gutters': { background: 'var(--bg)', color: 'var(--text-3)', border: 'none', fontSize: '11.5px' },
+    '.cm-gutters': { background: 'var(--bg)', color: 'var(--text-3)', border: 'none', fontSize: 'var(--font-xs)' },
     '.cm-activeLine, .cm-activeLineGutter': { background: 'var(--hover)' },
     '.cm-cursor': { borderLeftColor: 'var(--accent)', borderLeftWidth: '2px' },
     '.cm-selectionBackground, &.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { background: 'var(--selection) !important' },
     '.cm-panels': { background: 'var(--panel)', color: 'var(--text)', borderColor: 'var(--line)' },
     '.cm-searchMatch': { background: 'var(--accent-soft)' },
-    '.cm-found': { background: 'color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: '2px' },
+    '.cm-found': { background: 'var(--found)', borderRadius: 'var(--radius-2xs)' },
   });
 
   // The words of a search, marked until the next edit.
@@ -104,7 +105,52 @@
       const link = pos === null ? null : linkAt(target.state, pos);
       if (!link) return false;
       event.preventDefault();
-      void store.followLink(tab, link.target);
+      void store.followLink(tab, link.target, link.anchor);
+      return true;
+    },
+  });
+
+  // Ctrl+Shift+V pastes plain text; the paste event itself does not say so.
+  let plainPaste = false;
+  const pasteMarkdown = EditorView.domEventHandlers({
+    keydown(event) {
+      plainPaste = (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'v';
+      return false;
+    },
+    paste(event, target) {
+      const plain = plainPaste;
+      plainPaste = false;
+      const images = [...(event.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+      if (images.length) {
+        event.preventDefault();
+        void insertImages(target, images, target.state.selection.main.from, target.state.selection.main.to);
+        return true;
+      }
+      const html = event.clipboardData?.getData('text/html');
+      if (plain || !html) return false;
+      const markdown = htmlToMarkdown(html);
+      if (markdown === null) return false;
+      event.preventDefault();
+      target.dispatch(target.state.replaceSelection(markdown), { scrollIntoView: true, userEvent: 'input.paste' });
+      return true;
+    },
+  });
+
+  /** Saves images in the vault and links them where they were pasted or dropped. */
+  async function insertImages(target: EditorView, files: File[], from: number, to: number) {
+    const markdown = await store.saveImages(tab, files);
+    if (markdown === null) return;
+    target.dispatch({ changes: { from, to, insert: markdown }, selection: { anchor: from + markdown.length }, userEvent: 'input.paste' });
+    target.focus();
+  }
+
+  const dropImages = EditorView.domEventHandlers({
+    drop(event, target) {
+      const images = [...(event.dataTransfer?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+      if (!images.length) return false;
+      event.preventDefault();
+      const at = target.posAtCoords({ x: event.clientX, y: event.clientY }) ?? target.state.selection.main.head;
+      void insertImages(target, images, at, at);
       return true;
     },
   });
@@ -120,9 +166,10 @@
         language.of(languageFor(current.kind)),
         mode.of(PLAIN),
         found,
-        ...(current.kind === 'md' ? [wikilinks, followWithCtrl, autocompletion({ override: [noteCompletions], icons: false })] : []),
+        ...(current.kind === 'md' ? [wikilinks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
+          if (u.docChanged || u.selectionSet) publishPosition(u.state);
         }),
       ],
     });
@@ -135,14 +182,24 @@
       view.setState(states.get(current.key) ?? makeState(current));
       shownKey = current.key;
       shownRevision = current.revision;
+      publishPosition(view.state);
     }
-    // An edit made outside this editor stays undoable.
-    if (shownRevision !== current.revision || view.state.doc.toString() !== current.content) {
+    // An edit made outside this editor stays undoable. Only the part that
+    // differs is replaced, so the cursor and the scroll stay where they were.
+    const shown = view.state.doc.toString();
+    if (shownRevision !== current.revision || shown !== current.content) {
       shownRevision = current.revision;
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: current.content },
-        annotations: external.of(true),
-      });
+      const next = current.content;
+      let start = 0;
+      while (start < shown.length && start < next.length && shown[start] === next[start]) start++;
+      let end = 0;
+      while (end < shown.length - start && end < next.length - start && shown[shown.length - 1 - end] === next[next.length - 1 - end]) end++;
+      if (start < shown.length - end || start < next.length - end) {
+        view.dispatch({
+          changes: { from: start, to: shown.length - end, insert: next.slice(start, next.length - end) },
+          annotations: external.of(true),
+        });
+      }
     }
     const wanted = current.kind === 'md' && current.view === 'visual' ? visualMode : PLAIN;
     if (mode.get(view.state) !== wanted) view.dispatch({ effects: mode.reconfigure(wanted) });
@@ -166,6 +223,35 @@
     view.dispatch({ selection: { anchor: fence.to } });
     builder = { initial: null, replace: null };
   }
+
+  /** Where the diagram with this order in the note starts, counting only diagrams, as the preview does. */
+  function diagramStart(state: EditorState, index: number) {
+    const tree = ensureSyntaxTree(state, state.doc.length, 1000) ?? syntaxTree(state);
+    let seen = 0;
+    let found: number | null = null;
+    tree.iterate({
+      enter: (node) => {
+        if (found !== null) return false;
+        if (node.name !== 'FencedCode') return;
+        const { lang } = splitFence(state.doc.lineAt(node.from).text.replace(/^\s*[`~]+/, ''));
+        if ((lang === 'mermaid' || lang === 'd2') && seen++ === index) found = node.from;
+        return false;
+      },
+    });
+    return found;
+  }
+
+  // The preview asks for a diagram, for instance one with an error.
+  $effect(() => {
+    const wanted = store.editDiagram;
+    if (!view || wanted?.key !== tab.key) return;
+    store.editDiagram = null;
+    const start = diagramStart(view.state, wanted.index);
+    if (start === null) return;
+    const inside = Math.min(view.state.doc.lineAt(start).to + 1, view.state.doc.length);
+    view.dispatch({ selection: { anchor: inside }, scrollIntoView: true });
+    openBuilder();
+  });
 
   /** Leaves the cursor past the diagram, so that it shows drawn in visual mode. */
   function closeBuilder() {
@@ -210,6 +296,13 @@
 
   onDestroy(() => view?.destroy());
 
+  /** Tells the note panel which line has the cursor. */
+  function publishPosition(state: EditorState) {
+    if (tab.view === 'preview') return;
+    const line = state.doc.lineAt(state.selection.main.head).number;
+    if (store.position?.key !== tab.key || store.position.line !== line) store.position = { key: tab.key, line };
+  }
+
   /** Goes to the line a search asked for, unless the editor is hidden behind the preview. */
   function reveal() {
     const want = store.reveal;
@@ -222,7 +315,7 @@
     const anchor = first?.[0] ?? line?.from ?? 0;
     view.dispatch({
       selection: { anchor },
-      effects: [setFound.of(marks), EditorView.scrollIntoView(anchor, { y: line ? 'center' : 'start' })],
+      effects: [setFound.of(marks), EditorView.scrollIntoView(anchor, { y: line && want.heading === undefined ? 'center' : 'start', yMargin: 16 })],
     });
     view.focus();
   }

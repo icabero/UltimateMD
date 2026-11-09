@@ -55,7 +55,7 @@ fn scan_line(line: &str, offset: usize, out: &mut Vec<Link>) {
     let code = code_spans(line);
     let in_code = |i: usize| code.iter().any(|&(a, b)| i > a && i < b);
     let kinds: [(&str, &str, &[char], Kind); 2] =
-        [("[[", "]]", &['|', '#'], Kind::Wiki), ("](", ")", &['#'], Kind::Markdown)];
+        [("[[", "]]", &['|', '#', '^'], Kind::Wiki), ("](", ")", &['#'], Kind::Markdown)];
     let mut found = Vec::new();
     for (open, close, cut, kind) in kinds {
         let mut at = 0;
@@ -340,6 +340,170 @@ pub fn move_path(vault: &VaultFs, from: &str, to: &str) -> Result<LinkUpdate> {
     Ok(update)
 }
 
+/// A link that leads nowhere.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrokenLink {
+    /// The note it is written in.
+    pub note: String,
+    /// What it points to, as written.
+    pub target: String,
+    /// Its line in the note, from 1.
+    pub line: usize,
+    /// It points to a note, which can be created, rather than a file.
+    pub to_note: bool,
+    /// The closest note or file there is, for a typo or a rename.
+    pub suggestion: Option<String>,
+}
+
+fn all_files(nodes: &[crate::files::TreeNode], out: &mut Vec<String>) {
+    for node in nodes {
+        if node.is_dir {
+            all_files(&node.children, out);
+        } else {
+            out.push(node.path.clone());
+        }
+    }
+}
+
+fn extension(path: &str) -> &str {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    name.rsplit_once('.').map_or("", |(_, ext)| ext)
+}
+
+/// Edit distance in characters.
+fn distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut previous = row[0];
+        row[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let next = if ca == *cb { previous } else { 1 + previous.min(row[j]).min(row[j + 1]) };
+            previous = row[j + 1];
+            row[j + 1] = next;
+        }
+    }
+    row[b.len()]
+}
+
+/// The candidate whose name is closest to `target`, if it is close enough to
+/// be a typo, a different case or accent, or one name inside the other.
+fn closest(target: &str, candidates: &[String]) -> Option<String> {
+    let wanted = crate::search::fold(stem(target));
+    if wanted.is_empty() {
+        return None;
+    }
+    let limit = (wanted.chars().count() / 3).max(1);
+    candidates
+        .iter()
+        .filter_map(|c| {
+            let name = crate::search::fold(stem(c));
+            let d = distance(&wanted, &name);
+            let contains = name.chars().count() >= 3 && (name.contains(&wanted) || wanted.contains(&name));
+            (d <= limit || contains).then_some((d, c))
+        })
+        .min_by_key(|(d, c)| (*d, c.len()))
+        .map(|(_, c)| c.clone())
+}
+
+/// A file reached by a link: relative to the note, from the root, or by name
+/// anywhere, as images are found.
+fn file_exists(target: &str, from: &str, files: &[String]) -> bool {
+    let decoded = target.replace("%20", " ");
+    let exact = match decoded.strip_prefix('/') {
+        Some(from_root) => join_rel("", from_root),
+        None => join_rel(parent(from), &decoded),
+    };
+    let name = decoded.rsplit('/').next().unwrap_or(&decoded);
+    files.iter().any(|f| Some(f) == exact.as_ref() || f.rsplit('/').next() == Some(name))
+}
+
+/// Every link in the vault that leads nowhere, note by note.
+pub fn broken(vault: &VaultFs) -> Result<Vec<BrokenLink>> {
+    let notes = vault.notes()?;
+    let mut files = Vec::new();
+    all_files(&vault.tree()?, &mut files);
+    let attachments: Vec<String> = files.iter().filter(|f| !is_note_file(f)).cloned().collect();
+    let mut out = Vec::new();
+    for note in &notes {
+        let Ok(read) = vault.read(note) else { continue };
+        let content = &read.content;
+        for link in find_links(content) {
+            let raw = &content[link.start..link.end];
+            if link.kind == Kind::Markdown && raw.contains(':') {
+                continue;
+            }
+            let to_note = match link.kind {
+                Kind::Wiki => extension(raw).is_empty() || is_note_file(raw),
+                Kind::Markdown => is_note_file(raw),
+            };
+            let target = if link.kind == Kind::Markdown { raw.replace("%20", " ") } else { raw.to_string() };
+            let found = if to_note { resolve(&target, note, &notes).is_some() } else { file_exists(raw, note, &files) };
+            if found {
+                continue;
+            }
+            let suggestion = if to_note {
+                closest(&target, &notes)
+            } else {
+                let same_kind: Vec<String> = attachments
+                    .iter()
+                    .filter(|f| extension(f).eq_ignore_ascii_case(extension(&target)))
+                    .cloned()
+                    .collect();
+                closest(&target, &same_kind)
+            };
+            let line = content[..link.start].matches('\n').count() + 1;
+            out.push(BrokenLink { note: note.clone(), target, line, to_note, suggestion });
+        }
+    }
+    Ok(out)
+}
+
+/// Points the links of `note` written as `target` to `to`, a note or file of
+/// the vault, keeping how each was written. How many it changed.
+pub fn repoint(vault: &VaultFs, note: &str, target: &str, to: &str) -> Result<usize> {
+    let (note, to) = (crate::paths::normalize(note)?, crate::paths::normalize(to)?);
+    let read = vault.read(&note)?;
+    let notes = vault.notes()?;
+    let mut files = Vec::new();
+    all_files(&vault.tree()?, &mut files);
+    let content = &read.content;
+    let mut out = String::with_capacity(content.len());
+    let (mut at, mut changed) = (0, 0);
+    for link in find_links(content) {
+        let raw = &content[link.start..link.end];
+        let written = if link.kind == Kind::Markdown { raw.replace("%20", " ") } else { raw.to_string() };
+        if written != target {
+            continue;
+        }
+        let text = match link.kind {
+            Kind::Markdown => markdown_path(raw, &note, &to),
+            // A wikilink is a name while the name is enough, a path otherwise.
+            // An extension written stays written.
+            Kind::Wiki if is_note_file(&to) => {
+                let ext = if is_note_file(raw) { &to[without_ext(&to).len()..] } else { "" };
+                let name = format!("{}{ext}", stem(&to));
+                if resolve(&name, &note, &notes) == Some(&to) { name } else { format!("{}{ext}", without_ext(&to)) }
+            }
+            Kind::Wiki => {
+                let name = to.rsplit('/').next().unwrap_or(&to);
+                let unique = files.iter().filter(|f| f.rsplit('/').next() == Some(name)).count() == 1;
+                if unique { name.to_string() } else { to.clone() }
+            }
+        };
+        out.push_str(&content[at..link.start]);
+        out.push_str(&text);
+        at = link.end;
+        changed += 1;
+    }
+    if changed > 0 {
+        out.push_str(&content[at..]);
+        vault.write(&note, &out, WriteMode::Replace(Some(&read.version)))?;
+    }
+    Ok(changed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,12 +537,100 @@ mod tests {
     }
 
     #[test]
+    fn lists_broken_links_with_the_closest_note() {
+        let (_d, v) = vault_with(&[
+            ("Reunión de marzo.md", ""),
+            (
+                "Plan.md",
+                "[[Plan]] [[reunion de marzo]]
+[[Reunion de mazro|ver]] y [[Nada parecido]]
+",
+            ),
+            (
+                "dir/a.md",
+                "![x](foto.png) ![[logo.png]] ![y](falta.png) [z](https://e.com/no.md) [w](mailto:a@b.c)
+[n](Plan%20B.md)
+",
+            ),
+            ("dir/foto.png", ""),
+            ("img/logo.png", ""),
+            ("img/falta.jpg", ""),
+            ("img/falte.png", ""),
+        ]);
+        let found = broken(&v).unwrap();
+        let link = |note: &str, target: &str, line, to_note, suggestion: Option<&str>| BrokenLink {
+            note: note.into(),
+            target: target.into(),
+            line,
+            to_note,
+            suggestion: suggestion.map(String::from),
+        };
+        assert_eq!(
+            found,
+            [
+                link("Plan.md", "reunion de marzo", 1, true, Some("Reunión de marzo.md")),
+                link("Plan.md", "Reunion de mazro", 2, true, Some("Reunión de marzo.md")),
+                link("Plan.md", "Nada parecido", 2, true, None),
+                link("dir/a.md", "falta.png", 1, false, Some("img/falte.png")),
+                link("dir/a.md", "Plan B.md", 2, true, Some("Plan.md")),
+            ]
+        );
+    }
+
+    #[test]
+    fn repointing_keeps_how_each_link_was_written() {
+        let (_d, v) = vault_with(&[
+            ("Reunión.md", ""),
+            ("otra/Reunión.md", ""),
+            ("Plan.md", ""),
+            ("img/logo.png", ""),
+            (
+                "dir/a.md",
+                "[[Reunon|ver]] [[Reunon#H]] [x](../Reunon.md) [[Pln]] [[Pln.md]] ![[logo.pgn]] [[otra]]
+",
+            ),
+        ]);
+        assert_eq!(repoint(&v, "dir/a.md", "Reunon", "otra/Reunión.md").unwrap(), 2);
+        assert_eq!(repoint(&v, "dir/a.md", "../Reunon.md", "Reunión.md").unwrap(), 1);
+        repoint(&v, "dir/a.md", "Pln", "Plan.md").unwrap();
+        repoint(&v, "dir/a.md", "Pln.md", "Plan.md").unwrap();
+        repoint(&v, "dir/a.md", "logo.pgn", "img/logo.png").unwrap();
+        assert_eq!(
+            text(&v, "dir/a.md"),
+            "[[otra/Reunión|ver]] [[otra/Reunión#H]] [x](../Reunión.md) [[Plan]] [[Plan.md]] ![[logo.png]] [[otra]]
+"
+        );
+        assert_eq!(repoint(&v, "dir/a.md", "no está", "Plan.md").unwrap(), 0);
+    }
+
+    #[test]
     fn computes_backlinks() {
         let (_d, v) = vault_with(&[("a.md", "[[b]] [[falta]]"), ("b.md", "[[a]]"), ("c.md", "[[b]]")]);
         let i = info(&v, "b.md").unwrap();
         assert_eq!(i.outgoing, ["a.md"]);
         assert_eq!(i.backlinks, ["a.md", "c.md"]);
         assert_eq!(info(&v, "a.md").unwrap().unresolved, ["falta"]);
+    }
+
+    #[test]
+    fn block_and_same_note_links() {
+        let line = "[[Plan^tarea-1]] [[#Arriba]] [[Plan#Fechas^x]]
+";
+        assert_eq!(extract(line), ["Plan", "Plan"]);
+        let (_d, v) = vault_with(&[
+            ("Plan.md", ""),
+            (
+                "a.md",
+                "[[Plan^tarea-1|ver]]
+",
+            ),
+        ]);
+        move_path(&v, "Plan.md", "Proyecto.md").unwrap();
+        assert_eq!(
+            text(&v, "a.md"),
+            "[[Proyecto^tarea-1|ver]]
+"
+        );
     }
 
     #[test]

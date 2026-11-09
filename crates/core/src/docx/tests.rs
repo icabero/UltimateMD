@@ -27,6 +27,7 @@ fn render_with(template: Option<&[u8]>) -> Package {
         template,
         settings: &Default::default(),
         inline_numbering: false,
+        language: "es",
     };
     read_package(&render(&input).unwrap()).unwrap()
 }
@@ -93,6 +94,10 @@ fn template() -> Vec<u8> {
         (SETTINGS, settings),
         (NUMBERING, numbering),
         ("word/theme/theme1.xml", "<a:theme/>".to_string()),
+        (
+            CORE,
+            r#"<?xml version="1.0"?><cp:coreProperties xmlns:cp="cp" xmlns:dc="dc"><dc:title>Plantilla</dc:title><dc:creator>Quien la hizo</dc:creator></cp:coreProperties>"#.to_string(),
+        ),
         (DOC_RELS, format!(r#"<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId9" Type="{REL_NS}/header" Target="header1.xml"/></Relationships>"#)),
     ]
     .into_iter()
@@ -216,6 +221,7 @@ fn missing_assets_leave_a_note_rather_than_fail() {
         template: None,
         settings: &Default::default(),
         inline_numbering: false,
+        language: "es",
     };
     let doc = text(&read_package(&render(&input).unwrap()).unwrap(), DOCUMENT);
     assert!(doc.contains("[Imagen: no.png]") && doc.contains("[Diagrama no disponible]"));
@@ -237,6 +243,7 @@ fn bad_templates_are_rejected() {
         template: Some(b"nope"),
         settings: &Default::default(),
         inline_numbering: false,
+        language: "es",
     };
     assert!(render(&input).is_err());
     assert!(check_template(&template()).is_ok());
@@ -258,6 +265,7 @@ fn title_prefers_frontmatter() {
         template: Some(&source),
         settings: &Default::default(),
         inline_numbering: false,
+        language: "es",
     };
     let doc = text(&read_package(&render(&input).unwrap()).unwrap(), DOCUMENT);
     assert!(doc.contains("<w:t xml:space=\"preserve\">Elegido"));
@@ -327,6 +335,7 @@ fn folder_document() -> Package {
         template: Some(&source),
         settings: &Default::default(),
         inline_numbering: false,
+        language: "es",
     };
     read_package(&render(&input).unwrap()).unwrap()
 }
@@ -367,6 +376,19 @@ fn notes_can_reuse_footnote_labels() {
     let notes = text(&folder_document(), FOOTNOTES);
     assert!(notes.contains("pie uno") && notes.contains("pie dos"));
     assert_eq!(notes.matches("<w:footnote ").count(), 4, "two separators and one note each");
+}
+
+#[test]
+fn document_properties_name_this_document_and_its_author() {
+    let core = text(&render_with(Some(&template())), CORE);
+    assert!(core.contains("<dc:title>Informe</dc:title>") && core.contains("<dc:creator>Ane</dc:creator>"), "{core}");
+    assert!(!core.contains("Plantilla") && !core.contains("Quien"));
+
+    let empty = r#"<cp:coreProperties xmlns:dc="dc"><dc:title/></cp:coreProperties>"#;
+    assert_eq!(
+        with_properties(empty, "A & B", "$1"),
+        r#"<cp:coreProperties xmlns:dc="dc"><dc:title>A &amp; B</dc:title><dc:creator>$1</dc:creator></cp:coreProperties>"#
+    );
 }
 
 #[test]
@@ -424,4 +446,33 @@ fn the_contents_follow_both_switches_of_the_field() {
     assert_eq!(toc_levels(r#" TOC \o &quot;2-3&quot; \t &quot;Título 1;1&quot; "#), vec![2, 3, 1], "escaped quotes");
     assert_eq!(toc_levels(r#" TOC \t "Mi estilo,2" "#), vec![2], "another list separator");
     assert_eq!(toc_levels(" TOC "), vec![1, 2, 3]);
+}
+
+#[test]
+fn callouts_are_coloured_boxes_with_a_title() {
+    let image = |_: &str, _: &str| None;
+    let sections =
+        note("> [!warning] Hielo fino\n> No cruzar de noche.\n\n> [!tip]\n> Llevar crampones.\n\n> Una cita normal.\n");
+    let input = Input {
+        sections: &sections,
+        title: "archivo",
+        fixed_title: false,
+        date: "5/11/2026",
+        contents: "Índice",
+        diagrams: &[],
+        image: &image,
+        template: None,
+        settings: &Default::default(),
+        inline_numbering: false,
+        language: "es",
+    };
+    let parts = read_package(&render(&input).unwrap()).unwrap();
+    assert_well_formed(&parts);
+    let doc = text(&parts, DOCUMENT);
+    assert!(!doc.contains("[!"), "the marker is gone");
+    assert!(doc.contains("Hielo fino") && doc.contains("Consejo"), "written and default titles");
+    assert_eq!(doc.matches(r#"w:fill="FFFBEB""#).count(), 2, "both paragraphs of the warning");
+    assert_eq!(doc.matches(r#"w:fill="F0FDF4""#).count(), 2);
+    assert!(doc.contains(r#"w:color="D97706""#));
+    assert_eq!(doc.matches("w:fill=").count(), 4, "a plain quote stays a quote");
 }

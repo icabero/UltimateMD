@@ -3,7 +3,7 @@
   const CSS = `
     :host { display: block; }
     .docx-wrapper { padding: 0 !important; background: none !important; }
-    .docx-wrapper > section.docx { margin: 0 auto 12px !important; box-shadow: 0 1px 4px rgb(0 0 0 / 30%) !important; font-size: 10pt; }
+    .docx-wrapper > section.docx { margin: 0 auto var(--space-3) !important; box-shadow: var(--shadow-md) !important; font-size: 10pt; }
   `;
 
   let host = $state<HTMLDivElement>();
@@ -23,6 +23,19 @@
     // The sheets keep their real size; the zoom only fits them to the panel.
     const sheet = body.querySelector('section');
     if (sheet?.offsetWidth) body.style.zoom = String(host.clientWidth / sheet.offsetWidth);
+  }
+
+  /** A copy of the first page with its styles, at its real size, for a thumbnail. */
+  export function firstPage(): Node[] {
+    const root = host?.shadowRoot;
+    const body = root?.lastElementChild as HTMLElement | null;
+    if (!root || !body) return [];
+    const copy = body.cloneNode(true) as HTMLElement;
+    copy.style.zoom = '';
+    copy.querySelectorAll('section.docx').forEach((page, i) => i > 0 && page.remove());
+    const style = document.createElement('style');
+    style.textContent = `${CSS} .docx-wrapper > section.docx { margin: 0 !important; box-shadow: none !important; }`;
+    return [style, copy];
   }
 </script>
 

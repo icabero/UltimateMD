@@ -1,9 +1,10 @@
 // Exports use a fixed print look, whatever theme is on screen.
 import { api, type ExportPlan, type PlanSection, type TreeNode } from './api';
 import { hasStyle, parseStyle, withColors } from './diagramStyle';
+import { explainDiagramError } from './diagramErrors';
 import { renderDiagram, toPng } from './diagrams';
 import { language, tr } from './i18n.svelte';
-import { renderMarkdown } from './markdown';
+import { diagramFences, outline, renderMarkdown } from './markdown';
 import { baseName, extOf, kindOf, stem } from './paths';
 import previewCss from './preview.css?inline';
 import { store, type Tab } from './store.svelte';
@@ -34,6 +35,8 @@ export interface ExportOptions {
   noteTitles: boolean;
   noteBreak: boolean;
   cover: boolean;
+  /** PDF/A, for archiving. */
+  archive: boolean;
   template: string | null;
 }
 
@@ -174,17 +177,83 @@ async function diagramPng(lang: string, src: string, look: Look) {
   }
 }
 
+export type ProblemKind = 'image' | 'link' | 'diagram' | 'heading';
+
+/** Something that would come out wrong in the document. */
+export interface ExportProblem {
+  kind: ProblemKind;
+  note: string;
+  line: number;
+  /** What is wrong, in the language of the app. */
+  text: string;
+}
+
+const IMAGE = /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i;
+
+/**
+ * Looks for what would only show once the document is open: missing images,
+ * links that lead nowhere, diagrams that cannot be drawn and headings that
+ * skip a level, counting the levels the export moves them down.
+ */
+export async function reviewExport(tab: Tab, options: ExportOptions): Promise<ExportProblem[]> {
+  await store.saveAll();
+  const sections = planSections(tab, options);
+  const notes = await readNotes(tab, sections);
+  const problems: ExportProblem[] = [];
+
+  const broken = tab.loose ? [] : await api.brokenLinks(tab.vaultId).catch(() => []);
+  for (const link of broken.filter((l) => notes.has(l.note))) {
+    const image = !link.toNote && IMAGE.test(link.target);
+    problems.push({ kind: image ? 'image' : 'link', note: link.note, line: link.line, text: tr(image ? 'review.image' : 'review.link', { target: link.target }) });
+  }
+
+  let previous = 0;
+  for (const section of sections) {
+    if (section.kind === 'heading') {
+      previous = section.level;
+      continue;
+    }
+    for (const heading of outline(notes.get(section.path) ?? '')) {
+      const level = Math.min(heading.level + section.shift, MAX_LEVEL);
+      if (previous && level > previous + 1) {
+        problems.push({ kind: 'heading', note: section.path, line: heading.line, text: tr('review.heading', { title: heading.text, from: previous, to: level }) });
+      }
+      previous = level;
+    }
+  }
+
+  for (const [path, note] of notes) {
+    for (const fence of diagramFences(note)) {
+      try {
+        const { theme, sketch } = printLook(tab, note, fence.style);
+        await renderDiagram(fence.lang, fence.src, theme, sketch);
+      } catch (e) {
+        const problem = explainDiagramError(fence.lang, fence.src, e);
+        problems.push({ kind: 'diagram', note: path, line: fence.line + (problem.line ?? 0), text: tr('review.diagram', { problem: problem.message }) });
+      }
+    }
+  }
+
+  const order = [...notes.keys()];
+  return problems.sort((a, b) => order.indexOf(a.note) - order.indexOf(b.note) || a.line - b.line);
+}
+
+/** Reports how far the slow part of an export has gone. */
+export type Progress = (done: number, total: number) => void;
+
 /** Gathers everything the backend needs to write the document. */
-export async function buildPlan(tab: Tab, options: ExportOptions): Promise<ExportPlan> {
+export async function buildPlan(tab: Tab, options: ExportOptions, onProgress?: Progress): Promise<ExportPlan> {
   await store.saveAll();
   const sections = planSections(tab, options);
   const notes = await readNotes(tab, sections);
   const diagrams: number[][] = [];
-  for (const { path } of noteSections(sections)) {
+  const parts = noteSections(sections);
+  for (const [i, { path }] of parts.entries()) {
     const note = notes.get(path) ?? '';
     for (const { lang, src, style } of diagramBlocks(tab, path, note)) {
       diagrams.push(await diagramPng(lang, src, printLook(tab, note, style)));
     }
+    onProgress?.(i + 1, parts.length);
   }
   const fixedTitle = options.scope !== 'note';
   return {
@@ -195,6 +264,7 @@ export async function buildPlan(tab: Tab, options: ExportOptions): Promise<Expor
     language: language(),
     contents: tr('export.contents'),
     cover: options.cover,
+    archive: options.archive,
     template: options.template,
     sections,
     diagrams,
@@ -227,7 +297,7 @@ function shiftHeadings(root: ParentNode, shift: number) {
 }
 
 /** The whole export as one HTML article, with diagrams and images embedded. */
-export async function buildContent(tab: Tab, options: ExportOptions) {
+export async function buildContent(tab: Tab, options: ExportOptions, onProgress?: Progress) {
   await store.saveAll();
   const sections = planSections(tab, options);
   const notes = await readNotes(tab, sections);
@@ -246,15 +316,25 @@ export async function buildContent(tab: Tab, options: ExportOptions) {
     shiftHeadings(part, section.shift);
     root.append(part);
   }
+  // A document shows folded callouts open.
+  for (const box of root.querySelectorAll('details')) box.open = true;
+  // Drawing diagrams and reading images is the slow part.
+  const slow = root.querySelectorAll('.diagram, [data-path]').length;
+  let done = 0;
+  const step = () => onProgress?.(++done, slow);
   for (const el of root.querySelectorAll<HTMLElement>('.diagram')) {
+    step();
     try {
       const { theme, sketch } = printLook(tab, notes.get(el.dataset.note ?? '') ?? '', el.dataset.style ?? '');
+      // A web page can move; it is the one export that keeps animation.
+      if (parseStyle(el.dataset.style ?? '').animated) el.classList.add('animated');
       el.innerHTML = await renderDiagram(el.dataset.lang!, decodeURIComponent(el.dataset.src ?? ''), theme, sketch);
     } catch {
       el.textContent = tr('preview.diagramUnavailable');
     }
   }
   for (const img of root.querySelectorAll<HTMLImageElement>('[data-path]')) {
+    step();
     const path = img.dataset.path!;
     const bytes = await api.readImage(tab.vaultId, path).catch(() => null);
     if (bytes) img.src = `data:${MIME[extOf(path)] ?? 'application/octet-stream'};base64,${toBase64(bytes)}`;
@@ -262,8 +342,8 @@ export async function buildContent(tab: Tab, options: ExportOptions) {
   return root;
 }
 
-export async function exportHtml(tab: Tab, options: ExportOptions) {
-  const root = await buildContent(tab, options);
+export async function exportHtml(tab: Tab, options: ExportOptions, onProgress?: Progress) {
+  const root = await buildContent(tab, options, onProgress);
   const title = options.scope === 'note' ? stem(tab.path) : rootOf(tab, options).name;
   const page = document.implementation.createHTMLDocument(title);
   page.documentElement.lang = language();

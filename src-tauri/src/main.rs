@@ -60,8 +60,15 @@ fn main() {
                 .inner_size(1280.0, 820.0)
                 .min_inner_size(720.0, 480.0)
                 .disable_drag_drop_handler()
-                .on_navigation(allowed_navigation)
-                .build()?;
+                .on_navigation(allowed_navigation);
+            // The app draws its own title bar: macOS keeps its buttons over
+            // the app, elsewhere the app has its own. Settings can bring the
+            // system's back, applied by the frontend before the window shows.
+            #[cfg(target_os = "macos")]
+            let window = window.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
+            #[cfg(not(target_os = "macos"))]
+            let window = window.decorations(false);
+            let window = window.build()?;
             // A frontend that fails to start must not leave an invisible app.
             std::thread::spawn(move || {
                 std::thread::sleep(SHOW_FALLBACK);
@@ -71,6 +78,13 @@ fn main() {
                 for vault in registry.vaults.iter().filter(|v| v.open) {
                     watcher::watch(handle, vault);
                 }
+                // Deletions the app closed before finishing, such as on a crash.
+                let roots: Vec<_> = registry.vaults.iter().map(|v| v.path.clone()).collect();
+                std::thread::spawn(move || {
+                    for root in roots {
+                        let _ = ultimatemd_core::VaultFs::new(root).trash_leftovers();
+                    }
+                });
             }
             Ok(())
         })
@@ -91,10 +105,22 @@ fn main() {
             commands::rename_path,
             commands::trash_path,
             commands::search_all,
+            commands::home_info,
             commands::note_links,
+            commands::broken_links,
+            commands::repoint_link,
             commands::open_with_system,
             commands::mcp_info,
             commands::export_file,
+            commands::undo_trash,
+            commands::save_image,
+            commands::note_templates,
+            commands::note_template,
+            commands::save_note_template,
+            commands::delete_note_template,
+            commands::finish_trash,
+            commands::open_exported,
+            commands::reveal_exported,
             commands::installer_language,
             commands::open_path,
             commands::close_loose,

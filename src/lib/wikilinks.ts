@@ -4,15 +4,21 @@ import type { Completion, CompletionContext, CompletionResult } from '@codemirro
 import { startCompletion } from '@codemirror/autocomplete';
 import type { EditorState } from '@codemirror/state';
 import { Decoration, EditorView, MatchDecorator, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view';
+import { api } from './api';
 import { tr } from './i18n.svelte';
+import { outline } from './markdown';
 import { dirName, kindOf, resolveLink, stem } from './paths';
 import { store } from './store.svelte';
 
 const TYPING = /\[\[[^\]\n|#]*/;
 const VALID = /^[^\]\n|#]*$/;
 
-/** `[[target]]`, `[[target#heading]]` and `[[target|text]]`, but not `![[image]]`. */
-export const WIKILINK = /(?<!!)\[\[([^\]\n|#]+)(#[^\]\n|]*)?(?:\|([^\]\n]+))?\]\]/g;
+/**
+ * `[[target]]`, `[[target#heading]]`, `[[target^block]]`, `[[#heading]]` in the
+ * same note and `[[target|text]]`, but not `![[image]]` nor an empty `[[]]`.
+ * Groups: target, anchor (with its `#` or `^`), text.
+ */
+export const WIKILINK = /(?<!!)\[\[(?=[^\]\n|]*[^\s\]|])([^\]\n|#^]*)([#^][^\]\n|]*)?(?:\|([^\]\n]+))?\]\]/g;
 
 const targetOf = (path: string, tab: { path: string }, files: string[]) => {
   const short = stem(path);
@@ -43,6 +49,30 @@ export function noteCompletions(context: CompletionContext): CompletionResult | 
   return { from: typed.from + 2, options, validFor: VALID };
 }
 
+const TYPING_HEADING = /\[\[([^\]\n|#^]*)#[^\]\n|#^]*/;
+
+/** After `[[note#` or `[[#`, the headings of that note, to link straight to one. */
+export async function headingCompletions(context: CompletionContext): Promise<CompletionResult | null> {
+  const typed = context.matchBefore(TYPING_HEADING);
+  const tab = store.active;
+  if (!typed || !tab) return null;
+  const name = TYPING_HEADING.exec(typed.text)?.[1].trim() ?? '';
+  const path = name ? resolveLink(name, tab.path, store.files(tab.vaultId)) : tab.path;
+  if (!path) return null;
+  const open = store.tabs.find((t) => t.vaultId === tab.vaultId && t.path === path);
+  const content = open?.content ?? (await api.read(tab.vaultId, path).catch(() => null))?.content;
+  if (!content) return null;
+  return {
+    from: typed.from + typed.text.indexOf('#') + 1,
+    options: outline(content).map((h) => ({
+      label: h.text,
+      detail: `H${h.level}`,
+      apply: (view: EditorView, _completion: Completion, from: number, to: number) => complete(view, h.text, from, to),
+    })),
+    validFor: /^[^\]\n|#^]*$/,
+  };
+}
+
 /** Starts a link around the selection, and offers the notes to point it at. */
 export function startNoteLink(view: EditorView) {
   const { from, to } = view.state.selection.main;
@@ -60,14 +90,14 @@ export function linkAt(state: EditorState, pos: number) {
   const line = state.doc.lineAt(pos);
   for (const match of line.text.matchAll(WIKILINK)) {
     const from = line.from + match.index;
-    if (pos >= from && pos <= from + match[0].length) return { from, to: from + match[0].length, target: match[1].trim() };
+    if (pos >= from && pos <= from + match[0].length) return { from, to: from + match[0].length, target: match[1].trim(), anchor: match[2] ?? null };
   }
   return null;
 }
 
 function exists(target: string) {
   const tab = store.active;
-  return !tab || resolveLink(target, tab.path, store.files(tab.vaultId)) !== null;
+  return !tab || !target || resolveLink(target, tab.path, store.files(tab.vaultId)) !== null;
 }
 
 const matcher = new MatchDecorator({

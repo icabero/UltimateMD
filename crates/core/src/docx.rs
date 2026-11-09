@@ -7,7 +7,7 @@ mod detect;
 
 use crate::word_settings::WordSettings;
 use crate::{Error, Result};
-use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use regex::{Captures, Regex};
 use std::collections::{BTreeMap, HashMap};
 use std::io::{Cursor, Read, Write};
@@ -20,6 +20,7 @@ const NUMBERING: &str = "word/numbering.xml";
 const FOOTNOTES: &str = "word/footnotes.xml";
 const DOC_RELS: &str = "word/_rels/document.xml.rels";
 const CONTENT_TYPES: &str = "[Content_Types].xml";
+const CORE: &str = "docProps/core.xml";
 
 const W_NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -44,6 +45,8 @@ macro_rules! re {
 }
 
 re!(PARAGRAPH, r"(?s)<w:p(?: [^>]*[^/])?>.*?</w:p>");
+re!(CORE_TITLE, r"(?s)<dc:title\s*/>|<dc:title(?:\s[^>]*)?>.*?</dc:title>");
+re!(CORE_CREATOR, r"(?s)<dc:creator\s*/>|<dc:creator(?:\s[^>]*)?>.*?</dc:creator>");
 re!(TEXT, r"(?s)<w:t(?: [^>]*)?>(.*?)</w:t>");
 re!(PARAGRAPH_STYLE, r#"<w:pStyle w:val="([^"]*)""#);
 re!(PLACEHOLDER, r"\{\{\s*([^{}]+?)\s*\}\}");
@@ -102,6 +105,8 @@ pub struct Input<'a> {
     /// Writes each heading's numbering on the paragraph, for viewers that do not
     /// follow it through the style chain. Word does not need it.
     pub inline_numbering: bool,
+    /// For the default titles of callouts.
+    pub language: &'a str,
 }
 
 fn invalid(what: &str) -> Error {
@@ -151,6 +156,21 @@ pub fn check_template(bytes: &[u8]) -> Result<()> {
 
 fn text_of(parts: &Package, name: &str) -> Option<String> {
     parts.get(name).map(|b| String::from_utf8_lossy(b).into_owned())
+}
+
+/// The template's document properties with this document's title and author,
+/// so Word's File › Info does not show the template's.
+fn with_properties(core: &str, title: &str, author: &str) -> String {
+    let set = |xml: &str, pattern: &Regex, tag: &str, value: &str| {
+        let element = format!("<{tag}>{}</{tag}>", escape(value));
+        if pattern.is_match(xml) {
+            pattern.replace(xml, regex::NoExpand(&element)).into_owned()
+        } else {
+            xml.replacen("</cp:coreProperties>", &format!("{element}</cp:coreProperties>"), 1)
+        }
+    };
+    let core = set(core, &CORE_TITLE, "dc:title", title);
+    set(&core, &CORE_CREATOR, "dc:creator", author)
 }
 
 fn escape(text: &str) -> String {
@@ -254,6 +274,8 @@ struct Writer<'a> {
     item_marker: Option<(i64, usize)>,
     next_abstract: i64,
     quote: usize,
+    /// Inside a callout: its line and fill colours.
+    callout: Option<(&'static str, &'static str)>,
     footnote_ids: HashMap<String, i64>,
     next_footnote: i64,
     footnotes: String,
@@ -330,6 +352,12 @@ impl Writer<'_> {
         if let Some((num, level)) = self.item_marker.take() {
             let style = self.list_style();
             return format!(r#"{style}<w:numPr><w:ilvl w:val="{level}"/><w:numId w:val="{num}"/></w:numPr>"#);
+        }
+        if let (true, Some((line, fill))) = (self.quote > 0, self.callout) {
+            // Paragraphs with the same border and fill join into one box in Word.
+            return format!(
+                r#"<w:pBdr><w:left w:val="single" w:sz="24" w:space="8" w:color="{line}"/></w:pBdr><w:shd w:val="clear" w:color="auto" w:fill="{fill}"/><w:spacing w:before="0" w:after="0"/><w:ind w:left="284" w:right="284"/>"#
+            );
         }
         if self.quote > 0 {
             let style = self.styles.paragraph("quote");
@@ -654,9 +682,12 @@ impl Writer<'_> {
                 self.format.bold = style.is_none();
                 self.heading = Some(Heading { level, text: String::new() });
             }
-            Tag::BlockQuote(_) => {
+            Tag::BlockQuote(kind) => {
                 self.flush();
                 self.quote += 1;
+                if let Some(kind) = kind {
+                    self.callout = Some(callout_colors(kind));
+                }
             }
             Tag::CodeBlock(kind) => {
                 let language = match kind {
@@ -716,9 +747,12 @@ impl Writer<'_> {
                     self.headings.push(h);
                 }
             }
-            TagEnd::BlockQuote(_) => {
+            TagEnd::BlockQuote(kind) => {
                 self.flush();
                 self.quote -= 1;
+                if kind.is_some() {
+                    self.callout = None;
+                }
             }
             TagEnd::CodeBlock => {
                 if let Some((language, code)) = self.code.take() {
@@ -1092,8 +1126,11 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
     let numbering = text_of(&parts, NUMBERING).unwrap_or_default();
     let notes = text_of(&parts, FOOTNOTES).unwrap_or_default();
 
-    let options =
-        Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
+    let options = Options::ENABLE_TABLES
+        | Options::ENABLE_FOOTNOTES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_GFM;
 
     let mut writer = Writer {
         styles: &styles,
@@ -1117,6 +1154,7 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
         item_marker: None,
         next_abstract: max_of(&ABSTRACT_ID, &numbering) + 1,
         quote: 0,
+        callout: None,
         footnote_ids: HashMap::new(),
         next_footnote: max_of(&FOOTNOTE_ID, &notes).max(0) + 1,
         footnotes: String::new(),
@@ -1151,7 +1189,8 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
                 writer.note_index = index;
                 writer.shift = *shift;
                 writer.page_break = *page_break;
-                for event in Parser::new_ext(&normalize_wikilinks(body), options) {
+                let body = crate::callouts::normalize(body, input.language);
+                for event in Parser::new_ext(&normalize_wikilinks(&body), options) {
                     writer.event(event, &mut saved);
                 }
                 writer.flush();
@@ -1208,6 +1247,9 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
     }
     if let Some(settings) = text_of(&parts, SETTINGS) {
         parts.insert(SETTINGS.to_string(), without_field_update(&settings).into_bytes());
+    }
+    if let Some(core) = text_of(&parts, CORE) {
+        parts.insert(CORE.to_string(), with_properties(&core, &title, &author).into_bytes());
     }
     parts.insert(CONTENT_TYPES.to_string(), types.into_bytes());
     parts.insert(DOC_RELS.to_string(), rels.into_bytes());
@@ -1274,6 +1316,7 @@ pub fn sample(template: Option<&[u8]>, settings: &WordSettings, markdown: &str, 
         template,
         settings,
         inline_numbering: true,
+        language: "es",
     })
 }
 
@@ -1376,3 +1419,14 @@ pub fn example_template() -> Vec<u8> {
 
 #[cfg(test)]
 mod tests;
+
+/// The line and fill colours of each kind of callout, as hex for Word.
+pub(crate) fn callout_colors(kind: BlockQuoteKind) -> (&'static str, &'static str) {
+    match kind {
+        BlockQuoteKind::Note => ("2563EB", "EFF6FF"),
+        BlockQuoteKind::Tip => ("16A34A", "F0FDF4"),
+        BlockQuoteKind::Important => ("7C3AED", "F5F3FF"),
+        BlockQuoteKind::Warning => ("D97706", "FFFBEB"),
+        BlockQuoteKind::Caution => ("DC2626", "FEF2F2"),
+    }
+}

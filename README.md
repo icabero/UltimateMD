@@ -21,13 +21,14 @@ UltimateMD es un editor libre para Windows, macOS y Linux. Tus notas siguen sien
 
 - **Trabajar con varios vaults a la vez**, en una sola ventana, con pestañas de cualquiera de ellos.
 - **Editar en modo visual**, con formato mientras escribes y barra de herramientas, o en Markdown con vista dividida. El archivo siempre sigue siendo Markdown normal.
-- **Enlazar notas** escribiendo `[[` o con un botón, con sugerencias y un clic para abrirlas. Al renombrar o mover una nota, sus enlaces se actualizan solos.
+- **Escribir más rápido**: pega desde webs, Word o Google Docs y se convierte en Markdown; pega o arrastra imágenes y se guardan en el vault; crea notas desde plantillas; usa callouts como `> [!warning]`.
+- **Enlazar notas** escribiendo `[[` o con un botón, con sugerencias y un clic para abrirlas, también a un título (`[[nota#Título]]`). Al renombrar o mover una nota, sus enlaces se actualizan solos, y una pantalla reúne los enlaces rotos del vault para corregirlos.
 - **Moverte rápido** con autoguardado, selector rápido y búsqueda global que no distingue acentos y abre la nota en la línea encontrada.
-- **Dibujar diagramas** Mermaid y D2 dentro de la nota, sin conexión: con un creador visual para los más habituales y plantillas para todos los demás.
-- **Exportar** una nota, una carpeta o un vault a PDF, Word o HTML, con vista previa.
+- **Dibujar diagramas** Mermaid y D2 dentro de la nota, sin conexión: con un creador visual para los más habituales, plantillas para todos los demás y conexiones animadas. Si uno falla, te dice en qué línea y por qué.
+- **Exportar** una nota, una carpeta o un vault a PDF, Word o HTML en tres pasos, con vista previa y una revisión que avisa de lo que saldría mal.
 - **Usar tus plantillas de Word**, conservando portada, cabeceras, estilos e índice.
 - **Conectar tu IA** por MCP, con permisos por vault.
-- **Personalizarla** con ocho temas y temas propios por vault, nota o diagrama.
+- **Personalizarla** con ocho temas y temas propios por vault, nota o diagrama, y ajustar el tamaño del texto y el ancho de línea.
 - **Abrir `.md` sueltos** y usarla como programa por defecto.
 - **Usarla en castellano, euskera o inglés**, con un tutorial la primera vez y aviso de nuevas versiones.
 
@@ -68,11 +69,15 @@ Herramientas: `list_vaults`, `list_notes`, `read_note`, `search_notes`, `get_bac
 
 ![Diálogo de exportación con vista previa](site/img/export.png)
 
-Pulsa `Ctrl+E`. Lo exportado usa un aspecto de documento, sea cual sea el tema activo. Los diagramas conservan el estilo que les hayas dado, salvo los temas oscuros, pensados para pantalla y no para papel.
+Pulsa `Ctrl+E` y sigue los pasos **Formato**, **Contenido** y **Aspecto**. El diálogo recuerda tus últimas opciones en cada vault, así que puedes pulsar **Exportar** desde cualquier paso. Al terminar, puedes abrir el documento o mostrarlo en su carpeta.
+
+Lo exportado usa un aspecto de documento, sea cual sea el tema activo. Los diagramas conservan el estilo que les hayas dado, salvo los temas oscuros, pensados para pantalla y no para papel.
+
+- **Antes de exportar:** se revisan las notas y se avisa de imágenes que faltan, enlaces que no llevan a ninguna parte, diagramas que no se pueden dibujar y títulos que saltan niveles. Cada aviso lleva a su línea; también puedes exportar así.
 
 - **Alcance:** la nota, una carpeta o el vault. Las notas salen en orden natural: primero las de cada carpeta y luego sus subcarpetas. Usa prefijos como `01-` para fijar el orden.
 - **Carpetas:** cada nivel puede ser un título, un estilo de tu plantilla o no aparecer, con salto de página opcional. Los títulos de las notas bajan de nivel para encajar.
-- **PDF:** se compone directamente con un motor tipográfico integrado, sin diálogo de impresión, con portada e índice opcionales.
+- **PDF:** se compone directamente con un motor tipográfico integrado, sin diálogo de impresión, con portada e índice opcionales. Lleva el título y el `autor` del frontmatter en sus propiedades, y puede generarse como PDF/A para archivar.
 - **Word:** la nota se escribe dentro de una copia de tu plantilla. Incluye una plantilla de ejemplo que puedes guardar y adaptar.
 - **Word por vault:** cada vault puede llevar su propia plantilla y ajustar títulos, texto, tablas, imágenes y código, con una muestra en directo. Se abre desde el icono de Word junto al nombre del vault. Los estilos de títulos numerados de la plantilla se detectan solos.
 
@@ -154,6 +159,8 @@ npm install
 npm run dev     # abre la app
 npm run build   # crea los instaladores para tu sistema
 ```
+
+Los espacios, radios, tamaños de letra, sombras y capas de la interfaz siguen el [sistema de diseño](docs/sistema-de-diseno.md); `npm run lint` avisa si se escribe un valor suelto.
 
 Las capturas de `site/img` salen de la interfaz real, con un vault de ejemplo inventado: `npm run screenshots` las vuelve a generar.
 

@@ -2,6 +2,7 @@
   const PATHS: Record<string, string> = {
     plus: 'M12 5v14M5 12h14',
     close: 'M6 6l12 12M18 6L6 18',
+    check: 'M5 12.5l4.5 4.5L19 7.5',
     chevron: 'M9 6l6 6-6 6',
     file: 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5',
     folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
@@ -25,6 +26,11 @@
     word: 'M4 6l4 12 4-9 4 9 4-12',
     palette: 'M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5 1-2 2-2H18a3 3 0 0 0 3-3c0-4.5-4-8.5-9-8.5zM7.5 12h.01M9.5 8h.01M14.5 8h.01',
     diagram: 'M9 4h6v5H9zM3 15h6v5H3zM15 15h6v5h-6zM12 9v3M6 15v-3h12v3',
+    minimize: 'M6 12h12',
+    maximize: 'M6 6h12v12H6z',
+    restore: 'M9 9h10v10H9zM6 15V6a1 1 0 0 1 1-1h8',
+    panelLeft: 'M4 5h16v14H4zM9 5v14',
+    panelRight: 'M4 5h16v14H4zM15 5v14',
     link: 'M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1',
   };
   let { name, size = 16 }: { name: string; size?: number } = $props();
