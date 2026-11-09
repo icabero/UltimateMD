@@ -155,6 +155,8 @@ npm run dev     # abre la app
 npm run build   # crea los instaladores para tu sistema
 ```
 
+Los espacios, radios, tamaños de letra, sombras y capas de la interfaz siguen el [sistema de diseño](docs/sistema-de-diseno.md); `npm run lint` avisa si se escribe un valor suelto.
+
 Las capturas de `site/img` salen de la interfaz real, con un vault de ejemplo inventado: `npm run screenshots` las vuelve a generar.
 
 ## Contribuir

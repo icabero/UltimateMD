@@ -6,26 +6,76 @@
   --hover: color-mix(in srgb, var(--text) 7%, transparent);
   --accent-soft: color-mix(in srgb, var(--accent) 15%, transparent);
   --selection: color-mix(in srgb, var(--accent) 26%, transparent);
-  --shadow: 0 1px 2px rgb(0 0 0 / 12%), 0 12px 32px rgb(0 0 0 / 22%);
-  --ease: 120ms ease-out;
+  /* Words found by a search, in the results, the editor and the preview. */
+  --found: color-mix(in srgb, var(--accent) 30%, transparent);
+  /* The design scales. docs/sistema-de-diseno.md says when to use each step. */
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-3-5: 14px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-2xs: 2px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+
+  --font-xs: 11.5px;
+  --font-sm: 12.5px;
+  --font-md: 13px;
+  --font-base: 14px;
+  --font-lg: 15px;
+  --font-xl: 20px;
+  --font-2xl: 26px;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 15%);
+  --shadow-md: 0 1px 4px rgb(0 0 0 / 30%);
+  --shadow-lg: 0 1px 2px rgb(0 0 0 / 12%), 0 12px 32px rgb(0 0 0 / 22%);
+
+  /* Layers, from the page up. A dialog opened from another one uses `nested`. */
+  --z-raised: 5;
+  --z-scrim: 30;
+  --z-dialog: 31;
+  --z-nested-scrim: 32;
+  --z-nested: 33;
+  --z-menu: 40;
+  --z-confirm-scrim: 50;
+  --z-confirm: 51;
+  --z-toast: 60;
+  --z-tour-scrim: 70;
+  --z-tour: 71;
+
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --ease: var(--duration-fast) ease-out;
 }
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; }
-body { overflow: hidden; background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); -webkit-font-smoothing: antialiased; user-select: none; }
+body { overflow: hidden; background: var(--bg); color: var(--text); font: var(--font-base)/1.45 var(--sans); -webkit-font-smoothing: antialiased; user-select: none; }
 .cm-content, pre, input, p { user-select: text; }
 button { font: inherit; color: inherit; }
-input:not([type='checkbox']) { height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); font: inherit; font-size: 13.5px; outline: none; transition: border-color var(--ease); }
+input:not([type='checkbox']) { height: 34px; padding: 0 var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg); color: var(--text); font: inherit; font-size: var(--font-md); outline: none; transition: border-color var(--ease); }
 input:focus { border-color: var(--accent); }
-input[type='checkbox'] { accent-color: var(--accent); }
+input[type='checkbox'] { accent-color: var(--accent); transition: scale var(--ease); }
+/* A task box gives a little when pressed; only a click moves it, not opening a note. */
+input[type='checkbox']:not(:disabled):active { scale: .82; }
 ::placeholder { color: var(--text-3); opacity: 1; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--text-2); transition: background var(--ease), color var(--ease); }
+.icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); transition: background var(--ease), color var(--ease); }
 .icon.small { width: 24px; height: 24px; }
 .icon:hover { background: var(--hover); color: var(--text); }
 .icon.on { background: var(--accent-soft); color: var(--accent-text); }
-.scrim { position: fixed; inset: 0; z-index: 30; padding: 0; border: 0; background: rgb(0 0 0 / 38%); }
+.scrim { position: fixed; inset: 0; z-index: var(--z-scrim); padding: 0; border: 0; background: rgb(0 0 0 / 38%); }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 6px; background: var(--line) padding-box; }
+::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: var(--radius-sm); background: var(--line) padding-box; }
 ::-webkit-scrollbar-track { background: none; }
 @media (prefers-reduced-motion: reduce) {
   :root { --ease: 0ms; }

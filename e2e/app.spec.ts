@@ -4,6 +4,7 @@ import { fenceLine, parseStyle } from '../src/lib/diagramStyle';
 import { TEMPLATES } from '../src/lib/diagramTemplates';
 import { THEMES, contrast, frontmatterChange, mix } from '../src/lib/themes';
 import { isNewer } from '../src/lib/updates';
+import { properties, quote, setProperty } from '../src/lib/frontmatter';
 
 test.beforeEach(async ({ page }) => {
   // The app asks GitHub about new versions at startup; tests never reach it.
@@ -112,6 +113,45 @@ test('the quick switcher finds notes in every vault', async ({ page }) => {
   await expect(page.locator('main footer')).toContainText('Personal / Otra.md');
 });
 
+const palette = (page: Page) => page.getByRole('dialog', { name: 'Abrir nota' });
+
+test('the command palette runs actions and shows their shortcuts', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+Shift+p');
+  await expect(palette(page).getByRole('combobox')).toHaveValue('>');
+  await page.keyboard.type('exportar');
+  const first = palette(page).getByRole('option').first();
+  await expect(first).toContainText('Exportar la nota');
+  await expect(first.locator('kbd')).toHaveText(['Ctrl', 'E']);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Exportar' })).toBeVisible();
+});
+
+test('actions are found without accents and the last used come first', async ({ page }) => {
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('tema medianoche');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'medianoche');
+  await page.keyboard.press('Control+Shift+p');
+  await expect(palette(page).getByRole('option').first()).toHaveText('Tema: Medianoche');
+  // Shortcuts name the Shift key in the interface language.
+  await page.keyboard.type('barra lateral');
+  await expect(palette(page).getByRole('option').first().locator('kbd')).toHaveText(['Ctrl', 'Mayús', 'E']);
+});
+
+test('the quick switcher turns into actions with > and headings with #', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+p');
+  await expect(palette(page)).toContainText('Escribe > para ver acciones');
+  await page.keyboard.type('>');
+  await expect(palette(page).getByRole('combobox')).toHaveAttribute('placeholder', 'Buscar una acción…');
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('#');
+  await expect(palette(page).getByRole('option')).toHaveText(['Inicio H1']);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.cm-activeLine')).toHaveText('# Inicio');
+});
+
 test('global search covers every vault', async ({ page }) => {
   await page.keyboard.press('Control+Shift+f');
   await page.getByPlaceholder('Buscar en los vaults abiertos').fill('#');
@@ -182,6 +222,267 @@ test('renaming a note updates the links to it, also in open tabs', async ({ page
   await page.getByRole('tab', { name: /Inicio/ }).click();
   await expect(page.locator('.cm-content')).toContainText('Ver [[Meta]] y [[Falta]].');
   await expect(page.locator('main footer')).toContainText('Trabajo / Inicio.md');
+});
+
+const notePanel = (page: Page) => page.getByRole('complementary', { name: 'Panel de la nota' });
+
+/** A long note with sections, as if another program had written it. */
+async function sections(page: Page) {
+  await page.evaluate(() => {
+    const filler = (n: number) => Array.from({ length: n }, (_, i) => `Párrafo ${i + 1}.`).join('\n\n');
+    const text = `---\ntema: claro\n---\n# Larga\n\n${filler(30)}\n\n## Segunda parte\n\n${filler(30)}\n\n### Detalle [[Destino|el destino]]\n\nFin.\n`;
+    (window as any).__test.externalWrite('a', 'Larga.md', text);
+  });
+  await expect(page.locator('aside').getByRole('button', { name: 'Larga', exact: true })).toBeVisible();
+  await page.keyboard.press('Control+p');
+  await page.getByPlaceholder('Abrir nota…').fill('larga');
+  await page.keyboard.press('Enter');
+}
+
+test('the outline lists the headings and goes to one', async ({ page }) => {
+  await sections(page);
+  await page.keyboard.press('Control+Shift+o');
+  const outline = notePanel(page).getByRole('navigation', { name: 'Esquema' });
+  await expect(outline.getByRole('button')).toHaveText(['Larga', 'Segunda parte', 'Detalle el destino']);
+  await outline.getByRole('button', { name: 'Segunda parte' }).click();
+  await expect(page.locator('.cm-activeLine')).toHaveText('## Segunda parte');
+  await expect(page.locator('.cm-activeLine')).toBeInViewport();
+  // The section with the cursor is marked.
+  await expect(outline.locator('[aria-current="location"]')).toHaveText('Segunda parte');
+  // In the frontmatter, before the first heading, no section is marked.
+  await page.keyboard.press('ControlOrMeta+Home');
+  await expect(outline.locator('[aria-current="location"]')).toHaveCount(0);
+  await outline.getByRole('button', { name: 'Larga' }).click();
+  await expect(outline.locator('[aria-current="location"]')).toHaveText('Larga');
+});
+
+test('in reading view the outline scrolls the preview to the heading', async ({ page }) => {
+  await sections(page);
+  await page.getByTitle('Vista previa', { exact: true }).click();
+  await page.keyboard.press('Control+Shift+o');
+  await notePanel(page).getByRole('button', { name: 'Detalle el destino' }).click();
+  await expect(prose(page).getByRole('heading', { name: 'Detalle el destino' })).toBeInViewport();
+  await expect(notePanel(page).locator('[aria-current="location"]')).toHaveText('Detalle el destino');
+});
+
+test('the links tab shows who links here and opens them', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle(/^Panel de la nota/).click();
+  await notePanel(page).getByRole('tab', { name: 'Enlaces' }).click();
+  await expect(notePanel(page)).toContainText('Ninguna nota enlaza a esta.');
+  await expect(notePanel(page).getByRole('button', { name: /Destino/ })).toBeVisible();
+  await expect(notePanel(page).getByRole('button', { name: 'Falta' })).toHaveAttribute('title', 'Crear la nota');
+  await notePanel(page).getByRole('button', { name: /Destino/ }).click();
+  await expect(page.locator('main footer')).toContainText('Trabajo / dir/Destino.md');
+  await expect(notePanel(page).getByRole('button', { name: 'Inicio' })).toBeVisible();
+});
+
+test('app shortcuts never reach the editor, where macOS gives Ctrl keys their own meaning', async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' }));
+  await page.reload();
+  await open(page, 'Otra');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.press('Control+Shift+o');
+  await page.keyboard.press('Control+Shift+o');
+  await page.keyboard.press('Control+Shift+e');
+  await page.keyboard.press('Control+Shift+e');
+  await page.waitForTimeout(800);
+  expect(await disk(page, 'b', 'Otra.md')).toBe('# Otra\n');
+  await expect(page.locator('.cm-content')).toHaveText('# Otra');
+});
+
+test('both side bars hide with shortcuts and the choice is kept', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+Shift+o');
+  await expect(notePanel(page)).toBeVisible();
+  await page.keyboard.press('Control+Shift+e');
+  await expect(page.locator('aside').getByText('Trabajo')).toHaveCount(0);
+  await page.reload();
+  await expect(notePanel(page)).toBeVisible();
+  await page.getByTitle('Mostrar la barra lateral (Ctrl+Mayús+E)').click();
+  await expect(page.locator('aside').getByText('Trabajo')).toBeVisible();
+  await notePanel(page).getByTitle('Ocultar el panel (Ctrl+Mayús+O)').click();
+  await expect(notePanel(page)).toHaveCount(0);
+});
+
+test('a narrow window folds the side bars without forgetting them', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+Shift+o');
+  await page.setViewportSize({ width: 900, height: 700 });
+  await expect(notePanel(page)).toHaveCount(0);
+  await expect(page.locator('aside').getByText('Trabajo')).toBeVisible();
+  await page.setViewportSize({ width: 700, height: 700 });
+  await expect(page.locator('aside').getByText('Trabajo')).toHaveCount(0);
+  // Shown by hand while narrow, it stays until the window changes again.
+  await page.getByTitle('Mostrar la barra lateral (Ctrl+Mayús+E)').click();
+  await expect(page.locator('aside').getByText('Trabajo')).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(notePanel(page)).toBeVisible();
+  await expect(page.locator('aside').getByText('Trabajo')).toBeVisible();
+});
+
+test('the start screen shows recent notes and vaults, and opens them', async ({ page }) => {
+  const home = page.locator('.home');
+  await expect(home.getByRole('heading', { name: 'Recientes' })).toBeVisible();
+  await expect(home.locator('.card')).toHaveCount(2);
+  await expect(home.locator('.card').first()).toContainText(/\d+ notas/);
+  await expect(home.locator('.card').first()).toContainText('Editado hace');
+  // A note just edited comes first.
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Rara.md', '# Rara\n\notra vez\n'));
+  await expect(home.locator('.recent li').first()).toContainText('Rara');
+  await expect(home.locator('.recent li').first()).toContainText('ahora mismo');
+  await home.locator('.recent li').first().getByRole('button').click();
+  await expect(page.locator('main footer')).toContainText('Personal / Rara.md');
+});
+
+test('a vault card picks up the note edited last', async ({ page }) => {
+  await page.evaluate(() => (window as any).__test.externalWrite('a', 'dir/Destino.md', '# Destino\n\nnuevo\n'));
+  const card = page.locator('.home .card', { hasText: 'Trabajo' });
+  await expect(card).toHaveAttribute('title', 'Seguir con Destino');
+  await card.click();
+  await expect(page.locator('main footer')).toContainText('Trabajo / dir/Destino.md');
+});
+
+test('the start screen offers its actions and another tip', async ({ page }) => {
+  const home = page.locator('.home');
+  await expect(home.getByRole('button', { name: /Abrir nota/ }).locator('kbd')).toHaveText(['Ctrl', 'P']);
+  await home.getByRole('button', { name: /Acciones/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Abrir nota' }).getByRole('combobox')).toHaveValue('>');
+  await page.keyboard.press('Escape');
+  const tip = home.getByRole('note', { name: 'Consejo:' });
+  const before = await tip.textContent();
+  await tip.getByRole('button', { name: 'Otro consejo' }).click();
+  await expect(tip).not.toHaveText(before!);
+});
+
+test('with no vault open, the start screen says how to begin', async ({ page }) => {
+  await page.addInitScript(() => (window as any).__test.vaults.forEach((v: any) => (v.open = false)));
+  await page.reload();
+  const home = page.locator('.home');
+  await expect(home).toContainText('Crea un vault o abre una carpeta para empezar');
+  await expect(home.getByRole('button', { name: 'Crear vault' })).toBeVisible();
+  await expect(home.getByRole('button', { name: 'Abrir carpeta' })).toBeVisible();
+});
+
+test('frontmatter properties are read and written as plain YAML', () => {
+  const note = '---\ntema: sepia\ntitulo: "Plan: fase 2"\netiquetas:\n  - a\n  - b\n# comentario\n---\n# Nota\n';
+  expect(properties(note)).toEqual([
+    { key: 'tema', value: 'sepia', complex: false },
+    { key: 'titulo', value: 'Plan: fase 2', complex: false },
+    { key: 'etiquetas', value: '', complex: true },
+  ]);
+  expect(quote('Informe anual')).toBe('Informe anual');
+  for (const v of ['Plan: fase 2', '#1', 'yes', '2027', '- guion', 'dice "hola"']) {
+    expect(properties(`---\nk: ${quote(v)}\n---\n`)[0].value).toBe(v);
+  }
+  expect(setProperty('# Nota\n', 'autor', 'Nerea')).toBe('---\nautor: Nerea\n---\n# Nota\n');
+  expect(setProperty(note, 'tema', '')).not.toContain('tema:');
+  expect(setProperty('---\nautor: A\n---\nx', 'autor', '')).toBe('x');
+});
+
+test('the properties form edits the frontmatter and keeps the cursor', async ({ page }) => {
+  await open(page, 'Propia');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.press('Control+Shift+o');
+  await notePanel(page).getByRole('tab', { name: 'Propiedades' }).click();
+  const form = notePanel(page);
+  await expect(form.getByLabel('Tema de la nota')).toHaveValue('sepia');
+  await form.getByLabel('Título').fill('Informe: fase 2');
+  await form.getByLabel('Título').press('Enter');
+  await form.getByLabel('Tema de la nota').selectOption('oscuro');
+  await form.getByLabel('Nombre', { exact: true }).fill('cliente');
+  await form.getByLabel('Valor', { exact: true }).fill('ACME');
+  await form.getByRole('button', { name: 'Añadir' }).click();
+  await expect(page.locator('main footer')).toContainText('Guardado', { timeout: 3000 });
+  expect(await disk(page, 'b', 'Propia.md')).toBe('---\ntema: oscuro\ntitulo: "Informe: fase 2"\ncliente: ACME\n---\n# Propia\n');
+  await expect(page.locator('[data-note-theme]')).toHaveAttribute('data-note-theme', 'oscuro');
+  // The cursor stayed at the end of the note.
+  await page.locator('.cm-content').focus();
+  await page.keyboard.type(' fin');
+  await expect(page.locator('.cm-content')).toContainText('# Propia fin');
+  await form.getByTitle('Quitar cliente').click();
+  await expect(form.getByLabel('Nombre', { exact: true })).toHaveValue('');
+  await expect.poll(() => disk(page, 'b', 'Propia.md'), { timeout: 3000 }).not.toContain('cliente');
+});
+
+test('a property name is checked before it is added', async ({ page }) => {
+  await open(page, 'Otra');
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('propiedades');
+  await page.keyboard.press('Enter');
+  const form = notePanel(page);
+  await form.getByLabel('Nombre', { exact: true }).fill('mal:nombre');
+  await expect(form.getByRole('alert')).toHaveText('El nombre no puede tener dos puntos ni empezar por un símbolo.');
+  await form.getByLabel('Nombre', { exact: true }).fill('autor');
+  await form.getByLabel('Valor', { exact: true }).fill('Ana');
+  await form.getByRole('button', { name: 'Añadir' }).click();
+  await expect(form.getByLabel('Autor')).toHaveValue('Ana');
+  expect(await page.locator('.cm-content').textContent()).toContain('autor: Ana');
+});
+
+test('with reduced motion nothing animates', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.keyboard.press('Control+Shift+p');
+  const box = page.getByRole('dialog', { name: 'Abrir nota' });
+  await expect(box).toBeVisible();
+  const running = await box.evaluate((el) => el.getAnimations().filter((a) => Number(a.effect?.getComputedTiming().duration) > 0).length);
+  expect(running).toBe(0);
+});
+
+test('dialogs grow into place when motion is allowed', async ({ page }) => {
+  await page.keyboard.press('Control+Shift+p');
+  const box = page.getByRole('dialog', { name: 'Abrir nota' });
+  const timing = await box.evaluate((el) => el.getAnimations().map((a) => Number(a.effect?.getComputedTiming().duration)));
+  expect(timing.some((d) => d >= 120 && d <= 200)).toBe(true);
+});
+
+const windowCalls = (page: Page) => page.evaluate(() => (window as any).__windowCalls.map((c: any) => c.name));
+
+/** Pretends to run on Windows or macOS, which the app reads before it starts. */
+async function onPlatform(page: Page, platform: 'Win32' | 'MacIntel') {
+  await page.addInitScript((p) => Object.defineProperty(navigator, 'platform', { get: () => p }), platform);
+  await page.reload();
+}
+
+test('on Windows and Linux the app draws the window buttons and saves before closing', async ({ page }) => {
+  await onPlatform(page, 'Win32');
+  const controls = page.getByRole('group', { name: 'Ventana' });
+  await expect(controls.getByRole('button')).toHaveCount(3);
+  await controls.getByTitle('Minimizar la ventana').click();
+  await controls.getByTitle('Maximizar la ventana').click();
+  await open(page, 'Otra');
+  await typeInEditor(page, ' sin guardar');
+  await controls.getByTitle('Cerrar la ventana').click();
+  await expect.poll(() => windowCalls(page)).toEqual(expect.arrayContaining(['minimize', 'toggle_maximize', 'close']));
+  expect(await disk(page, 'b', 'Otra.md')).toContain('sin guardar');
+  // The bars leave room for the buttons and can drag the window.
+  await expect(page.locator('main > .bar')).toHaveAttribute('data-tauri-drag-region');
+  await expect(page.locator('main > .bar')).toHaveCSS('padding-right', '138px');
+});
+
+test('the system title bar can come back from settings', async ({ page }) => {
+  await onPlatform(page, 'Win32');
+  await page.getByTitle('Ajustes y MCP').click();
+  const settings = page.getByRole('dialog', { name: 'Ajustes' });
+  await settings.getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
+  await settings.getByLabel('Usar la barra de título del sistema').check();
+  await expect(page.getByRole('group', { name: 'Ventana' })).toHaveCount(0);
+  const calls = await page.evaluate(() => (window as any).__windowCalls);
+  expect(calls.at(-1)).toEqual({ name: 'set_decorations', value: true });
+  await page.reload();
+  await expect(page.getByRole('group', { name: 'Ventana' })).toHaveCount(0);
+});
+
+test('on macOS the system buttons sit over the app, which leaves them room', async ({ page }) => {
+  await onPlatform(page, 'MacIntel');
+  await expect(page.getByRole('group', { name: 'Ventana' })).toHaveCount(0);
+  const calls = await page.evaluate(() => (window as any).__windowCalls);
+  expect(calls).toContainEqual({ name: 'set_title_bar_style', value: 'overlay' });
+  await expect(page.locator('aside header')).toHaveCSS('padding-left', '90px');
+  await page.keyboard.press('Control+Shift+e');
+  await expect(page.locator('main > .bar')).toHaveCSS('padding-left', '76px');
 });
 
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {

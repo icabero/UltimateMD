@@ -12,7 +12,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test:e2e": "playwright test",
     "tauri": "tauri",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-tokens.mjs",
     "screenshots": "playwright test -c playwright.screenshots.config.ts"
   },
   "dependencies": {

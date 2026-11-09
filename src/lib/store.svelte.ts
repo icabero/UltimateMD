@@ -1,5 +1,6 @@
 import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { api, type TreeNode, type Vault, type VaultThemes } from './api';
 import { withColors, type DiagramStyle } from './diagramStyle';
 import { tr } from './i18n.svelte';
@@ -33,6 +34,18 @@ export interface Reveal {
   key: string;
   line: number;
   terms: string[];
+  /** Set when going to a heading: its place among the note's headings, for the preview. */
+  heading?: number;
+}
+
+export type PanelTab = 'outline' | 'links' | 'properties';
+
+/** Which side bars someone wants. A narrow window hides them anyway. */
+interface Layout {
+  left: boolean;
+  right: boolean;
+  panelTab: PanelTab;
+  rightWidth: number;
 }
 
 export interface Dialog {
@@ -49,6 +62,10 @@ const SESSION_KEY = 'ultimatemd.session';
 const THEME_KEY = 'ultimatemd.theme';
 const TUTORIAL_KEY = 'ultimatemd.tutorial';
 const VIEW_KEY = 'ultimatemd.view';
+const LAYOUT_KEY = 'ultimatemd.layout';
+/** Below these window widths a side bar folds away by itself. */
+const LEFT_MIN = 760;
+const RIGHT_MIN = 1080;
 const VIEWS: ViewMode[] = ['visual', 'edit', 'split', 'preview'];
 
 /** `fixed` null means following the system, with one theme for each mode. */
@@ -62,6 +79,15 @@ function loadThemeChoice(): ThemeChoice {
   const fallback = { fixed: null, light: 'claro', dark: 'oscuro' };
   try {
     return { ...fallback, ...JSON.parse(localStorage.getItem(THEME_KEY) ?? '{}') };
+  } catch {
+    return fallback;
+  }
+}
+
+function loadLayout(): Layout {
+  const fallback: Layout = { left: true, right: false, panelTab: 'outline', rightWidth: 280 };
+  try {
+    return { ...fallback, ...JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}') };
   } catch {
     return fallback;
   }
@@ -104,7 +130,8 @@ class Store {
   systemDark = $state(matchMedia('(prefers-color-scheme: dark)').matches);
   themeChoice = $state(loadThemeChoice());
 
-  palette = $state(false);
+  /** The quick switcher's starting text while it is open: `>` for actions, `#` for headings. */
+  palette = $state<string | null>(null);
   settings = $state(false);
   searching = $state(false);
   exporting = $state(false);
@@ -121,6 +148,12 @@ class Store {
   wordScreen = $state<string | null>(null);
   /** Taken by the editor, or the preview when it shows alone. */
   reveal = $state<Reveal | null>(null);
+  layout = $state(loadLayout());
+  windowWidth = $state(innerWidth);
+  /** A bar shown by hand while the window is too narrow for it. It folds again once the width changes enough. */
+  peek = $state({ left: false, right: false });
+  /** The line with the cursor, or the top of the preview when it shows alone. */
+  position = $state<{ key: string; line: number } | null>(null);
 
   #timers = new Map<string, ReturnType<typeof setTimeout>>();
   #toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -283,6 +316,20 @@ class Store {
     }
   }
 
+  /** Asks where and how to call a new vault, then creates it. */
+  async createVaultDialog() {
+    const parent = await openDialog({ directory: true, title: tr('sidebar.createVaultWhere') });
+    if (typeof parent !== 'string') return;
+    const name = await this.prompt(tr('sidebar.vaultName'), '', tr('common.create'));
+    if (name?.trim()) await this.addVault(() => api.createVault(parent, name.trim()));
+  }
+
+  /** Asks for a folder and opens it as a vault. */
+  async openVaultDialog() {
+    const path = await openDialog({ directory: true, title: tr('sidebar.openAsVault') });
+    if (typeof path === 'string') await this.addVault(() => api.openVault(path));
+  }
+
   async addVault(run: () => Promise<Vault>) {
     try {
       const vault = await run();
@@ -367,6 +414,56 @@ class Store {
     });
     this.activeKey = key;
     this.persist();
+  }
+
+  get showLeft() {
+    return this.windowWidth >= LEFT_MIN ? this.layout.left : this.peek.left;
+  }
+
+  get showRight() {
+    return this.windowWidth >= RIGHT_MIN ? this.layout.right : this.peek.right;
+  }
+
+  /** Shows or hides a side bar. In a narrow window the change lasts until it widens. */
+  toggleBar(side: 'left' | 'right', show?: boolean) {
+    const min = side === 'left' ? LEFT_MIN : RIGHT_MIN;
+    const next = show ?? !(side === 'left' ? this.showLeft : this.showRight);
+    if (this.windowWidth >= min) {
+      this.layout[side] = next;
+      this.saveLayout();
+    } else {
+      this.peek[side] = next;
+    }
+  }
+
+  setWindowWidth(width: number) {
+    // Crossing a threshold forgets bars shown by hand while it was narrow.
+    if ((this.windowWidth < LEFT_MIN) !== (width < LEFT_MIN)) this.peek.left = false;
+    if ((this.windowWidth < RIGHT_MIN) !== (width < RIGHT_MIN)) this.peek.right = false;
+    this.windowWidth = width;
+  }
+
+  openPanel(tab: PanelTab) {
+    this.layout.panelTab = tab;
+    this.toggleBar('right', true);
+    this.saveLayout();
+  }
+
+  saveLayout() {
+    try {
+      localStorage.setItem(LAYOUT_KEY, JSON.stringify(this.layout));
+    } catch {
+      // Only a convenience.
+    }
+  }
+
+  /** Asks for a name and creates a note beside the one open, or in the first vault. */
+  async newNote() {
+    const tab = this.active;
+    const vaultId = tab?.vaultId ?? this.openVaults[0]?.id;
+    if (!vaultId) return this.notify(tr('app.openVaultFirst'));
+    const name = await this.prompt(tr('sidebar.noteName'), '', tr('common.create'));
+    if (name?.trim()) await this.createNote(vaultId, tab ? dirName(tab.path) : '', name.trim());
   }
 
   /** Opens a note at a line, with the words of a search marked. */

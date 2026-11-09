@@ -113,6 +113,40 @@ function linkContent(root: DocumentFragment, ctx: RenderContext) {
   }
 }
 
+export interface Heading {
+  level: number;
+  text: string;
+  /** Its line in the file, counting from 1. */
+  line: number;
+}
+
+/**
+ * The note's headings, parsed as the preview draws them, so that the nth one
+ * here is the nth heading element there.
+ */
+export function outline(text: string): Heading[] {
+  const { meta, body } = splitFrontmatter(text);
+  const offset = meta === null ? 0 : text.slice(0, text.length - body.length).split('\n').length - 1;
+  const tokens = md.parse(body, {});
+  const out: Heading[] = [];
+  tokens.forEach((t: any, i: number) => {
+    if (t.type !== 'heading_open' || !t.map) return;
+    const inline = tokens[i + 1];
+    const words = (inline.children ?? []).filter((c: any) => c.type !== 'html_inline').map((c: any) => (c.type === 'wikilink' ? c.meta.label : c.content)).join('');
+    out.push({ level: Number(t.tag.slice(1)), text: (words || inline.content).trim(), line: t.map[0] + 1 + offset });
+  });
+  return out;
+}
+
+/** The heading whose section holds `line`: the last one at or above it. */
+export function headingAt(headings: Heading[], line: number) {
+  let found = -1;
+  headings.forEach((h, i) => {
+    if (h.line <= line) found = i;
+  });
+  return found;
+}
+
 /**
  * Renders a note to a sanitised fragment. HTML written in a note keeps its
  * formatting and styles, which the preview's shadow root confines; scripts,

@@ -1,9 +1,13 @@
 <script lang="ts">
+  import { rise, swap } from './lib/motion';
   import { onMount } from 'svelte';
   import Editor from './lib/components/Editor.svelte';
   import About from './lib/components/About.svelte';
   import Export from './lib/components/Export.svelte';
   import Modal from './lib/components/Modal.svelte';
+  import WindowControls from './lib/components/WindowControls.svelte';
+  import { IS_MAC, frame } from './lib/frame.svelte';
+  import NotePanel from './lib/components/NotePanel.svelte';
   import Palette from './lib/components/Palette.svelte';
   import Preview from './lib/components/Preview.svelte';
   import Settings from './lib/components/Settings.svelte';
@@ -14,7 +18,6 @@
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
   import { applyInstallerLanguage, tr } from './lib/i18n.svelte';
-  import { dirName } from './lib/paths';
   import { store, type ViewMode } from './lib/store.svelte';
   import { applyTheme } from './lib/themes';
   import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -25,6 +28,8 @@
   let preview = $state<Preview>();
   let sidebarWidth = $state(260);
   const tab = $derived(store.active);
+  const panel = $derived(store.showRight && tab?.kind === 'md');
+  const columns = $derived(`${store.showLeft ? `${sidebarWidth}px ` : ''}minmax(0, 1fr)${panel ? ` ${store.layout.rightWidth}px` : ''}`);
   const words = $derived(tab?.content.trim() ? tab.content.trim().split(/\s+/).length : 0);
   const status = $derived(
     !tab ? '' : tr(tab.missing ? 'app.statusDeleted' : tab.conflict ? 'app.statusConflict' : tab.saving ? 'app.statusSaving' : tab.dirty ? 'app.statusUnsaved' : 'app.statusSaved'),
@@ -42,8 +47,9 @@
       // Keeps the default width.
     }
     store.init().catch((e) => store.notify(e));
-    // The window starts hidden so it first appears with the right theme and language.
-    void applyInstallerLanguage().finally(() => {
+    void frame.watch();
+    // The window starts hidden so it first appears with the right theme, language and frame.
+    void Promise.all([applyInstallerLanguage(), frame.apply()]).finally(() => {
       try {
         void getCurrentWindow().show();
       } catch {
@@ -52,28 +58,23 @@
     });
   });
 
-  async function newNote() {
-    const vaultId = tab?.vaultId ?? store.openVaults[0]?.id;
-    if (!vaultId) return store.notify(tr('app.openVaultFirst'));
-    const name = await store.prompt(tr('sidebar.noteName'), '', tr('common.create'));
-    if (name?.trim()) await store.createNote(vaultId, tab ? dirName(tab.path) : '', name.trim());
-  }
 
   function onKey(e: KeyboardEvent) {
     const key = e.key.toLowerCase();
     if (key === 'escape') {
       if (store.tutorial) store.closeTutorial();
-      store.palette = store.settings = store.exporting = store.about = false;
+      store.settings = store.exporting = store.about = false;
+      store.palette = null;
       store.themeEditor = null;
       return;
     }
     if (!(e.ctrlKey || e.metaKey)) return;
     const actions: Record<string, () => void> = {
-      p: () => (store.palette = true),
+      p: () => (store.palette = ''),
       e: () => {
         if (tab?.kind === 'md') store.exporting = true;
       },
-      n: () => void newNote(),
+      n: () => void store.newNote(),
       s: () => void store.saveAll(),
       w: () => tab && void store.close(tab),
       '\\': () => {
@@ -81,19 +82,32 @@
       },
       tab: () => store.cycleTab(e.shiftKey ? -1 : 1),
     };
-    if (e.shiftKey && key === 'f') {
-      e.preventDefault();
-      store.searching = true;
-    } else if (actions[key] && (!e.shiftKey || key === 'tab')) {
-      e.preventDefault();
-      actions[key]();
-    }
+    const shifted: Record<string, () => void> = {
+      f: () => {
+        store.searching = true;
+        store.toggleBar('left', true);
+      },
+      p: () => (store.palette = '>'),
+      e: () => store.toggleBar('left'),
+      o: () => {
+        if (tab?.kind === 'md') store.toggleBar('right');
+      },
+      tab: actions.tab,
+    };
+    const run = e.shiftKey ? shifted[key] : actions[key];
+    if (!run) return;
+    // Caught before the editor sees it: on macOS, Ctrl+O, P, N and E also edit or move the cursor there.
+    e.preventDefault();
+    e.stopPropagation();
+    run();
   }
+
+  const clampWidth = (width: number) => Math.min(480, Math.max(180, width));
 
   function resize(down: PointerEvent) {
     const el = down.currentTarget as HTMLElement;
     el.setPointerCapture(down.pointerId);
-    const move = (e: PointerEvent) => (sidebarWidth = Math.min(480, Math.max(180, e.clientX)));
+    const move = (e: PointerEvent) => (sidebarWidth = clampWidth(e.clientX));
     const up = () => {
       el.removeEventListener('pointermove', move);
       try {
@@ -105,13 +119,27 @@
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerup', up, { once: true });
   }
+
+  function resizePanel(down: PointerEvent) {
+    const el = down.currentTarget as HTMLElement;
+    el.setPointerCapture(down.pointerId);
+    const move = (e: PointerEvent) => (store.layout.rightWidth = clampWidth(innerWidth - e.clientX));
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', () => {
+      el.removeEventListener('pointermove', move);
+      store.saveLayout();
+    }, { once: true });
+  }
 </script>
 
-<svelte:window onkeydown={onKey} onblur={() => store.saveAll()} />
+<svelte:window onkeydowncapture={onKey} onblur={() => store.saveAll()} onresize={() => store.setWindowWidth(innerWidth)} />
 
-<div class="app" style:grid-template-columns="{sidebarWidth}px 1fr">
-  <Sidebar />
-  <button class="grip" aria-label={tr('app.resize')} style:left="{sidebarWidth - 3}px" onpointerdown={resize}></button>
+<div class="app" style:grid-template-columns={columns} style:--frame-left={frame.own && IS_MAC ? '76px' : '0px'} style:--frame-right={frame.own && !IS_MAC ? '138px' : '0px'}>
+  {#if frame.own && !IS_MAC}<WindowControls />{/if}
+  {#if store.showLeft}
+    <Sidebar />
+    <button class="grip" aria-label={tr('app.resize')} style:left="{sidebarWidth - 3}px" onpointerdown={resize}></button>
+  {/if}
   <main>
     <Tabs />
     {#if tab?.conflict}
@@ -147,16 +175,20 @@
         {/if}
         <span class="spacer"></span>
         {#if tab.kind === 'md' || tab.kind === 'html'}<span>{tr('app.words', { n: words })}</span>{/if}
-        <span>{status}</span>
+        {#key status}<span class="status" in:swap>{status}</span>{/key}
       {/if}
       {#if store.update}
         <button class="adopt" onclick={() => (store.about = true)}>{tr('app.updateAvailable', { version: store.update })}</button>
       {/if}
     </footer>
   </main>
+  {#if panel && tab}
+    <button class="grip" aria-label={tr('app.resize')} style:right="{store.layout.rightWidth - 3}px" onpointerdown={resizePanel}></button>
+    <NotePanel {tab} />
+  {/if}
 </div>
 
-{#if store.palette}<Palette />{/if}
+{#if store.palette !== null}<Palette initial={store.palette} />{/if}
 {#if store.settings}<Settings />{/if}
 {#if store.about}<About />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
@@ -166,24 +198,24 @@
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}
 {/if}
 {#if store.tutorial}<Tutorial />{/if}
-{#if store.toast}<div class="toast" role="status">{store.toast}</div>{/if}
+{#if store.toast}<div class="toast" role="status" in:rise>{store.toast}</div>{/if}
 
 <style>
   .app { position: relative; display: grid; height: 100vh; overflow: hidden; }
-  .grip { position: absolute; top: 0; bottom: 0; z-index: 5; width: 6px; padding: 0; border: 0; background: none; cursor: col-resize; }
+  .grip { position: absolute; top: 0; bottom: 0; z-index: var(--z-raised); width: 6px; padding: 0; border: 0; background: none; cursor: col-resize; }
   .grip:hover { background: var(--line); }
   main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .content { display: flex; flex: 1; min-height: 0; background: var(--bg); }
   .pane { flex: 1 1 0; min-width: 0; min-height: 0; }
   .pane.hidden { display: none; }
   .pane.preview:not(:first-child) { border-left: 1px solid var(--line); }
-  .banner { display: flex; align-items: center; gap: 8px; padding: 7px 12px; flex: none; background: var(--warn); color: var(--text); font-size: 13px; }
+  .banner { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); flex: none; background: var(--warn); color: var(--text); font-size: var(--font-md); }
   .banner span { flex: 1; }
-  .banner button { padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--raised); color: var(--text); font-size: 12.5px; }
-  footer { display: flex; gap: 16px; align-items: center; height: 24px; flex: none; padding: 0 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+  .banner button { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--raised); color: var(--text); font-size: var(--font-sm); }
+  footer { display: flex; gap: var(--space-4); align-items: center; height: 24px; flex: none; padding: 0 var(--space-3); background: var(--panel); border-top: 1px solid var(--line); color: var(--text-3); font-size: var(--font-xs); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
   .spacer { flex: 1; }
   .where { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .adopt { flex: none; padding: 0; border: 0; background: none; color: var(--accent-text); font-size: inherit; }
   .adopt:hover { text-decoration: underline; }
-  .toast { position: fixed; bottom: 36px; left: 50%; z-index: 60; max-width: min(560px, calc(100vw - 32px)); padding: 9px 14px; border-radius: 8px; background: var(--text); color: var(--bg); box-shadow: var(--shadow); font-size: 13px; transform: translateX(-50%); }
+  .toast { position: fixed; bottom: 36px; left: 50%; z-index: var(--z-toast); max-width: min(560px, calc(100vw - 32px)); padding: var(--space-2-5) var(--space-3-5); border-radius: var(--radius-md); background: var(--text); color: var(--bg); box-shadow: var(--shadow-lg); font-size: var(--font-md); transform: translateX(-50%); }
 </style>

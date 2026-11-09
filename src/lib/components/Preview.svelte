@@ -6,7 +6,7 @@
   import { renderDiagram, toPng, toSvgBytes } from '../diagrams';
   import { findTerms } from '../fold';
   import { tr } from '../i18n.svelte';
-  import { renderMarkdown } from '../markdown';
+  import { outline, renderMarkdown, type Heading } from '../markdown';
   import { store, type Tab } from '../store.svelte';
   import { themeKey, themeVariables } from '../themes';
   import previewCss from '../preview.css?inline';
@@ -94,7 +94,29 @@
     body.replaceChildren(fragment);
     rendered = true;
     reveal();
+    publishPosition();
     void hydrate(id);
+  }
+
+  const headings = () => [...body.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')];
+
+  let parsed = { content: '', headings: [] as Heading[] };
+  let frame = 0;
+
+  /** In reading view, tells the note panel which section is at the top. */
+  function publishPosition() {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      if (tab.view !== 'preview' || !scroller || !rendered) return;
+      if (parsed.content !== tab.content) parsed = { content: tab.content, headings: outline(tab.content) };
+      const box = scroller.getBoundingClientRect();
+      // At the end of the note the last headings cannot reach the top: the lowest one in sight counts.
+      const atEnd = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+      const limit = atEnd ? box.bottom : box.top + 24;
+      const index = headings().filter((h) => h.getBoundingClientRect().top <= limit).length - 1;
+      const line = index < 0 ? 1 : (parsed.headings[index]?.line ?? 1);
+      if (store.position?.key !== tab.key || store.position.line !== line) store.position = { key: tab.key, line };
+    });
   }
 
   /** Marks the words of a search and scrolls to the match nearest the line found. */
@@ -102,6 +124,12 @@
     const want = store.reveal;
     if (!rendered || !scroller || !want || want.key !== tab.key || tab.view !== 'preview') return;
     store.reveal = null;
+    if (want.heading !== undefined) {
+      if ('highlights' in CSS) CSS.highlights.delete(FOUND);
+      const target = headings()[want.heading];
+      if (target) scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 16;
+      return;
+    }
     const ranges: Range[] = [];
     const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -155,7 +183,7 @@
     root = host!.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
     style.textContent = `${previewCss}
-::highlight(${FOUND}) { background: color-mix(in srgb, var(--accent) 30%, transparent); }`;
+::highlight(${FOUND}) { background: var(--found); }`;
     body = document.createElement('article');
     body.className = 'prose';
     root.append(style, body);
@@ -180,7 +208,7 @@
 </script>
 
 {#if tab.kind === 'md'}
-  <div class="scroll" style={scoped} data-note-theme={content.id} bind:this={scroller}><div bind:this={host}></div></div>
+  <div class="scroll" style={scoped} data-note-theme={content.id} bind:this={scroller} onscroll={publishPosition}><div bind:this={host}></div></div>
 {:else if tab.kind === 'html'}
   <div class="frame">
     {#key `${htmlSrc}:${scripts}`}
@@ -198,7 +226,7 @@
   .scroll { height: 100%; overflow-y: auto; background: var(--bg); }
   .frame { display: flex; flex-direction: column; height: 100%; }
   iframe { flex: 1; min-height: 0; width: 100%; border: 0; background: #fff; }
-  .note { margin: 0; padding: 4px 12px; background: var(--panel); color: var(--text-3); font-size: 11.5px; }
-  .image { display: flex; align-items: center; justify-content: center; height: 100%; padding: 24px; overflow: auto; background: var(--bg); }
+  .note { margin: 0; padding: var(--space-1) var(--space-3); background: var(--panel); color: var(--text-3); font-size: var(--font-xs); }
+  .image { display: flex; align-items: center; justify-content: center; height: 100%; padding: var(--space-6); overflow: auto; background: var(--bg); }
   .image img { max-width: 100%; max-height: 100%; }
 </style>

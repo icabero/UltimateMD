@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { enter } from '../motion';
   import Icon from './Icon.svelte';
   import { tr, type Key } from '../i18n.svelte';
   import { baseName } from '../paths';
@@ -11,12 +12,17 @@
     { mode: 'preview', icon: 'eye', title: 'tabs.preview' },
   ];
   const active = $derived(store.active);
+  // The bar touching a window corner leaves room for the window's buttons there.
+  const panelShown = $derived(store.showRight && active?.kind === 'md');
 </script>
 
-<div class="bar">
-  <div class="tabs" role="tablist">
+<div class="bar" data-tauri-drag-region class:corner-left={!store.showLeft} class:corner-right={!panelShown}>
+  {#if !store.showLeft}
+    <button class="icon show-left" title={tr('sidebar.show')} onclick={() => store.toggleBar('left', true)}><Icon name="panelLeft" /></button>
+  {/if}
+  <div class="tabs" role="tablist" data-tauri-drag-region>
     {#each store.tabs as tab (tab.key)}
-      <div class="tab" class:active={tab.key === store.activeKey} role="tab" tabindex="0" aria-selected={tab.key === store.activeKey}
+      <div class="tab" in:enter class:active={tab.key === store.activeKey} role="tab" tabindex="0" aria-selected={tab.key === store.activeKey}
         onclick={() => { store.activeKey = tab.key; store.persist(); }}
         onkeydown={(e) => { if (e.key === 'Enter') store.activeKey = tab.key; }}
         onauxclick={(e) => { if (e.button === 1) store.close(tab); }}
@@ -35,6 +41,7 @@
       {/each}
       {#if active.kind === 'md'}
         <button class="icon" title={tr('tabs.export')} onclick={() => (store.exporting = true)}><Icon name="export" /></button>
+        <button class="icon" class:on={store.showRight} aria-pressed={store.showRight} title={tr('panel.toggle')} onclick={() => store.toggleBar('right')}><Icon name="panelRight" /></button>
       {/if}
     </div>
   {/if}
@@ -43,14 +50,17 @@
 <style>
   .bar { display: flex; align-items: stretch; height: 38px; flex: none; background: var(--panel); border-bottom: 1px solid var(--line); }
   .tabs { display: flex; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-  .tab { display: flex; align-items: center; gap: 6px; max-width: 200px; padding: 0 6px 0 12px; border-right: 1px solid var(--line); color: var(--text-2); font-size: 12.5px; cursor: default; }
+  .tab { display: flex; align-items: center; gap: var(--space-1-5); max-width: 200px; padding: 0 var(--space-1-5) 0 var(--space-3); border-right: 1px solid var(--line); color: var(--text-2); font-size: var(--font-sm); cursor: default; }
   .tab:hover { color: var(--text); }
   .tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
   .name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .loose { display: flex; flex: none; color: var(--text-3); }
   .dirty { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-  .x { display: flex; flex: none; padding: 3px; border: 0; border-radius: 4px; background: none; color: inherit; opacity: 0; }
+  .x { display: flex; flex: none; padding: var(--space-1); border: 0; border-radius: var(--radius-xs); background: none; color: inherit; opacity: 0; }
   .tab:hover .x, .tab.active .x { opacity: .7; }
   .x:hover { background: var(--hover); opacity: 1; }
-  .views { display: flex; align-items: center; gap: 1px; padding: 0 8px; }
+  .show-left { align-self: center; flex: none; margin: 0 var(--space-1); }
+  .corner-left { padding-left: var(--frame-left, 0px); }
+  .corner-right { padding-right: var(--frame-right, 0px); }
+  .views { display: flex; align-items: center; gap: 1px; padding: 0 var(--space-2); }
 </style>

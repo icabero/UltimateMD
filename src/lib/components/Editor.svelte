@@ -48,13 +48,13 @@
     '.cm-scroller': { fontFamily: 'var(--mono)', fontSize: '13.5px', lineHeight: '1.65', overflow: 'auto' },
     '.cm-content': { padding: '20px 0 40vh', caretColor: 'var(--accent)' },
     '.cm-line': { padding: '0 22px' },
-    '.cm-gutters': { background: 'var(--bg)', color: 'var(--text-3)', border: 'none', fontSize: '11.5px' },
+    '.cm-gutters': { background: 'var(--bg)', color: 'var(--text-3)', border: 'none', fontSize: 'var(--font-xs)' },
     '.cm-activeLine, .cm-activeLineGutter': { background: 'var(--hover)' },
     '.cm-cursor': { borderLeftColor: 'var(--accent)', borderLeftWidth: '2px' },
     '.cm-selectionBackground, &.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { background: 'var(--selection) !important' },
     '.cm-panels': { background: 'var(--panel)', color: 'var(--text)', borderColor: 'var(--line)' },
     '.cm-searchMatch': { background: 'var(--accent-soft)' },
-    '.cm-found': { background: 'color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: '2px' },
+    '.cm-found': { background: 'var(--found)', borderRadius: 'var(--radius-2xs)' },
   });
 
   // The words of a search, marked until the next edit.
@@ -123,6 +123,7 @@
         ...(current.kind === 'md' ? [wikilinks, followWithCtrl, autocompletion({ override: [noteCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
+          if (u.docChanged || u.selectionSet) publishPosition(u.state);
         }),
       ],
     });
@@ -135,14 +136,24 @@
       view.setState(states.get(current.key) ?? makeState(current));
       shownKey = current.key;
       shownRevision = current.revision;
+      publishPosition(view.state);
     }
-    // An edit made outside this editor stays undoable.
-    if (shownRevision !== current.revision || view.state.doc.toString() !== current.content) {
+    // An edit made outside this editor stays undoable. Only the part that
+    // differs is replaced, so the cursor and the scroll stay where they were.
+    const shown = view.state.doc.toString();
+    if (shownRevision !== current.revision || shown !== current.content) {
       shownRevision = current.revision;
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: current.content },
-        annotations: external.of(true),
-      });
+      const next = current.content;
+      let start = 0;
+      while (start < shown.length && start < next.length && shown[start] === next[start]) start++;
+      let end = 0;
+      while (end < shown.length - start && end < next.length - start && shown[shown.length - 1 - end] === next[next.length - 1 - end]) end++;
+      if (start < shown.length - end || start < next.length - end) {
+        view.dispatch({
+          changes: { from: start, to: shown.length - end, insert: next.slice(start, next.length - end) },
+          annotations: external.of(true),
+        });
+      }
     }
     const wanted = current.kind === 'md' && current.view === 'visual' ? visualMode : PLAIN;
     if (mode.get(view.state) !== wanted) view.dispatch({ effects: mode.reconfigure(wanted) });
@@ -210,6 +221,13 @@
 
   onDestroy(() => view?.destroy());
 
+  /** Tells the note panel which line has the cursor. */
+  function publishPosition(state: EditorState) {
+    if (tab.view === 'preview') return;
+    const line = state.doc.lineAt(state.selection.main.head).number;
+    if (store.position?.key !== tab.key || store.position.line !== line) store.position = { key: tab.key, line };
+  }
+
   /** Goes to the line a search asked for, unless the editor is hidden behind the preview. */
   function reveal() {
     const want = store.reveal;
@@ -222,7 +240,7 @@
     const anchor = first?.[0] ?? line?.from ?? 0;
     view.dispatch({
       selection: { anchor },
-      effects: [setFound.of(marks), EditorView.scrollIntoView(anchor, { y: line ? 'center' : 'start' })],
+      effects: [setFound.of(marks), EditorView.scrollIntoView(anchor, { y: line && want.heading === undefined ? 'center' : 'start', yMargin: 16 })],
     });
     view.focus();
   }

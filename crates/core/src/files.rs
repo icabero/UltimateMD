@@ -19,6 +19,15 @@ pub struct TreeNode {
     pub children: Vec<TreeNode>,
 }
 
+/// A note and when it last changed on disk.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteStamp {
+    pub path: String,
+    /// Milliseconds since the Unix epoch.
+    pub modified: u64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Note {
@@ -73,6 +82,25 @@ impl Vault {
             .filter(|p| is_note(p))
             .collect();
         out.sort();
+        Ok(out)
+    }
+
+    /// Every note with its modification time, newest first.
+    pub fn note_stamps(&self) -> Result<Vec<NoteStamp>> {
+        let root = self.root.canonicalize()?;
+        let mut out: Vec<NoteStamp> = WalkDir::new(&root)
+            .into_iter()
+            .filter_entry(visible)
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .filter_map(|e| {
+                let path = to_rel(&root, e.path()).filter(|p| is_note(p))?;
+                let modified = e.metadata().ok()?.modified().ok()?;
+                let modified = modified.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis() as u64;
+                Some(NoteStamp { path, modified })
+            })
+            .collect();
+        out.sort_by(|a, b| b.modified.cmp(&a.modified).then_with(|| a.path.cmp(&b.path)));
         Ok(out)
     }
 
@@ -325,6 +353,20 @@ mod tests {
         v.write("n.md", "1", WriteMode::Create).unwrap();
         v.write("n.md", "2", WriteMode::Replace(None)).unwrap();
         assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn note_stamps_come_newest_first_and_skip_other_files() {
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::new(d.path());
+        v.write("vieja.md", "a", WriteMode::Create).unwrap();
+        v.write("imagen.png", "x", WriteMode::Create).unwrap();
+        std::thread::sleep(Duration::from_millis(20));
+        v.write("dir/nueva.md", "b", WriteMode::Create).unwrap();
+        let stamps = v.note_stamps().unwrap();
+        let paths: Vec<_> = stamps.iter().map(|s| s.path.as_str()).collect();
+        assert_eq!(paths, ["dir/nueva.md", "vieja.md"]);
+        assert!(stamps[0].modified >= stamps[1].modified && stamps[1].modified > 0);
     }
 
     #[test]

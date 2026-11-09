@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dim, pop } from '../motion';
   import Icon from './Icon.svelte';
   import { api, type ThemeFile } from '../api';
   import { themeName, tr, type Key } from '../i18n.svelte';
@@ -110,8 +111,8 @@
   }
 </script>
 
-<button class="scrim top" aria-label={tr('common.close')} onclick={() => (store.themeEditor = null)}></button>
-<div class="modal" role="dialog" aria-label={tr('themes.of', { name: vaultName })}>
+<button in:dim class="scrim top" aria-label={tr('common.close')} onclick={() => (store.themeEditor = null)}></button>
+<div in:pop class="modal" role="dialog" aria-label={tr('themes.of', { name: vaultName })}>
   <header>
     <h2>{tr('themes.of', { name: vaultName })}</h2>
     <button class="icon" title={tr('common.close')} onclick={() => (store.themeEditor = null)}><Icon name="close" /></button>
@@ -202,31 +203,31 @@
 </div>
 
 <style>
-  .top { z-index: 32; }
-  .modal { position: fixed; top: 50%; left: 50%; z-index: 33; width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 8px 18px 16px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow); transform: translate(-50%, -50%); }
+  .top { z-index: var(--z-nested-scrim); }
+  .modal { position: fixed; top: 50%; left: 50%; z-index: var(--z-nested); width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: var(--space-2) var(--space-5) var(--space-4); overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-lg); transform: translate(-50%, -50%); }
   header { display: flex; align-items: center; justify-content: space-between; }
-  h2 { margin: 8px 0; font-size: 15px; font-weight: 650; }
-  h3 { margin: 14px 0 6px; font-size: 12px; font-weight: 650; }
-  label { color: var(--text-2); font-size: 12.5px; }
-  select { padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
-  .default { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-  .columns { display: grid; grid-template-columns: 150px 1fr; gap: 16px; }
-  nav { display: flex; flex-direction: column; gap: 2px; }
-  nav button { display: flex; align-items: center; gap: 5px; padding: 5px 8px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 12.5px; text-align: left; }
+  h2 { margin: var(--space-2) 0; font-size: var(--font-lg); font-weight: 650; }
+  h3 { margin: var(--space-3-5) 0 var(--space-1-5); font-size: var(--font-sm); font-weight: 650; }
+  label { color: var(--text-2); font-size: var(--font-sm); }
+  select { padding: var(--space-1) var(--space-1-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; }
+  .default { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+  .columns { display: grid; grid-template-columns: 150px 1fr; gap: var(--space-4); }
+  nav { display: flex; flex-direction: column; gap: var(--space-0-5); }
+  nav button { display: flex; align-items: center; gap: var(--space-1-5); padding: var(--space-1-5) var(--space-2); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); text-align: left; }
   nav button:hover { background: var(--hover); color: var(--text); }
   nav .on { background: var(--accent-soft); color: var(--accent-text); }
-  .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px 12px; }
+  .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-1-5); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--space-1-5) var(--space-3); }
   .color { display: flex; align-items: center; justify-content: space-between; }
-  input[type='color'] { width: 30px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; }
-  .sample { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
-  .node { display: inline-block; margin-top: 8px; padding: 3px 10px; border: 1px solid; border-radius: 5px; font-size: 12px; }
-  .warn { margin: 8px 0 0; color: var(--danger); font-size: 12.5px; }
-  textarea { width: 100%; height: 260px; padding: 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); font: 12px/1.5 var(--mono); resize: vertical; user-select: text; }
-  .actions { display: flex; gap: 6px; margin-top: 12px; }
-  .actions button { padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text-2); font-size: 12px; }
+  input[type='color'] { width: 30px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-xs); background: none; }
+  .sample { margin-top: var(--space-3); padding: var(--space-2-5) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); font-size: var(--font-md); }
+  .node { display: inline-block; margin-top: var(--space-2); padding: var(--space-1) var(--space-2-5); border: 1px solid; border-radius: var(--radius-sm); font-size: var(--font-sm); }
+  .warn { margin: var(--space-2) 0 0; color: var(--danger); font-size: var(--font-sm); }
+  textarea { width: 100%; height: 260px; padding: var(--space-2); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg); color: var(--text); font: var(--font-sm)/1.5 var(--mono); resize: vertical; user-select: text; }
+  .actions { display: flex; gap: var(--space-1-5); margin-top: var(--space-3); }
+  .actions button { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); }
   .actions .main { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
   .spacer { flex: 1; }
-  .empty { margin: 0; color: var(--text-2); font-size: 12.5px; line-height: 1.5; }
-  .empty :global(code) { font: 11.5px var(--mono); }
+  .empty { margin: 0; color: var(--text-2); font-size: var(--font-sm); line-height: 1.5; }
+  .empty :global(code) { font: var(--font-xs) var(--mono); }
 </style>

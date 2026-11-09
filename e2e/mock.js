@@ -32,7 +32,13 @@
     },
   };
   const versionOf = (id, path) => (versions[`${id}:${path}`] ??= 'v0');
-  const bump = (id, path) => (versions[`${id}:${path}`] = `v${Date.now()}${Math.random()}`);
+  // When each note last changed: invented hours ago at first, now on every write.
+  const modified = {};
+  const changedAt = (id, path) => (modified[`${id}:${path}`] ??= Date.now() - (Object.keys(modified).length + 1) * 3_600_000);
+  const bump = (id, path) => {
+    modified[`${id}:${path}`] = Date.now();
+    return (versions[`${id}:${path}`] = `v${Date.now()}${Math.random()}`);
+  };
   const listeners = {};
 
   function tree(id) {
@@ -96,6 +102,36 @@
       vaults.find((v) => v.id === id).mcp = mcp;
     },
     mcp_info: () => ({ binary: 'C:\\Program Files\\UltimateMD\\ultimatemd-mcp.exe', available: true }),
+    home_info: () => {
+      const open = vaults.filter((v) => v.open);
+      const stamps = (id) =>
+        Object.keys(files[id])
+          .filter((p) => p.endsWith('.md'))
+          .map((path) => ({ path, modified: changedAt(id, path) }))
+          .sort((a, b) => b.modified - a.modified);
+      return {
+        vaults: open.map((v) => {
+          const s = stamps(v.id);
+          return { vaultId: v.id, notes: s.length, lastEdit: s[0]?.modified ?? null, lastNote: s[0]?.path ?? null };
+        }),
+        recent: open
+          .flatMap((v) => stamps(v.id).map((s) => ({ vaultId: v.id, ...s })))
+          .sort((a, b) => b.modified - a.modified)
+          .slice(0, 8),
+      };
+    },
+    // Like the backend, for [[wikilinks]] by name.
+    note_links: ({ id, path }) => {
+      const stem = (p) => p.split('/').pop().replace(/\.md$/, '');
+      const targets = (text) => [...text.matchAll(/\[\[([^\]|#]+)/g)].map((m) => m[1].trim());
+      const find = (name) => Object.keys(files[id]).find((p) => stem(p).toLowerCase() === name.toLowerCase());
+      const mine = targets(files[id][path] ?? '');
+      return {
+        outgoing: [...new Set(mine.map(find).filter(Boolean))],
+        unresolved: [...new Set(mine.filter((t) => !find(t)))],
+        backlinks: Object.keys(files[id]).filter((p) => p !== path && targets(files[id][p]).some((t) => find(t) === path)),
+      };
+    },
     // Like the backend: every word, ignoring case and accents, one hit per line.
     search_all: ({ query }) => {
       const fold = (t) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -191,7 +227,15 @@
 
   window.__word = { headings: [null, null, null, null, null, null], body: null, headerFill: null, tableTextSize: null, codeTextSize: null, imageMaxWidth: null, plainCode: false };
 
+  // The window, so that its buttons can be tested. Calls are recorded in order.
+  window.__windowCalls = [];
+  for (const name of ['show', 'minimize', 'toggle_maximize', 'close', 'set_decorations', 'set_title_bar_style']) {
+    commands[`plugin:window|${name}`] = (args) => void window.__windowCalls.push({ name, value: args?.value });
+  }
+  commands['plugin:window|is_maximized'] = () => false;
+
   window.__TAURI_INTERNALS__ = {
+    metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
     invoke: async (cmd, args) => {
       if (!commands[cmd]) throw `mock: no command ${cmd}`;
       return commands[cmd](args);

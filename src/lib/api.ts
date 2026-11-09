@@ -36,6 +36,12 @@ export interface LinkUpdate {
   notes: string[];
 }
 
+/** For the start screen. `notes` is null for a vault that cannot be read. Times are ms since the epoch. */
+export interface HomeInfo {
+  vaults: { vaultId: string; notes: number | null; lastEdit: number | null; lastNote: string | null }[];
+  recent: { vaultId: string; path: string; modified: number }[];
+}
+
 export interface LinkInfo {
   outgoing: string[];
   unresolved: string[];
@@ -131,6 +137,7 @@ export const api = {
   rename: (id: string, from: string, to: string) => invoke<LinkUpdate>('rename_path', { id, from, to }),
   trash: (id: string, path: string) => invoke<void>('trash_path', { id, path }),
   search: (query: string) => invoke<VaultHit[]>('search_all', { query }),
+  homeInfo: () => invoke<HomeInfo>('home_info'),
   links: (id: string, path: string) => invoke<LinkInfo>('note_links', { id, path }),
   openWithSystem: (id: string, path: string) => invoke<void>('open_with_system', { id, path }),
   mcpInfo: () => invoke<{ binary: string; available: boolean }>('mcp_info'),
