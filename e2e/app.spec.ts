@@ -4,6 +4,7 @@ import { fenceLine, parseStyle } from '../src/lib/diagramStyle';
 import { TEMPLATES } from '../src/lib/diagramTemplates';
 import { THEMES, contrast, frontmatterChange, mix } from '../src/lib/themes';
 import { isNewer } from '../src/lib/updates';
+import { properties, quote, setProperty } from '../src/lib/frontmatter';
 
 test.beforeEach(async ({ page }) => {
   // The app asks GitHub about new versions at startup; tests never reach it.
@@ -362,6 +363,63 @@ test('with no vault open, the start screen says how to begin', async ({ page }) 
   await expect(home).toContainText('Crea un vault o abre una carpeta para empezar');
   await expect(home.getByRole('button', { name: 'Crear vault' })).toBeVisible();
   await expect(home.getByRole('button', { name: 'Abrir carpeta' })).toBeVisible();
+});
+
+test('frontmatter properties are read and written as plain YAML', () => {
+  const note = '---\ntema: sepia\ntitulo: "Plan: fase 2"\netiquetas:\n  - a\n  - b\n# comentario\n---\n# Nota\n';
+  expect(properties(note)).toEqual([
+    { key: 'tema', value: 'sepia', complex: false },
+    { key: 'titulo', value: 'Plan: fase 2', complex: false },
+    { key: 'etiquetas', value: '', complex: true },
+  ]);
+  expect(quote('Informe anual')).toBe('Informe anual');
+  for (const v of ['Plan: fase 2', '#1', 'yes', '2027', '- guion', 'dice "hola"']) {
+    expect(properties(`---\nk: ${quote(v)}\n---\n`)[0].value).toBe(v);
+  }
+  expect(setProperty('# Nota\n', 'autor', 'Nerea')).toBe('---\nautor: Nerea\n---\n# Nota\n');
+  expect(setProperty(note, 'tema', '')).not.toContain('tema:');
+  expect(setProperty('---\nautor: A\n---\nx', 'autor', '')).toBe('x');
+});
+
+test('the properties form edits the frontmatter and keeps the cursor', async ({ page }) => {
+  await open(page, 'Propia');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.press('Control+Shift+o');
+  await notePanel(page).getByRole('tab', { name: 'Propiedades' }).click();
+  const form = notePanel(page);
+  await expect(form.getByLabel('Tema de la nota')).toHaveValue('sepia');
+  await form.getByLabel('Título').fill('Informe: fase 2');
+  await form.getByLabel('Título').press('Enter');
+  await form.getByLabel('Tema de la nota').selectOption('oscuro');
+  await form.getByLabel('Nombre', { exact: true }).fill('cliente');
+  await form.getByLabel('Valor', { exact: true }).fill('ACME');
+  await form.getByRole('button', { name: 'Añadir' }).click();
+  await expect(page.locator('main footer')).toContainText('Guardado', { timeout: 3000 });
+  expect(await disk(page, 'b', 'Propia.md')).toBe('---\ntema: oscuro\ntitulo: "Informe: fase 2"\ncliente: ACME\n---\n# Propia\n');
+  await expect(page.locator('[data-note-theme]')).toHaveAttribute('data-note-theme', 'oscuro');
+  // The cursor stayed at the end of the note.
+  await page.locator('.cm-content').focus();
+  await page.keyboard.type(' fin');
+  await expect(page.locator('.cm-content')).toContainText('# Propia fin');
+  await form.getByTitle('Quitar cliente').click();
+  await expect(form.getByLabel('Nombre', { exact: true })).toHaveValue('');
+  await expect.poll(() => disk(page, 'b', 'Propia.md'), { timeout: 3000 }).not.toContain('cliente');
+});
+
+test('a property name is checked before it is added', async ({ page }) => {
+  await open(page, 'Otra');
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('propiedades');
+  await page.keyboard.press('Enter');
+  const form = notePanel(page);
+  await form.getByLabel('Nombre', { exact: true }).fill('mal:nombre');
+  await expect(form.getByRole('alert')).toHaveText('El nombre no puede tener dos puntos ni empezar por un símbolo.');
+  await form.getByLabel('Nombre', { exact: true }).fill('autor');
+  await form.getByLabel('Valor', { exact: true }).fill('Ana');
+  await form.getByRole('button', { name: 'Añadir' }).click();
+  await expect(form.getByLabel('Autor')).toHaveValue('Ana');
+  expect(await page.locator('.cm-content').textContent()).toContain('autor: Ana');
 });
 
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {

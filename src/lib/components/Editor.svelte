@@ -138,13 +138,22 @@
       shownRevision = current.revision;
       publishPosition(view.state);
     }
-    // An edit made outside this editor stays undoable.
-    if (shownRevision !== current.revision || view.state.doc.toString() !== current.content) {
+    // An edit made outside this editor stays undoable. Only the part that
+    // differs is replaced, so the cursor and the scroll stay where they were.
+    const shown = view.state.doc.toString();
+    if (shownRevision !== current.revision || shown !== current.content) {
       shownRevision = current.revision;
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: current.content },
-        annotations: external.of(true),
-      });
+      const next = current.content;
+      let start = 0;
+      while (start < shown.length && start < next.length && shown[start] === next[start]) start++;
+      let end = 0;
+      while (end < shown.length - start && end < next.length - start && shown[shown.length - 1 - end] === next[next.length - 1 - end]) end++;
+      if (start < shown.length - end || start < next.length - end) {
+        view.dispatch({
+          changes: { from: start, to: shown.length - end, insert: next.slice(start, next.length - end) },
+          annotations: external.of(true),
+        });
+      }
     }
     const wanted = current.kind === 'md' && current.view === 'visual' ? visualMode : PLAIN;
     if (mode.get(view.state) !== wanted) view.dispatch({ effects: mode.reconfigure(wanted) });

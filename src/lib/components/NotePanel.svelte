@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import NoteProperties from './NoteProperties.svelte';
   import { api, type LinkInfo } from '../api';
   import { tr, type Key } from '../i18n.svelte';
   import { headingAt, outline, type Heading } from '../markdown';
@@ -11,6 +12,7 @@
   const TABS: { id: PanelTab; label: Key }[] = [
     { id: 'outline', label: 'panel.outline' },
     { id: 'links', label: 'panel.links' },
+    { id: 'properties', label: 'panel.properties' },
   ];
   const OUTLINE_DELAY = 200;
   const LINKS_DELAY = 250;
@@ -89,6 +91,8 @@
           <p class="empty">{tr('panel.noHeadings')}</p>
         {/each}
       </nav>
+    {:else if store.layout.panelTab === 'properties'}
+      <NoteProperties {tab} />
     {:else if tab.loose}
       <p class="empty">{tr('panel.looseLinks')}</p>
     {:else if links}

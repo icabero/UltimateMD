@@ -38,7 +38,7 @@ export interface Reveal {
   heading?: number;
 }
 
-export type PanelTab = 'outline' | 'links';
+export type PanelTab = 'outline' | 'links' | 'properties';
 
 /** Which side bars someone wants. A narrow window hides them anyway. */
 interface Layout {
