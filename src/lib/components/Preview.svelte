@@ -52,7 +52,9 @@
     await Promise.all(blocks.map(async (el, index) => {
       const src = decodeURIComponent(el.dataset.src ?? '');
       try {
-        const { theme, sketch } = store.diagramLook(tab, parseStyle(el.dataset.style ?? ''));
+        const style = parseStyle(el.dataset.style ?? '');
+        el.classList.toggle('animated', !!style.animated);
+        const { theme, sketch } = store.diagramLook(tab, style);
         const svg = await renderDiagram(el.dataset.lang!, src, theme, sketch);
         if (id !== run) return;
         el.innerHTML = svg;

@@ -62,18 +62,18 @@ class CheckboxWidget extends WidgetType {
 }
 
 class DiagramWidget extends WidgetType {
-  constructor(readonly lang: string, readonly src: string, readonly theme: Theme, readonly sketch: boolean) {
+  constructor(readonly lang: string, readonly src: string, readonly theme: Theme, readonly sketch: boolean, readonly animated = false) {
     super();
   }
   eq(other: DiagramWidget) {
-    return other.lang === this.lang && other.src === this.src && other.sketch === this.sketch && themeKey(other.theme) === themeKey(this.theme);
+    return other.lang === this.lang && other.src === this.src && other.sketch === this.sketch && other.animated === this.animated && themeKey(other.theme) === themeKey(this.theme);
   }
   get estimatedHeight() {
     return DIAGRAM_HEIGHT;
   }
   toDOM(view: EditorView) {
     const el = document.createElement('div');
-    el.className = 'cm-v-diagram';
+    el.className = this.animated ? 'cm-v-diagram animated' : 'cm-v-diagram';
     renderDiagram(this.lang, this.src, this.theme, this.sketch).then(
       (svg) => (el.innerHTML = svg),
       () => (el.textContent = tr('preview.diagramUnavailable')),
@@ -268,8 +268,9 @@ function decorate(state: EditorState, typing: boolean) {
         const closed = last.number > first.number && /^\s*(`{3,}|~{3,})\s*$/.test(last.text);
         if (fence && closed && !(typing && active)) {
           const src = state.sliceDoc(first.to + 1, last.from);
-          const { theme, sketch } = diagramLook(parseStyle(fence[3] ?? ''));
-          block(new DiagramWidget(fence[2].toLowerCase(), src, theme, sketch), first.from, last.to);
+          const style = parseStyle(fence[3] ?? '');
+          const { theme, sketch } = diagramLook(style);
+          block(new DiagramWidget(fence[2].toLowerCase(), src, theme, sketch, !!style.animated), first.from, last.to);
         } else {
           for (let n = first.number; n <= last.number; n++) out.push(lineClass('cm-v-code').range(state.doc.line(n).from));
         }

@@ -261,6 +261,8 @@ export async function buildContent(tab: Tab, options: ExportOptions, onProgress?
     step();
     try {
       const { theme, sketch } = printLook(tab, notes.get(el.dataset.note ?? '') ?? '', el.dataset.style ?? '');
+      // A web page can move; it is the one export that keeps animation.
+      if (parseStyle(el.dataset.style ?? '').animated) el.classList.add('animated');
       el.innerHTML = await renderDiagram(el.dataset.lang!, decodeURIComponent(el.dataset.src ?? ''), theme, sketch);
     } catch {
       el.textContent = tr('preview.diagramUnavailable');

@@ -479,6 +479,8 @@ export const en: Record<Key, string> = {
   'builder.theme': 'Theme',
   'builder.inherit': 'The note’s',
   'builder.sketch': 'Hand-drawn look',
+  'builder.animated': 'Animate connections',
+  'builder.animatedHint': 'Connections move in the app and in HTML. In Word, PDF and images the diagram is still.',
   'builder.fill': 'Fill',
   'builder.border': 'Border',
   'builder.line': 'Lines',

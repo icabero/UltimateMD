@@ -478,6 +478,8 @@ export const es = {
   'builder.theme': 'Tema',
   'builder.inherit': 'El de la nota',
   'builder.sketch': 'Aspecto de boceto a mano',
+  'builder.animated': 'Animar conexiones',
+  'builder.animatedHint': 'Las conexiones se mueven en la app y en HTML. En Word, PDF e imágenes el diagrama sale quieto.',
   'builder.fill': 'Relleno',
   'builder.border': 'Borde',
   'builder.line': 'Líneas',

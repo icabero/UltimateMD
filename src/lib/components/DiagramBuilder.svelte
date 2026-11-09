@@ -413,6 +413,8 @@
         </select>
       </label>
       <label class="check"><input type="checkbox" checked={!!style.sketch} onchange={(e) => { if (e.currentTarget.checked) style.sketch = true; else delete style.sketch; }} /> {tr('builder.sketch')}</label>
+      <label class="check"><input type="checkbox" checked={!!style.animated} onchange={(e) => { if (e.currentTarget.checked) style.animated = true; else delete style.animated; }} /> {tr('builder.animated')}</label>
+      {#if style.animated}<p class="hint">{tr('builder.animatedHint')}</p>{/if}
       <div class="colors">
         {#each COLORS as c (c.key)}
           <label class="check">{tr(c.label)} <input class="swatch" type="color" value={current[c.key]} oninput={(e) => (style[c.key] = e.currentTarget.value)} /></label>
@@ -428,7 +430,7 @@
 
   <div class="preview" aria-label={tr('export.preview')}>
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- renderDiagram sanitizes the SVG -->
-    <div class="drawing">{@html svg}</div>
+    <div class="drawing" class:animated={!!style.animated}>{@html svg}</div>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     {#if !code}
       <details>

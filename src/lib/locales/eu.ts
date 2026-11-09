@@ -479,6 +479,8 @@ export const eu: Record<Key, string> = {
   'builder.theme': 'Gaia',
   'builder.inherit': 'Oharrarena',
   'builder.sketch': 'Eskuz marraztutako itxura',
+  'builder.animated': 'Animatu loturak',
+  'builder.animatedHint': 'Loturak mugitu egiten dira aplikazioan eta HTMLn. Word, PDF eta irudietan diagrama geldi dago.',
   'builder.fill': 'Betegarria',
   'builder.border': 'Ertza',
   'builder.line': 'Lerroak',

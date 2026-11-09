@@ -810,6 +810,46 @@ test('the template list offers a blank note and deletes templates', async ({ pag
   await expect(picker.getByRole('option')).toHaveText(['Nota en blanco']);
 });
 
+const ANIMATED = '# Flujo\n\n```mermaid animado\nflowchart LR\n  a --> b\n```\n\n```mermaid\nflowchart LR\n  c e1@--> d\n  e1@{ animate: true }\n```\n';
+
+async function animatedNote(page: Page) {
+  await page.evaluate((text) => (window as any).__test.externalWrite('a', 'Flujo.md', text), ANIMATED);
+  await page.locator('aside').getByRole('button', { name: 'Flujo', exact: true }).click();
+  await expect(prose(page).locator('.diagram svg')).toHaveCount(2);
+}
+
+const lineAnimation = (page: Page) =>
+  prose(page).locator('.diagram.animated polyline.edge').first().evaluate((el) => getComputedStyle(el).animationName);
+
+test('diagrams marked animado flow on screen, and Mermaid’s own animation draws', async ({ page }) => {
+  await animatedNote(page);
+  expect(await lineAnimation(page)).toBe('umd-flow');
+  // `e1@{ animate: true }` goes to the official renderer, which draws it.
+  await expect(prose(page).locator('.diagram').nth(1).locator('path').first()).toBeAttached();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(await lineAnimation(page)).toBe('none');
+});
+
+test('an HTML export keeps the animation; the builder can turn it on', async ({ page }) => {
+  await animatedNote(page);
+  await exportAs(page, 'HTML');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+  const html = await page.evaluate(() => (window as any).__exported.text);
+  expect(html).toContain('class="diagram animated"');
+  expect(html).toContain('@keyframes umd-flow');
+
+  await page.getByTitle('Editar', { exact: true }).click();
+  await page.locator('.cm-line', { hasText: 'c e1@--> d' }).click();
+  await page.getByRole('button', { name: 'Diagrama', exact: true }).click();
+  const builder = page.getByRole('dialog', { name: 'Editar diagrama' });
+  await builder.getByText('Apariencia de este diagrama').click();
+  await builder.getByLabel('Animar conexiones').check();
+  await expect(builder).toContainText('En Word, PDF e imágenes el diagrama sale quieto.');
+  await builder.getByRole('button', { name: 'Actualizar' }).click();
+  await expect(page.locator('.cm-content')).toContainText('```mermaid animado');
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();
