@@ -24,6 +24,19 @@
     const sheet = body.querySelector('section');
     if (sheet?.offsetWidth) body.style.zoom = String(host.clientWidth / sheet.offsetWidth);
   }
+
+  /** A copy of the first page with its styles, at its real size, for a thumbnail. */
+  export function firstPage(): Node[] {
+    const root = host?.shadowRoot;
+    const body = root?.lastElementChild as HTMLElement | null;
+    if (!root || !body) return [];
+    const copy = body.cloneNode(true) as HTMLElement;
+    copy.style.zoom = '';
+    copy.querySelectorAll('section.docx').forEach((page, i) => i > 0 && page.remove());
+    const style = document.createElement('style');
+    style.textContent = `${CSS} .docx-wrapper > section.docx { margin: 0 !important; box-shadow: none !important; }`;
+    return [style, copy];
+  }
 </script>
 
 <div class="sheet" bind:this={host}></div>
