@@ -12,13 +12,15 @@
     { mode: 'preview', icon: 'eye', title: 'tabs.preview' },
   ];
   const active = $derived(store.active);
+  // The bar touching a window corner leaves room for the window's buttons there.
+  const panelShown = $derived(store.showRight && active?.kind === 'md');
 </script>
 
-<div class="bar">
+<div class="bar" data-tauri-drag-region class:corner-left={!store.showLeft} class:corner-right={!panelShown}>
   {#if !store.showLeft}
     <button class="icon show-left" title={tr('sidebar.show')} onclick={() => store.toggleBar('left', true)}><Icon name="panelLeft" /></button>
   {/if}
-  <div class="tabs" role="tablist">
+  <div class="tabs" role="tablist" data-tauri-drag-region>
     {#each store.tabs as tab (tab.key)}
       <div class="tab" in:enter class:active={tab.key === store.activeKey} role="tab" tabindex="0" aria-selected={tab.key === store.activeKey}
         onclick={() => { store.activeKey = tab.key; store.persist(); }}
@@ -58,5 +60,7 @@
   .tab:hover .x, .tab.active .x { opacity: .7; }
   .x:hover { background: var(--hover); opacity: 1; }
   .show-left { align-self: center; flex: none; margin: 0 var(--space-1); }
+  .corner-left { padding-left: var(--frame-left, 0px); }
+  .corner-right { padding-right: var(--frame-right, 0px); }
   .views { display: flex; align-items: center; gap: 1px; padding: 0 var(--space-2); }
 </style>

@@ -438,6 +438,53 @@ test('dialogs grow into place when motion is allowed', async ({ page }) => {
   expect(timing.some((d) => d >= 120 && d <= 200)).toBe(true);
 });
 
+const windowCalls = (page: Page) => page.evaluate(() => (window as any).__windowCalls.map((c: any) => c.name));
+
+/** Pretends to run on Windows or macOS, which the app reads before it starts. */
+async function onPlatform(page: Page, platform: 'Win32' | 'MacIntel') {
+  await page.addInitScript((p) => Object.defineProperty(navigator, 'platform', { get: () => p }), platform);
+  await page.reload();
+}
+
+test('on Windows and Linux the app draws the window buttons and saves before closing', async ({ page }) => {
+  await onPlatform(page, 'Win32');
+  const controls = page.getByRole('group', { name: 'Ventana' });
+  await expect(controls.getByRole('button')).toHaveCount(3);
+  await controls.getByTitle('Minimizar la ventana').click();
+  await controls.getByTitle('Maximizar la ventana').click();
+  await open(page, 'Otra');
+  await typeInEditor(page, ' sin guardar');
+  await controls.getByTitle('Cerrar la ventana').click();
+  await expect.poll(() => windowCalls(page)).toEqual(expect.arrayContaining(['minimize', 'toggle_maximize', 'close']));
+  expect(await disk(page, 'b', 'Otra.md')).toContain('sin guardar');
+  // The bars leave room for the buttons and can drag the window.
+  await expect(page.locator('main > .bar')).toHaveAttribute('data-tauri-drag-region');
+  await expect(page.locator('main > .bar')).toHaveCSS('padding-right', '138px');
+});
+
+test('the system title bar can come back from settings', async ({ page }) => {
+  await onPlatform(page, 'Win32');
+  await page.getByTitle('Ajustes y MCP').click();
+  const settings = page.getByRole('dialog', { name: 'Ajustes' });
+  await settings.getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
+  await settings.getByLabel('Usar la barra de título del sistema').check();
+  await expect(page.getByRole('group', { name: 'Ventana' })).toHaveCount(0);
+  const calls = await page.evaluate(() => (window as any).__windowCalls);
+  expect(calls.at(-1)).toEqual({ name: 'set_decorations', value: true });
+  await page.reload();
+  await expect(page.getByRole('group', { name: 'Ventana' })).toHaveCount(0);
+});
+
+test('on macOS the system buttons sit over the app, which leaves them room', async ({ page }) => {
+  await onPlatform(page, 'MacIntel');
+  await expect(page.getByRole('group', { name: 'Ventana' })).toHaveCount(0);
+  const calls = await page.evaluate(() => (window as any).__windowCalls);
+  expect(calls).toContainEqual({ name: 'set_title_bar_style', value: 'overlay' });
+  await expect(page.locator('aside header')).toHaveCSS('padding-left', '90px');
+  await page.keyboard.press('Control+Shift+e');
+  await expect(page.locator('main > .bar')).toHaveCSS('padding-left', '76px');
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();

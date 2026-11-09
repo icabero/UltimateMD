@@ -85,7 +85,7 @@ function loadThemeChoice(): ThemeChoice {
 }
 
 function loadLayout(): Layout {
-  const fallback: Layout = { left: true, right: false, panelTab: 'outline', rightWidth: 260 };
+  const fallback: Layout = { left: true, right: false, panelTab: 'outline', rightWidth: 280 };
   try {
     return { ...fallback, ...JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}') };
   } catch {

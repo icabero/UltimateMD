@@ -227,7 +227,15 @@
 
   window.__word = { headings: [null, null, null, null, null, null], body: null, headerFill: null, tableTextSize: null, codeTextSize: null, imageMaxWidth: null, plainCode: false };
 
+  // The window, so that its buttons can be tested. Calls are recorded in order.
+  window.__windowCalls = [];
+  for (const name of ['show', 'minimize', 'toggle_maximize', 'close', 'set_decorations', 'set_title_bar_style']) {
+    commands[`plugin:window|${name}`] = (args) => void window.__windowCalls.push({ name, value: args?.value });
+  }
+  commands['plugin:window|is_maximized'] = () => false;
+
   window.__TAURI_INTERNALS__ = {
+    metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
     invoke: async (cmd, args) => {
       if (!commands[cmd]) throw `mock: no command ${cmd}`;
       return commands[cmd](args);

@@ -60,8 +60,15 @@ fn main() {
                 .inner_size(1280.0, 820.0)
                 .min_inner_size(720.0, 480.0)
                 .disable_drag_drop_handler()
-                .on_navigation(allowed_navigation)
-                .build()?;
+                .on_navigation(allowed_navigation);
+            // The app draws its own title bar: macOS keeps its buttons over
+            // the app, elsewhere the app has its own. Settings can bring the
+            // system's back, applied by the frontend before the window shows.
+            #[cfg(target_os = "macos")]
+            let window = window.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
+            #[cfg(not(target_os = "macos"))]
+            let window = window.decorations(false);
+            let window = window.build()?;
             // A frontend that fails to start must not leave an invisible app.
             std::thread::spawn(move || {
                 std::thread::sleep(SHOW_FALLBACK);

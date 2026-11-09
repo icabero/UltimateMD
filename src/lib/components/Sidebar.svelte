@@ -87,8 +87,8 @@
 <svelte:window onclick={() => (menu = null)} />
 
 <aside>
-  <header>
-    <span class="brand">Ultimate<b>MD</b></span>
+  <header data-tauri-drag-region>
+    <span class="brand" data-tauri-drag-region>Ultimate<b>MD</b></span>
     <button class="icon" title={tr('sidebar.searchTitle')} class:on={store.searching} onclick={() => (store.searching = !store.searching)}><Icon name="search" /></button>
     <button class="icon" title={tr('sidebar.settingsTitle')} onclick={() => (store.settings = true)}><Icon name="settings" /></button>
     <button class="icon" title={tr('about.title')} onclick={() => (store.about = true)}><Icon name="info" /></button>
@@ -146,7 +146,7 @@
 
 <style>
   aside { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--panel); border-right: 1px solid var(--line); }
-  header { display: flex; align-items: center; gap: var(--space-0-5); padding: var(--space-2-5) var(--space-2) var(--space-2) var(--space-3-5); }
+  header { display: flex; align-items: center; gap: var(--space-0-5); height: 38px; padding: 0 var(--space-2) 0 calc(var(--space-3-5) + var(--frame-left, 0px)); }
   .brand { flex: 1; font-size: var(--font-md); letter-spacing: -.01em; color: var(--text-2); }
   .brand b { color: var(--text); font-weight: 700; }
   .vaults { flex: 1; min-height: 0; overflow-y: auto; padding: 0 var(--space-1-5) var(--space-2); }

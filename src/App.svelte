@@ -5,6 +5,8 @@
   import About from './lib/components/About.svelte';
   import Export from './lib/components/Export.svelte';
   import Modal from './lib/components/Modal.svelte';
+  import WindowControls from './lib/components/WindowControls.svelte';
+  import { IS_MAC, frame } from './lib/frame.svelte';
   import NotePanel from './lib/components/NotePanel.svelte';
   import Palette from './lib/components/Palette.svelte';
   import Preview from './lib/components/Preview.svelte';
@@ -45,8 +47,9 @@
       // Keeps the default width.
     }
     store.init().catch((e) => store.notify(e));
-    // The window starts hidden so it first appears with the right theme and language.
-    void applyInstallerLanguage().finally(() => {
+    void frame.watch();
+    // The window starts hidden so it first appears with the right theme, language and frame.
+    void Promise.all([applyInstallerLanguage(), frame.apply()]).finally(() => {
       try {
         void getCurrentWindow().show();
       } catch {
@@ -131,7 +134,8 @@
 
 <svelte:window onkeydowncapture={onKey} onblur={() => store.saveAll()} onresize={() => store.setWindowWidth(innerWidth)} />
 
-<div class="app" style:grid-template-columns={columns}>
+<div class="app" style:grid-template-columns={columns} style:--frame-left={frame.own && IS_MAC ? '76px' : '0px'} style:--frame-right={frame.own && !IS_MAC ? '138px' : '0px'}>
+  {#if frame.own && !IS_MAC}<WindowControls />{/if}
   {#if store.showLeft}
     <Sidebar />
     <button class="grip" aria-label={tr('app.resize')} style:left="{sidebarWidth - 3}px" onpointerdown={resize}></button>

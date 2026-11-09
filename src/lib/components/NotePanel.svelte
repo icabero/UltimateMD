@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import NoteProperties from './NoteProperties.svelte';
+  import { IS_MAC, frame } from '../frame.svelte';
   import { api, type LinkInfo } from '../api';
   import { tr, type Key } from '../i18n.svelte';
   import { headingAt, outline, type Heading } from '../markdown';
@@ -71,7 +72,11 @@
 {/snippet}
 
 <aside class="panel" aria-label={tr('panel.title')}>
-  <div class="head">
+  {#if frame.own && !IS_MAC}
+    <!-- Room for the window buttons, which would not fit beside the tabs. -->
+    <div class="frame-gap" data-tauri-drag-region></div>
+  {/if}
+  <div class="head" data-tauri-drag-region>
     <div class="tabs" role="tablist">
       {#each TABS as t (t.id)}
         <button role="tab" aria-selected={store.layout.panelTab === t.id} class:on={store.layout.panelTab === t.id} onclick={() => store.openPanel(t.id)}>{tr(t.label)}</button>
@@ -115,8 +120,9 @@
 <style>
   .panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); border-left: 1px solid var(--line); }
   .head { display: flex; align-items: center; gap: var(--space-1); height: 38px; flex: none; padding: 0 var(--space-1-5) 0 var(--space-2); border-bottom: 1px solid var(--line); }
-  .tabs { display: flex; flex: 1; gap: var(--space-0-5); min-width: 0; }
-  .tabs button { padding: var(--space-1) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); transition: background var(--ease), color var(--ease); }
+  .frame-gap { height: 38px; flex: none; border-bottom: 1px solid var(--line); }
+  .tabs { display: flex; flex: 1; gap: var(--space-0-5); min-width: 0; overflow: hidden; }
+  .tabs button { min-width: 0; overflow: hidden; padding: var(--space-1) var(--space-2); white-space: nowrap; text-overflow: ellipsis; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); transition: background var(--ease), color var(--ease); }
   .tabs button:hover { background: var(--hover); color: var(--text); }
   .tabs button.on { background: var(--accent-soft); color: var(--accent-text); }
   .body { flex: 1; min-height: 0; padding: var(--space-2); overflow-y: auto; }

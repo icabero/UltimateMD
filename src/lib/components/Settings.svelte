@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { frame } from '../frame.svelte';
   import { dim, pop } from '../motion';
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
@@ -175,6 +176,11 @@
         </label>
       </div>
     {/if}
+    <label class="follow">
+      <input type="checkbox" checked={frame.native} onchange={(e) => frame.setNative(e.currentTarget.checked)} />
+      {tr('settings.nativeFrame')}
+    </label>
+    <p class="hint">{tr('settings.nativeFrameHint')}</p>
   </section>
 
   {:else if section === 'vaults'}
@@ -249,6 +255,7 @@
   .sample { font-size: var(--font-xl); line-height: 1.2; }
   .bar { width: 18px; height: 6px; border-radius: var(--radius-2xs); }
   .tname { grid-column: 1 / -1; font-size: var(--font-sm); }
+  .hint { margin: var(--space-1) 0 0 var(--space-5); color: var(--text-3); font-size: var(--font-xs); line-height: 1.4; }
   .follow { display: flex; align-items: center; gap: var(--space-1-5); margin-top: var(--space-3); color: var(--text-2); font-size: var(--font-sm); }
   .modes { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-2); color: var(--text-2); font-size: var(--font-sm); }
   .modes label { display: flex; align-items: center; gap: var(--space-1-5); }
