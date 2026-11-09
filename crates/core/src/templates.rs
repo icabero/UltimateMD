@@ -26,10 +26,8 @@ pub fn list() -> Result<Vec<String>> {
     let Ok(entries) = std::fs::read_dir(dir()) else {
         return Ok(vec![EXAMPLE.to_string()]);
     };
-    let mut names: Vec<String> = entries
-        .flatten()
-        .filter_map(|e| e.file_name().to_str()?.strip_suffix(EXT).map(String::from))
-        .collect();
+    let mut names: Vec<String> =
+        entries.flatten().filter_map(|e| e.file_name().to_str()?.strip_suffix(EXT).map(String::from)).collect();
     names.sort_by_key(|n| n.to_lowercase());
     names.insert(0, EXAMPLE.to_string());
     Ok(names)

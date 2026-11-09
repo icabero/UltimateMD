@@ -89,18 +89,13 @@ impl Registry {
     }
 
     pub fn find_mut(&mut self, id: &str) -> Result<&mut Vault> {
-        self.vaults
-            .iter_mut()
-            .find(|v| v.id == id)
-            .ok_or_else(|| Error::UnknownVault(id.to_string()))
+        self.vaults.iter_mut().find(|v| v.id == id).ok_or_else(|| Error::UnknownVault(id.to_string()))
     }
 
     /// Registers an existing folder as a vault. Its folder name is the default
     /// vault name, with a numeric suffix if that name is already used.
     pub fn add(&mut self, path: &Path) -> Result<Vault> {
-        let path = path
-            .canonicalize()
-            .map_err(|_| Error::Vault(format!("folder not found: {}", path.display())))?;
+        let path = path.canonicalize().map_err(|_| Error::Vault(format!("folder not found: {}", path.display())))?;
         if !path.is_dir() {
             return Err(Error::Vault(format!("not a folder: {}", path.display())));
         }
@@ -108,11 +103,7 @@ impl Registry {
             v.open = true;
             return Ok(v.clone());
         }
-        let base = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("Vault")
-            .to_string();
+        let base = path.file_name().and_then(|n| n.to_str()).unwrap_or("Vault").to_string();
         let vault = Vault {
             id: uuid::Uuid::new_v4().to_string(),
             name: self.unique_name(&base),
@@ -175,10 +166,7 @@ impl Registry {
         if !taken(base) {
             return base.to_string();
         }
-        (2..)
-            .map(|i| format!("{base} {i}"))
-            .find(|n| !taken(n))
-            .expect("unbounded range")
+        (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).expect("unbounded range")
     }
 }
 

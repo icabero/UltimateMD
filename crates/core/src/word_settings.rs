@@ -33,7 +33,8 @@ pub struct WordSettings {
 }
 
 fn check_style(id: &str) -> Result<()> {
-    let valid = !id.is_empty() && id.len() <= MAX_STYLE_ID && !id.chars().any(|c| c.is_control() || "\"<>&'".contains(c));
+    let valid =
+        !id.is_empty() && id.len() <= MAX_STYLE_ID && !id.chars().any(|c| c.is_control() || "\"<>&'".contains(c));
     if valid { Ok(()) } else { Err(Error::Vault(format!("invalid style: {id}"))) }
 }
 
@@ -113,7 +114,12 @@ mod tests {
     fn settings_round_trip_inside_the_vault() {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(load(dir.path()), WordSettings::default());
-        let mut settings = WordSettings { body: Some("Cuerpo".into()), header_fill: Some("A1B2C3".into()), image_max_width: Some(420), ..WordSettings::default() };
+        let mut settings = WordSettings {
+            body: Some("Cuerpo".into()),
+            header_fill: Some("A1B2C3".into()),
+            image_max_width: Some(420),
+            ..WordSettings::default()
+        };
         settings.headings[1] = Some("Propio 2".into());
         save(dir.path(), &settings).unwrap();
         assert_eq!(load(dir.path()), settings);

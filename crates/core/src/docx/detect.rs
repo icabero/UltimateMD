@@ -120,7 +120,10 @@ fn counts_level(xml: &str, definition: &str, slot: usize) -> bool {
         .children()
         .filter(|n| n.tag_name().name() == "abstractNum" && attr(*n, "abstractNumId").unwrap_or_default() == definition)
         .flat_map(|list| list.children().filter(|n| n.tag_name().name() == "lvl"))
-        .any(|level| attr(level, "ilvl") == Some(slot.to_string().as_str()) && value(level, "lvlText").is_some_and(|text| text.contains(&counter)))
+        .any(|level| {
+            attr(level, "ilvl") == Some(slot.to_string().as_str())
+                && value(level, "lvlText").is_some_and(|text| text.contains(&counter))
+        })
 }
 
 /// The colour a template gives its tables, from the first filled cell it has.
@@ -130,7 +133,9 @@ fn table_fill(document: &str) -> Option<String> {
         .descendants()
         .filter(|n| n.tag_name().name() == "tcPr")
         .filter_map(|cell| attr(child(cell, "shd")?, "fill"))
-        .find(|fill| fill.len() == 6 && !fill.eq_ignore_ascii_case("FFFFFF") && fill.bytes().all(|b| b.is_ascii_hexdigit()))
+        .find(|fill| {
+            fill.len() == 6 && !fill.eq_ignore_ascii_case("FFFFFF") && fill.bytes().all(|b| b.is_ascii_hexdigit())
+        })
         .map(str::to_uppercase)
 }
 
@@ -164,7 +169,7 @@ fn contents_styles(document: &str) -> Vec<String> {
         .collect();
     let Some(list) = super::TOC_STYLES.captures(&field) else { return Vec::new() };
     let pairs: Vec<&str> = list[1].split([';', ',']).collect();
-    pairs.chunks_exact(2).map(|pair| pair[0].trim().to_lowercase()).collect()
+    pairs.as_chunks::<2>().0.iter().map(|pair| pair[0].trim().to_lowercase()).collect()
 }
 
 /// A variant of a heading style that the contents list and that keeps its
@@ -189,7 +194,9 @@ fn body_style(styles: &HashMap<String, Style>, document: &str) -> Option<String>
         .into_iter()
         .filter(|(id, count)| {
             *count >= MIN_BODY_USES
-                && styles.get(*id).is_some_and(|s| s.paragraph && !s.default && !NOT_BODY.iter().any(|word| s.name.starts_with(word)))
+                && styles
+                    .get(*id)
+                    .is_some_and(|s| s.paragraph && !s.default && !NOT_BODY.iter().any(|word| s.name.starts_with(word)))
         })
         .collect();
     // The name settles a tie, so the same template always gives the same answer.
@@ -216,7 +223,8 @@ pub fn detect(styles_xml: &str, numbering_xml: &str, document_xml: &str) -> Dete
         for slot in chain.len()..HEADING_LEVELS {
             let name = format!("heading {}", slot + 1);
             if styles.values().any(|s| s.name == name && s.numbered) {
-                detected.loose_levels[slot] = Some(if counts_level(numbering_xml, &definition, slot) { list.clone() } else { "0".into() });
+                detected.loose_levels[slot] =
+                    Some(if counts_level(numbering_xml, &definition, slot) { list.clone() } else { "0".into() });
             }
         }
     }
@@ -239,7 +247,8 @@ mod tests {
 
     fn styles() -> String {
         let all = [
-            r#"<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>"#.to_string(),
+            r#"<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>"#
+                .to_string(),
             style("Tit1", "heading 1", "Normal"),
             style("Tit2", "heading 2", "Normal"),
             style("Tit3", "heading 3", "Normal"),
@@ -272,7 +281,9 @@ mod tests {
     fn document(uses: &[(&str, usize)]) -> String {
         let body: String = uses
             .iter()
-            .flat_map(|(id, n)| std::iter::repeat_n(format!(r#"<w:p><w:pPr><w:pStyle w:val="{id}"/></w:pPr></w:p>"#, ), *n))
+            .flat_map(|(id, n)| {
+                std::iter::repeat_n(format!(r#"<w:p><w:pPr><w:pStyle w:val="{id}"/></w:pPr></w:p>"#,), *n)
+            })
             .collect();
         format!("<w:document {NS}><w:body>{body}</w:body></w:document>")
     }
@@ -287,7 +298,8 @@ mod tests {
     #[test]
     fn a_style_outside_the_list_is_not_taken_for_its_looks() {
         // Propio3Bis derives from Propio3 and looks the part, but no list uses it.
-        let found = detect(&styles(), &numbering(&[&["Propio1", "Propio2", "Propio3"]]), &document(&[("Propio3Bis", 9)]));
+        let found =
+            detect(&styles(), &numbering(&[&["Propio1", "Propio2", "Propio3"]]), &document(&[("Propio3Bis", 9)]));
         assert_eq!(found.headings[2], Some("Propio3".into()));
     }
 
@@ -304,16 +316,26 @@ mod tests {
     }
 
     fn with_numbering(id: &str, name: &str, based_on: &str) -> String {
-        style(id, name, based_on).replace("</w:style>", r#"<w:pPr><w:numPr><w:numId w:val="7"/></w:numPr></w:pPr></w:style>"#)
+        style(id, name, based_on)
+            .replace("</w:style>", r#"<w:pPr><w:numPr><w:numId w:val="7"/></w:numPr></w:pPr></w:style>"#)
     }
 
     fn contents(list: &str) -> String {
-        format!(r#"<w:document {NS}><w:body><w:p><w:r><w:instrText> TOC \o "2-3" \t "{list}" </w:instrText></w:r></w:p></w:body></w:document>"#)
+        format!(
+            r#"<w:document {NS}><w:body><w:p><w:r><w:instrText> TOC \o "2-3" \t "{list}" </w:instrText></w:r></w:p></w:body></w:document>"#
+        )
     }
 
     #[test]
     fn a_variant_in_the_contents_replaces_the_style_if_it_keeps_the_numbering() {
-        let all = styles().replace("</w:styles>", &format!("{}{}</w:styles>", style("Capitulo", "Capitulo", "Propio1"), with_numbering("Otra", "Otra", "Propio2")));
+        let all = styles().replace(
+            "</w:styles>",
+            &format!(
+                "{}{}</w:styles>",
+                style("Capitulo", "Capitulo", "Propio1"),
+                with_numbering("Otra", "Otra", "Propio2")
+            ),
+        );
         let list = numbering(&[&["Propio1", "Propio2"]]);
         let found = detect(&all, &list, &contents("Capitulo;1;Otra;2"));
         assert_eq!(found.headings[0].as_deref(), Some("Capitulo"), "it adds to the style and numbers the same");
@@ -346,14 +368,23 @@ mod tests {
     #[test]
     fn the_header_colour_comes_from_the_first_filled_cell() {
         let cell = |fill: &str| format!(r#"<w:tc><w:tcPr><w:shd w:val="clear" w:fill="{fill}"/></w:tcPr></w:tc>"#);
-        let tables = format!("<w:document {NS}><w:body><w:tbl>{}{}{}</w:tbl></w:body></w:document>", cell("auto"), cell("FFFFFF"), cell("a1b2c3"));
+        let tables = format!(
+            "<w:document {NS}><w:body><w:tbl>{}{}{}</w:tbl></w:body></w:document>",
+            cell("auto"),
+            cell("FFFFFF"),
+            cell("a1b2c3")
+        );
         assert_eq!(detect("", "", &tables).header_fill.as_deref(), Some("A1B2C3"));
     }
 
     /// Two levels with styles of their own, in a list that defines a third.
     fn short_list(third: &str) -> String {
-        let levels = format!(r#"<w:lvl w:ilvl="0"><w:pStyle w:val="Propio1"/></w:lvl><w:lvl w:ilvl="1"><w:pStyle w:val="Propio2"/></w:lvl><w:lvl w:ilvl="2"><w:lvlText w:val="{third}"/></w:lvl>"#);
-        format!(r#"<w:numbering {NS}><w:abstractNum w:abstractNumId="5">{levels}</w:abstractNum><w:num w:numId="9"><w:abstractNumId w:val="5"/></w:num></w:numbering>"#)
+        let levels = format!(
+            r#"<w:lvl w:ilvl="0"><w:pStyle w:val="Propio1"/></w:lvl><w:lvl w:ilvl="1"><w:pStyle w:val="Propio2"/></w:lvl><w:lvl w:ilvl="2"><w:lvlText w:val="{third}"/></w:lvl>"#
+        );
+        format!(
+            r#"<w:numbering {NS}><w:abstractNum w:abstractNumId="5">{levels}</w:abstractNum><w:num w:numId="9"><w:abstractNumId w:val="5"/></w:num></w:numbering>"#
+        )
     }
 
     fn numbered_third_heading() -> String {
@@ -379,12 +410,17 @@ mod tests {
 
     #[test]
     fn a_heading_without_a_number_is_left_as_the_template_has_it() {
-        assert_eq!(detect(&styles(), &short_list("%1.%2.%3."), &document(&[])).loose_levels, Detected::default().loose_levels);
+        assert_eq!(
+            detect(&styles(), &short_list("%1.%2.%3."), &document(&[])).loose_levels,
+            Detected::default().loose_levels
+        );
     }
 
     #[test]
     fn the_list_of_the_headings_is_found_by_its_number() {
-        let list = numbering(&[&["Propio1", "Propio2"]]).replace("<w:abstractNum>", r#"<w:abstractNum w:abstractNumId="5">"#).replace("</w:numbering>", r#"<w:num w:numId="9"><w:abstractNumId w:val="5"/></w:num></w:numbering>"#);
+        let list = numbering(&[&["Propio1", "Propio2"]])
+            .replace("<w:abstractNum>", r#"<w:abstractNum w:abstractNumId="5">"#)
+            .replace("</w:numbering>", r#"<w:num w:numId="9"><w:abstractNumId w:val="5"/></w:num></w:numbering>"#);
         assert_eq!(detect(&styles(), &list, &document(&[])).heading_list.as_deref(), Some("9"));
     }
 

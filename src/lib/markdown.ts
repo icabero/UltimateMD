@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- markdown-it plugins reach internals it does not type */
 import MarkdownIt from 'markdown-it';
 import footnote from 'markdown-it-footnote';
 import taskLists from 'markdown-it-task-lists';

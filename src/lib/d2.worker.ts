@@ -3,6 +3,7 @@
 // app's commands, so D2 can run here while the window stays locked down.
 
 // The library takes the absence of `window` to mean it is running under Node.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the library looks for a window
 (globalThis as any).window = globalThis;
 
 const engine = import('@terrastruct/d2').then(({ D2 }) => new D2());

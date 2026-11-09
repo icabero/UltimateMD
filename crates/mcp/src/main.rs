@@ -107,11 +107,7 @@ fn open(key: &str, need_write: bool) -> ultimatemd_core::Result<VaultFs> {
 /// Refuses non-note files, so images and other files stay out of reach.
 fn note_path(path: &str) -> ultimatemd_core::Result<String> {
     let path = paths::normalize(path)?;
-    if paths::is_note(&path) {
-        Ok(path)
-    } else {
-        Err(Error::PathNotAllowed(format!("{path} is not a note")))
-    }
+    if paths::is_note(&path) { Ok(path) } else { Err(Error::PathNotAllowed(format!("{path} is not a note"))) }
 }
 
 fn with_extension(path: &str) -> String {
@@ -155,21 +151,12 @@ impl Server {
     }
 
     #[tool(description = "List all notes in a vault.", annotations(read_only_hint = true))]
-    async fn list_notes(
-        &self,
-        Parameters(a): Parameters<VaultArg>,
-    ) -> Result<CallToolResult, ErrorData> {
+    async fn list_notes(&self, Parameters(a): Parameters<VaultArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| Ok(json!({ "notes": open(&a.vault, false)?.notes()? })))())
     }
 
-    #[tool(
-        description = "Read a note. Returns its content and its version.",
-        annotations(read_only_hint = true)
-    )]
-    async fn read_note(
-        &self,
-        Parameters(a): Parameters<NoteArg>,
-    ) -> Result<CallToolResult, ErrorData> {
+    #[tool(description = "Read a note. Returns its content and its version.", annotations(read_only_hint = true))]
+    async fn read_note(&self, Parameters(a): Parameters<NoteArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let path = note_path(&a.path)?;
             Ok(serde_json::to_value(open(&a.vault, false)?.read(&path)?)?)
@@ -180,10 +167,7 @@ impl Server {
         description = "Search note names and contents, ignoring case and accents. Returns matching lines, best notes first; line 0 means the file name matched.",
         annotations(read_only_hint = true)
     )]
-    async fn search_notes(
-        &self,
-        Parameters(a): Parameters<SearchArg>,
-    ) -> Result<CallToolResult, ErrorData> {
+    async fn search_notes(&self, Parameters(a): Parameters<SearchArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let limit = a.limit.unwrap_or(DEFAULT_LIMIT);
             let names: Vec<String> = match a.vault {
@@ -213,10 +197,7 @@ impl Server {
         description = "Get the notes a note links to, its broken links, and the notes linking to it.",
         annotations(read_only_hint = true)
     )]
-    async fn get_backlinks(
-        &self,
-        Parameters(a): Parameters<NoteArg>,
-    ) -> Result<CallToolResult, ErrorData> {
+    async fn get_backlinks(&self, Parameters(a): Parameters<NoteArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let path = note_path(&a.path)?;
             Ok(serde_json::to_value(links::info(&open(&a.vault, false)?, &path)?)?)
@@ -227,10 +208,7 @@ impl Server {
         description = "Create a new note. Folders are created as needed. Fails if the note exists. Needs write access.",
         annotations(read_only_hint = false, destructive_hint = false)
     )]
-    async fn create_note(
-        &self,
-        Parameters(a): Parameters<WriteArg>,
-    ) -> Result<CallToolResult, ErrorData> {
+    async fn create_note(&self, Parameters(a): Parameters<WriteArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let path = note_path(&with_extension(&a.path))?;
             let version = open(&a.vault, true)?.write(&path, &a.content, WriteMode::Create)?;
@@ -242,10 +220,7 @@ impl Server {
         description = "Replace the full text of a note. Pass expected_version from read_note to avoid losing changes. Needs write access.",
         annotations(read_only_hint = false, destructive_hint = true)
     )]
-    async fn update_note(
-        &self,
-        Parameters(a): Parameters<UpdateArg>,
-    ) -> Result<CallToolResult, ErrorData> {
+    async fn update_note(&self, Parameters(a): Parameters<UpdateArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let path = note_path(&a.path)?;
             let mode = WriteMode::Replace(a.expected_version.as_deref());
@@ -258,10 +233,7 @@ impl Server {
         description = "Add text at the end of a note. Needs write access.",
         annotations(read_only_hint = false, destructive_hint = false)
     )]
-    async fn append_note(
-        &self,
-        Parameters(a): Parameters<AppendArg>,
-    ) -> Result<CallToolResult, ErrorData> {
+    async fn append_note(&self, Parameters(a): Parameters<AppendArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let path = note_path(&a.path)?;
             let vault = open(&a.vault, true)?;
@@ -277,10 +249,7 @@ impl Server {
         description = "Move or rename a note. Never overwrites. By default rewrites the links that would break, in other notes and in the note itself, and reports how many. Needs write access.",
         annotations(read_only_hint = false, destructive_hint = false)
     )]
-    async fn move_note(
-        &self,
-        Parameters(a): Parameters<MoveArg>,
-    ) -> Result<CallToolResult, ErrorData> {
+    async fn move_note(&self, Parameters(a): Parameters<MoveArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let (from, to) = (note_path(&a.from)?, note_path(&with_extension(&a.to))?);
             let vault = open(&a.vault, true)?;
@@ -297,10 +266,7 @@ impl Server {
         description = "Send a note to the system trash, where the user can restore it. Needs write access.",
         annotations(read_only_hint = false, destructive_hint = true)
     )]
-    async fn delete_note(
-        &self,
-        Parameters(a): Parameters<NoteArg>,
-    ) -> Result<CallToolResult, ErrorData> {
+    async fn delete_note(&self, Parameters(a): Parameters<NoteArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let path = note_path(&a.path)?;
             open(&a.vault, true)?.trash(&path)?;

@@ -113,9 +113,7 @@ pub fn resolve<'a>(target: &str, from: &str, notes: &'a [String]) -> Option<&'a 
         "" => without_ext.to_string(),
         dir => format!("{dir}/{without_ext}"),
     };
-    let same = |note: &str, wanted: &str| {
-        note.rsplit_once('.').map_or(note, |(s, _)| s).eq_ignore_ascii_case(wanted)
-    };
+    let same = |note: &str, wanted: &str| note.rsplit_once('.').map_or(note, |(s, _)| s).eq_ignore_ascii_case(wanted);
     notes
         .iter()
         .find(|n| same(n, &sibling))
@@ -147,9 +145,7 @@ pub fn info(vault: &VaultFs, path: &str) -> Result<LinkInfo> {
     let mut backlinks = Vec::new();
     for note in notes.iter().filter(|n| **n != path) {
         let Ok(other) = vault.read(note) else { continue };
-        let links_here = extract(&other.content)
-            .iter()
-            .any(|t| resolve(t, note, &notes) == Some(&path));
+        let links_here = extract(&other.content).iter().any(|t| resolve(t, note, &notes) == Some(&path));
         if links_here {
             backlinks.push(note.clone());
         }

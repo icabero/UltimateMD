@@ -53,11 +53,7 @@ impl Vault {
     /// Resolves a path for raw reads, such as images used by a note.
     pub fn resolve_file(&self, rel: &str) -> Result<PathBuf> {
         let path = resolve(&self.root, rel)?;
-        if path.is_file() {
-            Ok(path)
-        } else {
-            Err(Error::NotFound(rel.to_string()))
-        }
+        if path.is_file() { Ok(path) } else { Err(Error::NotFound(rel.to_string())) }
     }
 
     pub fn tree(&self) -> Result<Vec<TreeNode>> {
@@ -86,11 +82,7 @@ impl Vault {
         let version = version_of(&bytes);
         let text = String::from_utf8(bytes).map_err(|_| Error::NotText(rel.to_string()))?;
         let text = text.strip_prefix(BOM).unwrap_or(&text);
-        Ok(Note {
-            path: normalize(rel)?,
-            content: text.replace("\r\n", "\n"),
-            version,
-        })
+        Ok(Note { path: normalize(rel)?, content: text.replace("\r\n", "\n"), version })
     }
 
     /// Writes a note atomically and returns its new version. Line endings and

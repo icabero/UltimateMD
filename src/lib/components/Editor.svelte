@@ -73,6 +73,8 @@
 
   let host: HTMLDivElement;
   let view: EditorView | null = null;
+  // Editor states of the tabs not shown. Never drawn, so not reactive.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const states = new Map<string, EditorState>();
   const language = new Compartment();
   const mode = new Compartment();

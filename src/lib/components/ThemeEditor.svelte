@@ -195,6 +195,7 @@
         </div>
       </div>
     {:else}
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -- our own translation, with markup -->
       <p class="empty">{@html tr('themes.empty')}</p>
     {/if}
   </div>
