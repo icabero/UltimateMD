@@ -156,8 +156,12 @@ export const api = {
   renameTemplate: (name: string, newName: string) => invoke<void>('rename_template', { name, newName }),
   deleteTemplate: (name: string) => invoke<void>('delete_template', { name }),
   readImage: (id: string, path: string) => invoke<number[]>('read_image', { id, path }),
-  exportDocx: (plan: ExportPlan) => invoke<boolean>('export_docx', { plan }),
-  exportPdf: (plan: ExportPlan) => invoke<boolean>('export_pdf', { plan }),
+  /** The saved file's path, or null if the save dialog was cancelled. */
+  exportDocx: (plan: ExportPlan) => invoke<string | null>('export_docx', { plan }),
+  exportPdf: (plan: ExportPlan) => invoke<string | null>('export_pdf', { plan }),
+  /** Only for files exported in this session. */
+  openExported: (path: string) => invoke<void>('open_exported', { path }),
+  revealExported: (path: string) => invoke<void>('reveal_exported', { path }),
   previewDocx: (plan: ExportPlan) => invoke<number[]>('preview_docx', { plan }),
   previewPdf: (plan: ExportPlan) => invoke<string[]>('preview_pdf', { plan }),
   templateStyles: (template: string | null) => invoke<TemplateStyle[]>('template_styles', { template }),
@@ -168,7 +172,7 @@ export const api = {
   removeVaultTemplate: (id: string) => invoke<void>('remove_vault_template', { id }),
   wordSample: (id: string, settings: WordSettings, markdown: string, picture: number[]) => invoke<number[]>('word_sample', { id, settings, markdown, picture }),
   installerLanguage: () => invoke<string | null>('installer_language'),
-  exportFile: (name: string, data: Uint8Array) => invoke<boolean>('export_file', { name, data: Array.from(data) }),
+  exportFile: (name: string, data: Uint8Array) => invoke<string | null>('export_file', { name, data: Array.from(data) }),
 };
 
 /** URL of a vault file, served by the app's `umd` protocol. */

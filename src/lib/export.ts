@@ -174,17 +174,22 @@ async function diagramPng(lang: string, src: string, look: Look) {
   }
 }
 
+/** Reports how far the slow part of an export has gone. */
+export type Progress = (done: number, total: number) => void;
+
 /** Gathers everything the backend needs to write the document. */
-export async function buildPlan(tab: Tab, options: ExportOptions): Promise<ExportPlan> {
+export async function buildPlan(tab: Tab, options: ExportOptions, onProgress?: Progress): Promise<ExportPlan> {
   await store.saveAll();
   const sections = planSections(tab, options);
   const notes = await readNotes(tab, sections);
   const diagrams: number[][] = [];
-  for (const { path } of noteSections(sections)) {
+  const parts = noteSections(sections);
+  for (const [i, { path }] of parts.entries()) {
     const note = notes.get(path) ?? '';
     for (const { lang, src, style } of diagramBlocks(tab, path, note)) {
       diagrams.push(await diagramPng(lang, src, printLook(tab, note, style)));
     }
+    onProgress?.(i + 1, parts.length);
   }
   const fixedTitle = options.scope !== 'note';
   return {
@@ -227,7 +232,7 @@ function shiftHeadings(root: ParentNode, shift: number) {
 }
 
 /** The whole export as one HTML article, with diagrams and images embedded. */
-export async function buildContent(tab: Tab, options: ExportOptions) {
+export async function buildContent(tab: Tab, options: ExportOptions, onProgress?: Progress) {
   await store.saveAll();
   const sections = planSections(tab, options);
   const notes = await readNotes(tab, sections);
@@ -246,7 +251,12 @@ export async function buildContent(tab: Tab, options: ExportOptions) {
     shiftHeadings(part, section.shift);
     root.append(part);
   }
+  // Drawing diagrams and reading images is the slow part.
+  const slow = root.querySelectorAll('.diagram, [data-path]').length;
+  let done = 0;
+  const step = () => onProgress?.(++done, slow);
   for (const el of root.querySelectorAll<HTMLElement>('.diagram')) {
+    step();
     try {
       const { theme, sketch } = printLook(tab, notes.get(el.dataset.note ?? '') ?? '', el.dataset.style ?? '');
       el.innerHTML = await renderDiagram(el.dataset.lang!, decodeURIComponent(el.dataset.src ?? ''), theme, sketch);
@@ -255,6 +265,7 @@ export async function buildContent(tab: Tab, options: ExportOptions) {
     }
   }
   for (const img of root.querySelectorAll<HTMLImageElement>('[data-path]')) {
+    step();
     const path = img.dataset.path!;
     const bytes = await api.readImage(tab.vaultId, path).catch(() => null);
     if (bytes) img.src = `data:${MIME[extOf(path)] ?? 'application/octet-stream'};base64,${toBase64(bytes)}`;
@@ -262,8 +273,8 @@ export async function buildContent(tab: Tab, options: ExportOptions) {
   return root;
 }
 
-export async function exportHtml(tab: Tab, options: ExportOptions) {
-  const root = await buildContent(tab, options);
+export async function exportHtml(tab: Tab, options: ExportOptions, onProgress?: Progress) {
+  const root = await buildContent(tab, options, onProgress);
   const title = options.scope === 'note' ? stem(tab.path) : rootOf(tab, options).name;
   const page = document.implementation.createHTMLDocument(title);
   page.documentElement.lang = language();

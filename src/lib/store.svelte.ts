@@ -48,6 +48,24 @@ interface Layout {
   rightWidth: number;
 }
 
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
+/** A notice at the bottom. Long texts, such as errors, show their first line and fold the rest. */
+export interface Toast {
+  id: number;
+  message: string;
+  details: string | null;
+  actions: ToastAction[];
+}
+
+const TOAST_TIME = 4500;
+/** Longer when there is something to do with it. */
+const TOAST_TIME_ACTIONS = 9000;
+const TOAST_SHORT = 140;
+
 export interface Dialog {
   title: string;
   /** Text field value. Null for a yes/no question. */
@@ -126,7 +144,7 @@ class Store {
   trees = $state<Record<string, TreeNode[]>>({});
   tabs = $state<Tab[]>([]);
   activeKey = $state<string | null>(null);
-  toast = $state<string | null>(null);
+  toast = $state<Toast | null>(null);
   systemDark = $state(matchMedia('(prefers-color-scheme: dark)').matches);
   themeChoice = $state(loadThemeChoice());
 
@@ -260,10 +278,33 @@ class Store {
     return flatten(this.trees[vaultId] ?? []);
   }
 
-  notify(message: unknown) {
-    this.toast = String(message);
+  notify(message: unknown, options: { actions?: ToastAction[]; details?: string } = {}) {
+    const text = String(message);
+    const firstLine = text.split(/\r?\n/)[0];
+    const long = text.length > TOAST_SHORT || firstLine !== text;
+    const message_ = long ? `${firstLine.slice(0, TOAST_SHORT).trimEnd()}${firstLine.length > TOAST_SHORT ? '…' : ''}` : text;
+    const details = options.details ?? (long ? text : null);
+    this.toast = { id: (this.toast?.id ?? 0) + 1, message: message_, details, actions: options.actions ?? [] };
+    this.holdToast(false);
+  }
+
+  /** Keeps the notice while the pointer is over it or its details are open; lets it go otherwise. */
+  holdToast(hold: boolean) {
     clearTimeout(this.#toastTimer);
-    this.#toastTimer = setTimeout(() => (this.toast = null), 4500);
+    if (hold || !this.toast) return;
+    const time = this.toast.actions.length || this.toast.details ? TOAST_TIME_ACTIONS : TOAST_TIME;
+    this.#toastTimer = setTimeout(() => (this.toast = null), time);
+  }
+
+  /** The notice after an export, with ways to reach the file. */
+  notifyExported(path: string | null) {
+    if (!path) return;
+    this.notify(tr('export.done'), {
+      actions: [
+        { label: tr('export.openFile'), run: () => void api.openExported(path).catch((e) => this.notify(e)) },
+        { label: tr('export.showInFolder'), run: () => void api.revealExported(path).catch((e) => this.notify(e)) },
+      ],
+    });
   }
 
   #ask(title: string, value: string | null, action: string, danger: boolean) {

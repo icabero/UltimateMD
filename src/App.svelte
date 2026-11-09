@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { rise, swap } from './lib/motion';
+  import { swap } from './lib/motion';
+  import Toast from './lib/components/Toast.svelte';
   import { onMount } from 'svelte';
   import Editor from './lib/components/Editor.svelte';
   import About from './lib/components/About.svelte';
@@ -198,7 +199,7 @@
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}
 {/if}
 {#if store.tutorial}<Tutorial />{/if}
-{#if store.toast}<div class="toast" role="status" in:rise>{store.toast}</div>{/if}
+{#if store.toast}{#key store.toast.id}<Toast toast={store.toast} />{/key}{/if}
 
 <style>
   .app { position: relative; display: grid; height: 100vh; overflow: hidden; }
@@ -217,5 +218,4 @@
   .where { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .adopt { flex: none; padding: 0; border: 0; background: none; color: var(--accent-text); font-size: inherit; }
   .adopt:hover { text-decoration: underline; }
-  .toast { position: fixed; bottom: 36px; left: 50%; z-index: var(--z-toast); max-width: min(560px, calc(100vw - 32px)); padding: var(--space-2-5) var(--space-3-5); border-radius: var(--radius-md); background: var(--text); color: var(--bg); box-shadow: var(--shadow-lg); font-size: var(--font-md); transform: translateX(-50%); }
 </style>

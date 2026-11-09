@@ -33,7 +33,7 @@
     return async () => {
       const name = `${tr('preview.diagramFile', { n: index + 1 })}.${format}`;
       try {
-        await api.exportFile(name, format === 'svg' ? toSvgBytes(svg) : await toPng(svg));
+        store.notifyExported(await api.exportFile(name, format === 'svg' ? toSvgBytes(svg) : await toPng(svg)));
       } catch (e) {
         store.notify(format === 'png' ? tr('preview.pngFailed') : e);
       }

@@ -183,19 +183,26 @@
     await loadTemplates();
   }
 
+  /** Notes prepared out of how many, while preparing; null while the document is written. */
+  let progress = $state<{ done: number; total: number } | null>(null);
+  const onProgress = (done: number, total: number) => (progress = { done, total });
+
   async function submit() {
     busy = true;
-    const done = await runAction(async () => {
+    progress = { done: 0, total: 0 };
+    const saved = await runAction(async () => {
       const current = $state.snapshot(options) as ExportOptions;
-      if (format === 'html') return exportHtml(tab, current);
-      const plan = await buildPlan(tab, current);
+      if (format === 'html') return exportHtml(tab, current, onProgress);
+      const plan = await buildPlan(tab, current, onProgress);
+      progress = null;
       return format === 'docx' ? api.exportDocx(plan) : api.exportPdf(plan);
     });
     busy = false;
-    if (done) {
+    progress = null;
+    if (saved) {
       saveMemory({ format, scope, folder, levels: $state.snapshot(levels), noteTitles, noteBreak, cover, template });
       store.exporting = false;
-      store.notify(tr('export.done'));
+      store.notifyExported(saved);
     }
   }
 </script>
@@ -279,6 +286,14 @@
     {/if}
 
     <footer>
+      {#if busy}
+        <div class="progress">
+          <div class="track" role="progressbar" aria-label={tr('export.exporting')} aria-valuemin={0} aria-valuemax={progress?.total || undefined} aria-valuenow={progress?.total ? progress.done : undefined}>
+            <span class="bar" class:indeterminate={!progress?.total} style:width={progress?.total ? `${(100 * progress.done) / progress.total}%` : undefined}></span>
+          </div>
+          <span class="phase">{progress?.total ? tr('export.preparing', { done: progress.done, total: progress.total }) : tr('export.writing')}</span>
+        </div>
+      {/if}
       <button class="main" disabled={busy} onclick={submit}>{tr(busy ? 'export.exporting' : 'export.title')}</button>
     </footer>
   </div>
@@ -321,11 +336,18 @@
   .plain:hover { background: var(--hover); color: var(--text); }
   p { margin: var(--space-2) 0 0; color: var(--text-2); font-size: var(--font-sm); line-height: 1.5; }
   p :global(code) { font: var(--font-xs) var(--mono); }
-  footer { display: flex; justify-content: flex-end; margin-top: auto; padding-top: var(--space-3-5); }
+  footer { display: flex; align-items: center; justify-content: flex-end; margin-top: auto; padding-top: var(--space-3-5); }
   .main { padding: var(--space-1-5) var(--space-4); border: 1px solid var(--accent); border-radius: var(--radius-md); background: var(--accent); color: var(--on-accent); font-size: var(--font-md); }
   .main:disabled { opacity: .6; }
   .preview { min-width: 0; min-height: 0; padding: var(--space-4) var(--space-6); overflow-y: auto; border-left: 1px solid var(--line); background: var(--panel); }
   .preview[aria-busy='true'] { opacity: .6; }
+  .progress { display: flex; flex: 1; flex-direction: column; gap: var(--space-1); min-width: 0; margin-right: var(--space-3); }
+  .track { position: relative; height: 4px; overflow: hidden; border-radius: var(--radius-2xs); background: var(--line); }
+  .bar { position: absolute; inset: 0 auto 0 0; background: var(--accent); transition: width var(--ease); }
+  .bar.indeterminate { width: 30%; animation: slide 1.1s ease-in-out infinite; }
+  @keyframes slide { from { left: -30%; } to { left: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .bar.indeterminate { width: 100%; animation: none; opacity: .5; } }
+  .phase { overflow: hidden; color: var(--text-3); font-size: var(--font-xs); white-space: nowrap; text-overflow: ellipsis; }
   .page { display: block; width: 100%; margin-bottom: var(--space-3); box-shadow: var(--shadow-md); }
   .html { background: #fff; }
   .note { margin: 0 0 var(--space-3); text-align: center; }

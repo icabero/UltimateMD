@@ -103,6 +103,8 @@ fn main() {
             commands::open_with_system,
             commands::mcp_info,
             commands::export_file,
+            commands::open_exported,
+            commands::reveal_exported,
             commands::installer_language,
             commands::open_path,
             commands::close_loose,

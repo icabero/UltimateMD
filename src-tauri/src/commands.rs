@@ -393,22 +393,57 @@ impl ExportPlan {
     }
 }
 
-fn save_as(app: &AppHandle, name: String, kind: &str, ext: &str, bytes: Vec<u8>) -> Result<bool> {
-    let picked = app.dialog().file().set_file_name(name).add_filter(kind, &[ext]).blocking_save_file();
-    let Some(target) = picked else { return Ok(false) };
-    std::fs::write(target.into_path().map_err(|e| Error::Vault(e.to_string()))?, bytes)?;
-    Ok(true)
+/// Files written by an export in this session. Only these can be opened or
+/// shown afterwards, so the frontend never opens an arbitrary path.
+static EXPORTED: std::sync::LazyLock<Mutex<std::collections::HashSet<PathBuf>>> =
+    std::sync::LazyLock::new(Default::default);
+
+fn exported() -> std::sync::MutexGuard<'static, std::collections::HashSet<PathBuf>> {
+    EXPORTED.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Writes a `.docx` where the user picks. False if the dialog is cancelled.
+/// Asks where to save and writes the file there. Its path, or None if the dialog is cancelled.
+fn save_to(picked: Option<tauri_plugin_dialog::FilePath>, bytes: Vec<u8>) -> Result<Option<String>> {
+    let Some(target) = picked else { return Ok(None) };
+    let path = target.into_path().map_err(|e| Error::Vault(e.to_string()))?;
+    std::fs::write(&path, bytes)?;
+    let shown = path.to_string_lossy().into_owned();
+    exported().insert(path);
+    Ok(Some(shown))
+}
+
+fn save_as(app: &AppHandle, name: String, kind: &str, ext: &str, bytes: Vec<u8>) -> Result<Option<String>> {
+    save_to(app.dialog().file().set_file_name(name).add_filter(kind, &[ext]).blocking_save_file(), bytes)
+}
+
+fn exported_path(path: &str) -> Result<PathBuf> {
+    let path = PathBuf::from(path);
+    if exported().contains(&path) { Ok(path) } else { Err(Error::PathNotAllowed(path.to_string_lossy().into_owned())) }
+}
+
+/// Opens a file this session exported with the system's program for it.
 #[tauri::command(async)]
-pub fn export_docx(app: AppHandle, plan: ExportPlan) -> Result<bool> {
+pub fn open_exported(app: AppHandle, path: String) -> Result<()> {
+    let path = exported_path(&path)?;
+    app.opener().open_path(path.to_string_lossy(), None::<&str>).map_err(|e| Error::Vault(e.to_string()))
+}
+
+/// Shows a file this session exported in its folder.
+#[tauri::command(async)]
+pub fn reveal_exported(app: AppHandle, path: String) -> Result<()> {
+    let path = exported_path(&path)?;
+    app.opener().reveal_item_in_dir(path).map_err(|e| Error::Vault(e.to_string()))
+}
+
+/// Writes a `.docx` where the user picks. Its path, or None if the dialog is cancelled.
+#[tauri::command(async)]
+pub fn export_docx(app: AppHandle, plan: ExportPlan) -> Result<Option<String>> {
     save_as(&app, format!("{}.docx", plan.title), "Word", "docx", plan.docx(false)?)
 }
 
-/// Writes a PDF where the user picks. False if the dialog is cancelled.
+/// Writes a PDF where the user picks. Its path, or None if the dialog is cancelled.
 #[tauri::command(async)]
-pub fn export_pdf(app: AppHandle, plan: ExportPlan) -> Result<bool> {
+pub fn export_pdf(app: AppHandle, plan: ExportPlan) -> Result<Option<String>> {
     let bytes = plan.with_pdf(ultimatemd_pdf::render)?;
     save_as(&app, format!("{}.pdf", plan.title), "PDF", "pdf", bytes)
 }
@@ -482,7 +517,7 @@ pub fn template_styles(template: Option<String>) -> Result<Vec<docx::StyleInfo>>
 /// Saves a template as a normal `.docx`, to adapt the example in Word.
 #[tauri::command(async)]
 pub fn save_template_copy(app: AppHandle, name: String) -> Result<bool> {
-    save_as(&app, format!("{name}.docx"), "Word", "docx", templates::read(&name)?)
+    save_as(&app, format!("{name}.docx"), "Word", "docx", templates::read(&name)?).map(|p| p.is_some())
 }
 
 #[derive(Serialize)]
@@ -596,13 +631,8 @@ pub fn mcp_info() -> Result<McpInfo> {
 /// Saves a rendered diagram where the user picks. The dialog runs here so the
 /// frontend never gets to choose an arbitrary path to write to.
 #[tauri::command(async)]
-pub fn export_file(app: AppHandle, name: String, data: Vec<u8>) -> Result<bool> {
-    let Some(target) = app.dialog().file().set_file_name(&name).blocking_save_file() else {
-        return Ok(false);
-    };
-    let path = target.into_path().map_err(|e| Error::Vault(e.to_string()))?;
-    std::fs::write(path, data)?;
-    Ok(true)
+pub fn export_file(app: AppHandle, name: String, data: Vec<u8>) -> Result<Option<String>> {
+    save_to(app.dialog().file().set_file_name(&name).blocking_save_file(), data)
 }
 
 /// The language picked in the Windows installer, left next to the program.

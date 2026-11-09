@@ -485,6 +485,47 @@ test('on macOS the system buttons sit over the app, which leaves them room', asy
   await expect(page.locator('main > .bar')).toHaveCSS('padding-left', '76px');
 });
 
+test('after an export the notice opens the file or shows its folder', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'PDF');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  const notice = page.getByRole('group', { name: 'Aviso' });
+  await expect(notice.getByRole('status')).toHaveText('Exportado');
+  await notice.getByRole('button', { name: 'Mostrar en la carpeta' }).click();
+  expect(await page.evaluate(() => (window as any).__revealedExport)).toBe('/exportados/Inicio.pdf');
+  await expect(notice).toHaveCount(0);
+});
+
+test('a long error shows its first line and folds the rest', async ({ page }) => {
+  await page.evaluate(() => {
+    const long = 'No se pudo leer la plantilla\n' + 'detalle técnico '.repeat(20);
+    const internals = (window as any).__TAURI_INTERNALS__;
+    const invoke = internals.invoke;
+    internals.invoke = (cmd: string, args: unknown) => (cmd === 'create_note' ? Promise.reject(long) : invoke(cmd, args));
+  });
+  await page.keyboard.press('Control+n');
+  await page.getByRole('form').getByRole('textbox').fill('Nueva');
+  await page.keyboard.press('Enter');
+  const notice = page.getByRole('group', { name: 'Aviso' });
+  await expect(notice.getByRole('status')).toHaveText('No se pudo leer la plantilla');
+  await notice.getByRole('button', { name: 'Ver detalles' }).click();
+  await expect(notice.locator('pre')).toContainText('detalle técnico detalle técnico');
+  await notice.getByTitle('Cerrar el aviso').click();
+  await expect(notice).toHaveCount(0);
+});
+
+test('a long export shows how far it has gone', async ({ page }) => {
+  await page.evaluate(() => ((window as any).__slowExport = 1500));
+  await open(page, 'Inicio');
+  await exportAs(page, 'PDF');
+  await scope(page, 'Vault');
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Exportar' });
+  await expect(dialog.getByRole('progressbar')).toBeVisible();
+  await expect(dialog).toContainText('Generando el documento…');
+  await expect(page.getByRole('status')).toHaveText('Exportado');
+});
+
 test('settings change MCP access and give a valid Windows config', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();
