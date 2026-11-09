@@ -186,8 +186,12 @@
         files[id][note].split('\n').flatMap((text, i) =>
           [...text.matchAll(/\[\[([^\]|#]+)/g)]
             .map((m) => m[1].trim())
-            .filter((t) => !notes.some((n) => stem(n).toLowerCase() === t.toLowerCase()))
-            .map((target) => ({ note, target, line: i + 1, toNote: true, suggestion: notes.find((n) => near(target.toLowerCase(), stem(n).toLowerCase())) ?? null })),
+            .filter((t) => !notes.some((n) => stem(n).toLowerCase() === t.replace(/\.md$/, '').toLowerCase()))
+            .filter((t) => /\.md$|^[^.]*$/.test(t) || !Object.keys(files[id]).some((p) => p.split('/').pop() === t))
+            .map((target) => {
+              const toNote = /\.md$|^[^.]*$/.test(target);
+              return { note, target, line: i + 1, toNote, suggestion: toNote ? (notes.find((n) => near(target.toLowerCase(), stem(n).toLowerCase())) ?? null) : null };
+            }),
         ),
       );
     },

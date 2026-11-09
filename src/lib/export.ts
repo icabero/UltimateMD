@@ -1,9 +1,10 @@
 // Exports use a fixed print look, whatever theme is on screen.
 import { api, type ExportPlan, type PlanSection, type TreeNode } from './api';
 import { hasStyle, parseStyle, withColors } from './diagramStyle';
+import { explainDiagramError } from './diagramErrors';
 import { renderDiagram, toPng } from './diagrams';
 import { language, tr } from './i18n.svelte';
-import { renderMarkdown } from './markdown';
+import { diagramFences, outline, renderMarkdown } from './markdown';
 import { baseName, extOf, kindOf, stem } from './paths';
 import previewCss from './preview.css?inline';
 import { store, type Tab } from './store.svelte';
@@ -174,6 +175,67 @@ async function diagramPng(lang: string, src: string, look: Look) {
   } finally {
     stage.remove();
   }
+}
+
+export type ProblemKind = 'image' | 'link' | 'diagram' | 'heading';
+
+/** Something that would come out wrong in the document. */
+export interface ExportProblem {
+  kind: ProblemKind;
+  note: string;
+  line: number;
+  /** What is wrong, in the language of the app. */
+  text: string;
+}
+
+const IMAGE = /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i;
+
+/**
+ * Looks for what would only show once the document is open: missing images,
+ * links that lead nowhere, diagrams that cannot be drawn and headings that
+ * skip a level, counting the levels the export moves them down.
+ */
+export async function reviewExport(tab: Tab, options: ExportOptions): Promise<ExportProblem[]> {
+  await store.saveAll();
+  const sections = planSections(tab, options);
+  const notes = await readNotes(tab, sections);
+  const problems: ExportProblem[] = [];
+
+  const broken = tab.loose ? [] : await api.brokenLinks(tab.vaultId).catch(() => []);
+  for (const link of broken.filter((l) => notes.has(l.note))) {
+    const image = !link.toNote && IMAGE.test(link.target);
+    problems.push({ kind: image ? 'image' : 'link', note: link.note, line: link.line, text: tr(image ? 'review.image' : 'review.link', { target: link.target }) });
+  }
+
+  let previous = 0;
+  for (const section of sections) {
+    if (section.kind === 'heading') {
+      previous = section.level;
+      continue;
+    }
+    for (const heading of outline(notes.get(section.path) ?? '')) {
+      const level = Math.min(heading.level + section.shift, MAX_LEVEL);
+      if (previous && level > previous + 1) {
+        problems.push({ kind: 'heading', note: section.path, line: heading.line, text: tr('review.heading', { title: heading.text, from: previous, to: level }) });
+      }
+      previous = level;
+    }
+  }
+
+  for (const [path, note] of notes) {
+    for (const fence of diagramFences(note)) {
+      try {
+        const { theme, sketch } = printLook(tab, note, fence.style);
+        await renderDiagram(fence.lang, fence.src, theme, sketch);
+      } catch (e) {
+        const problem = explainDiagramError(fence.lang, fence.src, e);
+        problems.push({ kind: 'diagram', note: path, line: fence.line + (problem.line ?? 0), text: tr('review.diagram', { problem: problem.message }) });
+      }
+    }
+  }
+
+  const order = [...notes.keys()];
+  return problems.sort((a, b) => order.indexOf(a.note) - order.indexOf(b.note) || a.line - b.line);
 }
 
 /** Reports how far the slow part of an export has gone. */

@@ -1052,6 +1052,31 @@ async function exportAs(page: Page, format: string) {
   await page.getByRole('group', { name: 'Formato' }).getByRole('button', { name: format }).click();
 }
 
+test('before exporting, the dialog lists what would come out wrong and leads to it', async ({ page }) => {
+  await page.evaluate(() => {
+    (window as any).__test.externalWrite('a', 'Revisar.md', '# Uno\n\n### Tres\n\n![[nada.png]] ![[imagen.png]]\n\n[[Ninguna]] [[Destino]]\n\n```mermaid\nflowchar LR\n A-->B\n```\n');
+  });
+  await open(page, 'Revisar');
+  await page.keyboard.press('Control+e');
+  const review = page.getByRole('region', { name: 'Antes de exportar' });
+  await expect(review).toContainText('4 cosas que conviene revisar', { timeout: 15_000 });
+  await expect(review.getByRole('listitem')).toHaveText([
+    '«Tres» salta del nivel 1 al 3. Revisar · línea 3',
+    'Falta la imagen «nada.png». Revisar · línea 5',
+    'El enlace a «Ninguna» no lleva a ninguna parte. Revisar · línea 7',
+    /^Un diagrama no se puede dibujar: No se reconoce el tipo de diagrama.*Revisar · línea 10$/,
+  ]);
+  await review.getByRole('button', { name: /Ninguna/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Exportar' })).toBeHidden();
+  await expect(page.locator('main footer')).toContainText('Trabajo / Revisar.md');
+});
+
+test('a note with nothing to fix says so before exporting', async ({ page }) => {
+  await open(page, 'Otra');
+  await page.keyboard.press('Control+e');
+  await expect(page.getByRole('region', { name: 'Antes de exportar' })).toContainText('Todo en orden');
+});
+
 test('export to HTML gives a self-contained page in the print look', async ({ page }) => {
   await page.getByTitle('Ajustes y MCP').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();

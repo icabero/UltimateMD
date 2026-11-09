@@ -2,9 +2,10 @@
   import { dim, pop } from '../motion';
   import { onMount, untrack } from 'svelte';
   import DocxSheet from './DocxSheet.svelte';
+  import ExportReview from './ExportReview.svelte';
   import Icon from './Icon.svelte';
   import { api, type TemplateStyle } from '../api';
-  import { buildContent, buildPlan, documentCss, exportHtml, foldersOf, levelCount, levelExamples, type ExportOptions, type LevelChoice, type Scope } from '../export';
+  import { buildContent, buildPlan, documentCss, exportHtml, foldersOf, levelCount, levelExamples, reviewExport, type ExportOptions, type ExportProblem, type LevelChoice, type Scope } from '../export';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
 
@@ -82,6 +83,8 @@
   let previewError = $state('');
   let timer: ReturnType<typeof setTimeout>;
   let run = 0;
+  let problems = $state<ExportProblem[] | null>(null);
+  let reviewRun = 0;
 
   const folders = $derived(foldersOf(store.trees[tab.vaultId] ?? []));
   const canWiden = $derived(!tab.loose);
@@ -152,11 +155,32 @@
     }
   }
 
+  /** Checks the notes again; only what goes in the document matters, not its format. */
+  async function review() {
+    const id = ++reviewRun;
+    problems = null;
+    const found = await reviewExport(tab, $state.snapshot(options) as ExportOptions).catch(() => []);
+    if (id === reviewRun) problems = found;
+  }
+
+  function goTo(problem: ExportProblem) {
+    const id = tab.vaultId;
+    store.exporting = false;
+    void store.openAt(id, problem.note, problem.line, []);
+  }
+
   $effect(() => {
     JSON.stringify(options);
     format;
     clearTimeout(timer);
     timer = setTimeout(refresh, PREVIEW_DELAY);
+  });
+
+  let reviewTimer: ReturnType<typeof setTimeout>;
+  $effect(() => {
+    JSON.stringify([scope, folder, levels, noteTitles]);
+    clearTimeout(reviewTimer);
+    reviewTimer = setTimeout(review, PREVIEW_DELAY);
   });
 
   function setScope(next: Scope) {
@@ -287,6 +311,9 @@
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- our own translation, with markup -->
       <p>{@html tr('export.templateHelp')}</p>
     {/if}
+
+    <h3>{tr('review.title')}</h3>
+    <ExportReview {problems} ongo={goTo} />
 
     <footer>
       {#if busy}
