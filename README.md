@@ -21,8 +21,8 @@ UltimateMD es un editor libre para Windows, macOS y Linux. Tus notas siguen sien
 
 - **Trabajar con varios vaults a la vez**, en una sola ventana, con pestañas de cualquiera de ellos.
 - **Editar en modo visual**, con formato mientras escribes y barra de herramientas, o en Markdown con vista dividida. El archivo siempre sigue siendo Markdown normal.
-- **Enlazar notas** escribiendo `[[` o con un botón, con sugerencias y un clic para abrirlas.
-- **Moverte rápido** con autoguardado, búsqueda global y selector rápido.
+- **Enlazar notas** escribiendo `[[` o con un botón, con sugerencias y un clic para abrirlas. Al renombrar o mover una nota, sus enlaces se actualizan solos.
+- **Moverte rápido** con autoguardado, selector rápido y búsqueda global que no distingue acentos y abre la nota en la línea encontrada.
 - **Dibujar diagramas** Mermaid y D2 dentro de la nota, sin conexión: con un creador visual para los más habituales y plantillas para todos los demás.
 - **Exportar** una nota, una carpeta o un vault a PDF, Word o HTML, con vista previa.
 - **Usar tus plantillas de Word**, conservando portada, cabeceras, estilos e índice.
