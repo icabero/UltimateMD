@@ -70,6 +70,9 @@ export const en: Record<Key, string> = {
   'sidebar.searchTitle': 'Search all vaults (Ctrl+Shift+F)',
   'sidebar.settingsTitle': 'Settings and MCP',
   'sidebar.emptyVault': 'Empty vault',
+  'sidebar.favorites': 'Favourites',
+  'sidebar.addFavorite': 'Add to favourites',
+  'sidebar.removeFavorite': 'Remove from favourites',
   'sidebar.createVault': 'Create vault',
   'sidebar.openFolder': 'Open folder',
 
@@ -88,6 +91,7 @@ export const en: Record<Key, string> = {
   'palette.headings': 'Go to a heading in the note…',
   'palette.hint': 'Type > for actions or # to go to a heading (Ctrl+Shift+P opens the actions)',
   'palette.noHeadings': 'This note has no headings.',
+  'palette.recent': 'Recent',
   'keys.shift': 'Shift',
   'cmd.newNote': 'New note',
   'cmd.openNote': 'Open note',

@@ -39,6 +39,9 @@
         { label: tr('sidebar.newNote'), run: () => newNote(id, dir) },
         { label: tr('cmd.fromTemplate'), run: () => store.newNoteFromTemplate(id, dir) },
         { label: tr('sidebar.newFolder'), run: () => newFolder(id, dir) },
+        ...(node.isDir
+          ? []
+          : [{ label: tr(store.isFavorite(id, node.path) ? 'sidebar.removeFavorite' : 'sidebar.addFavorite'), run: () => store.toggleFavorite(id, node.path) }]),
         {
           label: tr('common.rename'),
           run: async () => {
@@ -71,6 +74,19 @@
     };
   }
 
+  /** Favourites of the vaults that are open and still there. */
+  const favorites = $derived(
+    store.favorites.flatMap((f) => {
+      const vault = store.vault(f.vaultId);
+      return vault?.open && store.files(f.vaultId).includes(f.path) ? [{ ...f, vault }] : [];
+    }),
+  );
+
+  function favoriteMenu(e: MouseEvent, vaultId: string, path: string) {
+    e.preventDefault();
+    menu = { x: e.clientX, y: e.clientY, items: [{ label: tr('sidebar.removeFavorite'), run: () => store.toggleFavorite(vaultId, path) }] };
+  }
+
   const createVault = () => store.createVaultDialog();
   const openVault = () => store.openVaultDialog();
 
@@ -100,6 +116,23 @@
     <SearchPanel />
   {:else}
     <div class="vaults">
+      {#if favorites.length}
+        <section class="favorites" aria-label={tr('sidebar.favorites')}>
+          <h2>{tr('sidebar.favorites')}</h2>
+          {#each favorites as f (`${f.vaultId}:${f.path}`)}
+            <button
+              class="fav"
+              class:active={store.active?.vaultId === f.vaultId && store.active.path === f.path}
+              title="{f.vault.name} / {f.path}"
+              onclick={() => store.openFile(f.vaultId, f.path)}
+              oncontextmenu={(e) => favoriteMenu(e, f.vaultId, f.path)}
+            >
+              <span class="dot" style:background={colorOf(f.vaultId)}></span>
+              <span class="label">{baseName(f.path).replace(/\.(md|markdown)$/i, '')}</span>
+            </button>
+          {/each}
+        </section>
+      {/if}
       {#each store.openVaults as vault (vault.id)}
         <section
           class="vault"
@@ -161,6 +194,11 @@
   .chev { display: flex; flex: none; color: var(--text-3); transition: transform .12s; }
   .chev.open { transform: rotate(90deg); }
   .dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-2xs); }
+  .favorites { margin-bottom: var(--space-2); }
+  .favorites h2 { margin: 0; padding: var(--space-1-5) var(--space-1) var(--space-1); color: var(--text-3); font-size: var(--font-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .fav { display: flex; align-items: center; gap: var(--space-2); width: 100%; height: 27px; padding: 0 var(--space-2) 0 var(--space-3); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-md); text-align: left; }
+  .fav:hover { background: var(--hover); color: var(--text); }
+  .fav.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 500; }
   .empty { margin: var(--space-0-5) 0 var(--space-1-5) var(--space-8); color: var(--text-3); font-size: var(--font-sm); }
   footer { display: flex; gap: var(--space-1); padding: var(--space-2); border-top: 1px solid var(--line); }
   footer button { display: flex; flex: 1; align-items: center; justify-content: center; gap: var(--space-1-5); height: 30px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); white-space: nowrap; }

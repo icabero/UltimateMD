@@ -70,6 +70,9 @@ export const eu: Record<Key, string> = {
   'sidebar.searchTitle': 'Bilatu vault guztietan (Ctrl+Maius+F)',
   'sidebar.settingsTitle': 'Ezarpenak eta MCP',
   'sidebar.emptyVault': 'Vault hutsa',
+  'sidebar.favorites': 'Gogokoak',
+  'sidebar.addFavorite': 'Gehitu gogokoetara',
+  'sidebar.removeFavorite': 'Kendu gogokoetatik',
   'sidebar.createVault': 'Sortu vaulta',
   'sidebar.openFolder': 'Ireki karpeta',
 
@@ -88,6 +91,7 @@ export const eu: Record<Key, string> = {
   'palette.headings': 'Joan oharreko izenburu batera…',
   'palette.hint': 'Idatzi > ekintzak ikusteko edo # izenburu batera joateko (Ctrl+Maius+P-k ekintzak irekitzen ditu)',
   'palette.noHeadings': 'Ohar honek ez du izenbururik.',
+  'palette.recent': 'Azkena',
   'keys.shift': 'Maius',
   'cmd.newNote': 'Ohar berria',
   'cmd.openNote': 'Ireki oharra',

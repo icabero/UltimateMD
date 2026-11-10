@@ -69,6 +69,9 @@ export const es = {
   'sidebar.searchTitle': 'Buscar en todos los vaults (Ctrl+Mayús+F)',
   'sidebar.settingsTitle': 'Ajustes y MCP',
   'sidebar.emptyVault': 'Vault vacío',
+  'sidebar.favorites': 'Favoritos',
+  'sidebar.addFavorite': 'Añadir a favoritos',
+  'sidebar.removeFavorite': 'Quitar de favoritos',
   'sidebar.createVault': 'Crear vault',
   'sidebar.openFolder': 'Abrir carpeta',
 
@@ -88,6 +91,7 @@ export const es = {
   'palette.headings': 'Ir a un título de la nota…',
   'palette.hint': 'Escribe > para ver acciones o # para ir a un título (Ctrl+Mayús+P abre las acciones)',
   'palette.noHeadings': 'Esta nota no tiene títulos.',
+  'palette.recent': 'Reciente',
   'keys.shift': 'Mayús',
   'cmd.newNote': 'Nueva nota',
   'cmd.openNote': 'Abrir nota',

@@ -241,6 +241,40 @@ test('the quick switcher turns into actions with > and headings with #', async (
   await expect(page.locator('.cm-activeLine')).toHaveText('# Inicio');
 });
 
+test('the quick switcher starts with the notes opened last', async ({ page }) => {
+  await open(page, 'Otra');
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+p');
+  // The note on screen is not offered: the one before it is.
+  const first = palette(page).getByRole('option').first();
+  await expect(first).toContainText('Otra.md');
+  await expect(first).toContainText('Reciente');
+  await page.keyboard.press('Escape');
+  await page.reload();
+  await page.keyboard.press('Control+p');
+  await expect(palette(page).getByRole('option').first()).toContainText('Otra.md');
+});
+
+test('favourite notes are pinned to the side bar and follow a rename', async ({ page }) => {
+  const aside = page.locator('aside');
+  await aside.getByRole('button', { name: 'Otra', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Añadir a favoritos' }).click();
+  const favorites = aside.getByRole('region', { name: 'Favoritos' });
+  await expect(favorites.getByRole('button')).toHaveText(['Otra']);
+  await favorites.getByRole('button', { name: 'Otra' }).click();
+  await expect(page.locator('main footer')).toContainText('Personal / Otra.md');
+
+  await aside.locator('section.vault').getByRole('button', { name: 'Otra', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Renombrar' }).click();
+  await page.getByRole('form', { name: 'Nuevo nombre' }).getByRole('textbox').fill('Segunda.md');
+  await page.getByRole('form', { name: 'Nuevo nombre' }).getByRole('button', { name: 'Renombrar' }).click();
+  await expect(favorites.getByRole('button')).toHaveText(['Segunda']);
+
+  await favorites.getByRole('button', { name: 'Segunda' }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Quitar de favoritos' }).click();
+  await expect(favorites).toBeHidden();
+});
+
 test('global search covers every vault', async ({ page }) => {
   await page.keyboard.press('Control+Shift+f');
   await page.getByPlaceholder('Buscar en los vaults abiertos').fill('#');

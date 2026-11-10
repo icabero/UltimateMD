@@ -89,6 +89,32 @@ const VIEW_KEY = 'ultimatemd.view';
 const LAYOUT_KEY = 'ultimatemd.layout';
 const READING_KEY = 'ultimatemd.reading';
 const IMAGES_KEY = 'ultimatemd.images';
+const RECENT_KEY = 'ultimatemd.recent';
+const FAVORITES_KEY = 'ultimatemd.favorites';
+const RECENT_MAX = 30;
+
+/** A note somewhere: in which vault and where in it. */
+export interface Place {
+  vaultId: string;
+  path: string;
+}
+
+function loadPlaces(key: string): Place[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(key) ?? '[]');
+    return Array.isArray(list) ? list.filter((p) => typeof p?.vaultId === 'string' && typeof p?.path === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePlaces(key: string, places: Place[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(places));
+  } catch {
+    // Lasts for this session only.
+  }
+}
 /** Where pasted and dropped images go: a folder at the vault root, or beside the note. */
 export type ImagePlace = 'vault' | 'note';
 export const IMAGE_FOLDER = 'adjuntos';
@@ -230,6 +256,10 @@ class Store {
   editDiagram = $state<{ key: string; index: number } | null>(null);
   /** The line with the cursor, or the top of the preview when it shows alone. */
   position = $state<{ key: string; line: number } | null>(null);
+  /** Notes opened lately, the last one first. */
+  recent = $state<Place[]>(loadPlaces(RECENT_KEY));
+  /** Notes pinned to the top of the side bar, in the order they were added. */
+  favorites = $state<Place[]>(loadPlaces(FAVORITES_KEY));
 
   #timers = new Map<string, ReturnType<typeof setTimeout>>();
   #toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -344,6 +374,35 @@ class Store {
     } catch {
       // The next start tries again, and About can check by hand.
     }
+  }
+
+  isFavorite(vaultId: string, path: string) {
+    return this.favorites.some((f) => f.vaultId === vaultId && f.path === path);
+  }
+
+  toggleFavorite(vaultId: string, path: string) {
+    this.favorites = this.isFavorite(vaultId, path)
+      ? this.favorites.filter((f) => !(f.vaultId === vaultId && f.path === path))
+      : [...this.favorites, { vaultId, path }];
+    savePlaces(FAVORITES_KEY, this.favorites);
+  }
+
+  #remember(vaultId: string, path: string) {
+    this.recent = [{ vaultId, path }, ...this.recent.filter((r) => !(r.vaultId === vaultId && r.path === path))].slice(0, RECENT_MAX);
+    savePlaces(RECENT_KEY, this.recent);
+  }
+
+  /** Keeps favourites and recent notes pointing at a file or folder that moved, or drops them when it is gone. */
+  #repointPlaces(vaultId: string, from: string, to: string | null) {
+    const fix = (list: Place[]) =>
+      list.flatMap((p) => {
+        if (p.vaultId !== vaultId || !(p.path === from || p.path.startsWith(`${from}/`))) return [p];
+        return to === null ? [] : [{ vaultId, path: to + p.path.slice(from.length) }];
+      });
+    this.recent = fix(this.recent);
+    this.favorites = fix(this.favorites);
+    savePlaces(RECENT_KEY, this.recent);
+    savePlaces(FAVORITES_KEY, this.favorites);
   }
 
   get active() {
@@ -522,6 +581,7 @@ class Store {
 
   async openFile(vaultId: string, path: string, loose: Tab['loose'] = null) {
     const key = tabKey(vaultId, path);
+    if (!loose && this.vault(vaultId)) this.#remember(vaultId, path);
     if (this.tabs.some((t) => t.key === key)) {
       this.activeKey = key;
       this.persist();
@@ -842,6 +902,7 @@ class Store {
         if (wasActive) this.activeKey = tab.key;
       }
     }
+    this.#repointPlaces(vaultId, from, to);
     // Open tabs of the notes rewritten show the new links.
     await this.onChanged({ vaultId, paths: update.notes });
     this.persist();
@@ -877,6 +938,8 @@ class Store {
       await this.close(tab);
     }
     await this.refreshTree(vaultId);
+    const places = { recent: this.recent, favorites: this.favorites };
+    this.#repointPlaces(vaultId, path, null);
     let undone = false;
     const undo = async () => {
       undone = true;
@@ -887,6 +950,10 @@ class Store {
         return;
       }
       await this.refreshTree(vaultId);
+      this.recent = places.recent;
+      this.favorites = places.favorites;
+      savePlaces(RECENT_KEY, this.recent);
+      savePlaces(FAVORITES_KEY, this.favorites);
       for (const t of closed) {
         await this.openFile(vaultId, t.path);
         if (this.active) this.active.view = t.view;
@@ -910,6 +977,7 @@ class Store {
   }
 
   async restore() {
+    const recent = this.recent;
     try {
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) return;
@@ -932,6 +1000,10 @@ class Store {
       if (active && this.tabs.some((t) => t.key === active)) this.activeKey = active;
     } catch {
       // A damaged session only means starting with no tabs.
+    } finally {
+      // Reopening the tabs is not opening notes anew.
+      this.recent = recent;
+      savePlaces(RECENT_KEY, recent);
     }
   }
 }
