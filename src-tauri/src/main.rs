@@ -126,6 +126,8 @@ fn main() {
             commands::set_spellcheck,
             commands::watch_problems,
             commands::check_mcp,
+            commands::replace_preview,
+            commands::replace_apply,
             commands::open_path,
             commands::close_loose,
             commands::take_pending_files,

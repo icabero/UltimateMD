@@ -66,6 +66,17 @@
     return root;
   }
 
+  function replacePattern({ find, matchCase, wholeWord, regex }) {
+    if (!find) throw 'nothing to find';
+    let source = regex ? find : find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (wholeWord) source = `\\b(?:${source})\\b`;
+    try {
+      return new RegExp(source, matchCase ? 'g' : 'gi');
+    } catch (e) {
+      throw `invalid regular expression: ${e}`;
+    }
+  }
+
   const commands = {
     list_vaults: () => vaults,
     vault_tree: ({ id }) => tree(id),
@@ -314,6 +325,44 @@
     installer_language: () => window.__installerLanguage ?? null,
     check_mcp: () =>
       window.__mcpCheck ?? { ok: true, version: '9.9.9', vaults: vaults.filter((v) => v.mcp !== 'off').map((v) => ({ name: v.name, access: v.mcp })), failed: null, error: null },
+    // The same rules as crates/core/src/replace.rs, which has its own tests.
+    replace_preview: ({ replace }) => {
+      const pattern = replacePattern(replace);
+      return Object.entries(files).flatMap(([vaultId, notes]) =>
+        Object.entries(notes).flatMap(([path, text]) => {
+          if (!/\.(md|html?)$/i.test(path)) return [];
+          const changes = text.split('\n').flatMap((line, i) => {
+            const after = line.replace(pattern, replace.regex ? replace.with : () => replace.with);
+            return after !== line ? [{ line: i + 1, before: line, after }] : [];
+          });
+          return changes.length ? [{ vaultId, path, version: versionOf(vaultId, path), changes }] : [];
+        }),
+      );
+    },
+    replace_apply: ({ replace, notes }) => {
+      const pattern = replacePattern(replace);
+      const replaced = [];
+      const skipped = [];
+      for (const { vaultId, path, version, lines } of notes) {
+        if (versionOf(vaultId, path) !== version) {
+          skipped.push(path);
+          continue;
+        }
+        const before = files[vaultId][path];
+        let count = 0;
+        files[vaultId][path] = before
+          .split('\n')
+          .map((line, i) => {
+            if (!lines.includes(i + 1)) return line;
+            const after = line.replace(pattern, replace.regex ? replace.with : () => replace.with);
+            if (after !== line) count++;
+            return after;
+          })
+          .join('\n');
+        replaced.push({ vaultId, path, before, version: bump(vaultId, path), lines: count });
+      }
+      return { replaced, skipped };
+    },
     watch_problems: () => window.__watchProblems ?? [],
     set_spellcheck: ({ languages }) => void (window.__spellcheck = languages),
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),

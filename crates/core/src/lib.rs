@@ -11,6 +11,7 @@ pub mod links;
 pub mod note_templates;
 pub mod paths;
 pub mod registry;
+pub mod replace;
 pub mod search;
 pub mod tags;
 pub mod templates;

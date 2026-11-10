@@ -3,6 +3,7 @@
   import { pieces, queryMarks } from '../fold';
   import { tr } from '../i18n.svelte';
   import { store } from '../store.svelte';
+  import ReplacePanel from './ReplacePanel.svelte';
 
   let query = $state('');
   let hits = $state<VaultHit[]>([]);
@@ -10,6 +11,7 @@
   let searched = $state(false);
   let problem = $state<string | null>(null);
   let help = $state(false);
+  let replacing = $state(false);
   let timer: ReturnType<typeof setTimeout>;
   let run = 0;
 
@@ -50,6 +52,13 @@
 </script>
 
 <div class="panel">
+  <div class="modes" role="tablist" aria-label={tr('search.modes')}>
+    <button role="tab" aria-selected={!replacing} class:on={!replacing} onclick={() => (replacing = false)}>{tr('search.find')}</button>
+    <button role="tab" aria-selected={replacing} class:on={replacing} onclick={() => (replacing = true)}>{tr('search.replace')}</button>
+  </div>
+  {#if replacing}
+    <ReplacePanel />
+  {:else}
   <!-- svelte-ignore a11y_autofocus -->
   <div class="field">
     <input autofocus bind:value={query} oninput={onInput} placeholder={tr('search.placeholder')} />
@@ -85,10 +94,14 @@
       {:else if searched}<p>{tr('search.empty')}</p>{/if}
     {/each}
   </div>
+  {/if}
 </div>
 
 <style>
   .panel { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 0 var(--space-2) var(--space-2); }
+  .modes { display: flex; gap: var(--space-0-5); margin-bottom: var(--space-2); padding: var(--space-0-5); border-radius: var(--radius-sm); background: var(--hover); }
+  .modes button { flex: 1; justify-content: center; padding: var(--space-1) 0; color: var(--text-2); font-size: var(--font-sm); }
+  .modes button.on { background: var(--raised); color: var(--text); font-weight: 600; box-shadow: var(--shadow-sm); }
   .field { display: flex; gap: var(--space-1); }
   input { flex: 1; min-width: 0; }
   .help { flex: none; justify-content: center; width: 28px; padding: 0; border: 1px solid var(--line); color: var(--text-3); font-size: var(--font-sm); }

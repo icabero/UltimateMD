@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { anchorLabel, findAnchor, parseAnchor } from './anchors';
-import { api, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
+import { api, type ReplaceOptions, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
 import { fold } from './fold';
 import { fillTemplate } from './noteTemplates';
 import { withColors, type DiagramStyle } from './diagramStyle';
@@ -503,6 +503,40 @@ class Store {
     await this.openPaths(await api.takePendingFiles());
     for (const problem of await api.watchProblems().catch(() => [])) this.onUnwatched(problem);
     void this.checkUpdates();
+  }
+
+  /** Re-reads the notes of some vaults, in tabs and trees, after the app changed them on disk. */
+  async #reloadChanged(paths: { vaultId: string; path: string }[]) {
+    for (const vaultId of new Set(paths.map((p) => p.vaultId))) {
+      await this.onChanged({ vaultId, paths: paths.filter((p) => p.vaultId === vaultId).map((p) => p.path) });
+    }
+  }
+
+  /** Replaces the chosen lines in several notes, with a notice that can undo it. */
+  async replaceInVaults(replace: ReplaceOptions, notes: { vaultId: string; path: string; version: string; lines: number[] }[]) {
+    await this.saveAll();
+    let result;
+    try {
+      result = await api.replaceApply(replace, notes);
+    } catch (e) {
+      this.notify(e);
+      return;
+    }
+    const { replaced, skipped } = result;
+    await this.#reloadChanged(replaced);
+    const lines = replaced.reduce((n, r) => n + r.lines, 0);
+    const undo = async () => {
+      const failed: string[] = [];
+      for (const r of replaced) {
+        await api.write(r.vaultId, r.path, r.before, r.version).catch(() => failed.push(baseName(r.path)));
+      }
+      await this.#reloadChanged(replaced);
+      this.notify(failed.length ? tr('replace.undoPartly', { list: failed.join(', ') }) : tr('replace.undone'));
+    };
+    const message = tr('replace.done', { lines, notes: replaced.length });
+    this.notify(skipped.length ? `${message} ${tr('replace.skipped', { list: skipped.map(baseName).join(', ') })}` : message, {
+      actions: replaced.length ? [{ label: tr('common.undo'), run: () => void undo() }] : [],
+    });
   }
 
   /** A vault that cannot be watched: changes made outside the app only show when it is read again. */

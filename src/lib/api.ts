@@ -56,6 +56,29 @@ export interface McpCheck {
   error: string | null;
 }
 
+export interface ReplaceOptions {
+  find: string;
+  with: string;
+  matchCase: boolean;
+  wholeWord: boolean;
+  regex: boolean;
+}
+
+/** A note where a replace would change these lines. */
+export interface ReplacePlan {
+  vaultId: string;
+  path: string;
+  version: string;
+  changes: { line: number; before: string; after: string }[];
+}
+
+export interface ReplaceResult {
+  /** `before` is the text to put back to undo; `version` what was written. */
+  replaced: { vaultId: string; path: string; before: string; version: string; lines: number }[];
+  /** Notes that changed after the preview, left alone. */
+  skipped: string[];
+}
+
 export interface LinkInfo {
   outgoing: string[];
   unresolved: string[];
@@ -180,6 +203,9 @@ export const api = {
   /** How many links it changed. */
   repointLink: (id: string, note: string, target: string, to: string) => invoke<number>('repoint_link', { id, note, target, to }),
   openWithSystem: (id: string, path: string) => invoke<void>('open_with_system', { id, path }),
+  replacePreview: (replace: ReplaceOptions) => invoke<ReplacePlan[]>('replace_preview', { replace }),
+  replaceApply: (replace: ReplaceOptions, notes: { vaultId: string; path: string; version: string; lines: number[] }[]) =>
+    invoke<ReplaceResult>('replace_apply', { replace, notes }),
   checkMcp: () => invoke<McpCheck>('check_mcp'),
   mcpInfo: () => invoke<{ binary: string; available: boolean }>('mcp_info'),
   openPath: (path: string) => invoke<Opened>('open_path', { path }),

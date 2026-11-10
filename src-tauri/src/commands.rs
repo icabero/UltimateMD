@@ -18,7 +18,7 @@ use ultimatemd_core::word_settings::{self, WordSettings};
 use ultimatemd_core::{
     Error, McpAccess, Note, Registry, Result, SearchHit, TreeNode, Vault, VaultFs, WriteMode, search,
 };
-use ultimatemd_core::{docx, note_templates, templates};
+use ultimatemd_core::{docx, note_templates, replace, templates};
 
 const SEARCH_LIMIT: usize = 200;
 /// In an export plan, the template kept in the vault itself.
@@ -736,4 +736,105 @@ pub fn set_spellcheck(window: tauri::WebviewWindow, languages: Vec<String>) -> R
 #[tauri::command]
 pub fn watch_problems(app: AppHandle) -> Vec<watcher::WatchProblem> {
     watcher::problems(&app)
+}
+
+/// Most lines a replace preview lists, so a careless search cannot flood the window.
+const REPLACE_PREVIEW_LINES: usize = 2000;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplacePlan {
+    vault_id: String,
+    path: String,
+    version: String,
+    changes: Vec<replace::LineChange>,
+}
+
+/// What would change in the notes of the open vaults.
+#[tauri::command(async)]
+pub fn replace_preview(replace: replace::Replace) -> Result<Vec<ReplacePlan>> {
+    replace.changes("")?;
+    let mut out = Vec::new();
+    let mut lines = 0;
+    for vault in Registry::load()?.vaults.iter().filter(|v| v.open) {
+        let fs = VaultFs::new(&vault.path);
+        let Ok(notes) = fs.notes() else { continue };
+        for path in notes {
+            let Ok(note) = fs.read(&path) else { continue };
+            let changes = replace.changes(&note.content)?;
+            if changes.is_empty() {
+                continue;
+            }
+            lines += changes.len();
+            out.push(ReplacePlan { vault_id: vault.id.clone(), path, version: note.version, changes });
+            if lines >= REPLACE_PREVIEW_LINES {
+                return Ok(out);
+            }
+        }
+    }
+    Ok(out)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceIn {
+    vault_id: String,
+    path: String,
+    /// As previewed. A note that changed since is left alone.
+    version: String,
+    lines: Vec<usize>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Replaced {
+    vault_id: String,
+    path: String,
+    /// The text before, to undo.
+    before: String,
+    /// The version written, so undoing can tell if it changed again.
+    version: String,
+    lines: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceResult {
+    replaced: Vec<Replaced>,
+    /// Notes that changed after the preview, or could not be written.
+    skipped: Vec<String>,
+}
+
+/// Replaces the chosen lines, note by note.
+#[tauri::command(async)]
+pub fn replace_apply(replace: replace::Replace, notes: Vec<ReplaceIn>) -> Result<ReplaceResult> {
+    replace.changes("")?;
+    let mut result = ReplaceResult { replaced: Vec::new(), skipped: Vec::new() };
+    for target in notes {
+        let done = (|| {
+            let fs = fs(&target.vault_id)?;
+            let note = fs.read(&target.path)?;
+            if note.version != target.version {
+                return Err(Error::Conflict(target.path.clone()));
+            }
+            let (text, lines) = replace.apply(&note.content, Some(&target.lines))?;
+            if lines == 0 {
+                return Ok(None);
+            }
+            let version = fs.write(&target.path, &text, WriteMode::Replace(Some(&note.version)))?;
+            Ok(Some(Replaced {
+                vault_id: target.vault_id.clone(),
+                path: target.path.clone(),
+                before: note.content,
+                version,
+                lines,
+            }))
+        })();
+        match done {
+            Ok(Some(replaced)) => result.replaced.push(replaced),
+            Ok(None) => {}
+            Err(_) => result.skipped.push(target.path),
+        }
+    }
+    Ok(result)
 }

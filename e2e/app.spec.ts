@@ -388,6 +388,34 @@ test('search explains its syntax, marks phrases and says when an expression is w
   await expect(page.getByRole('alert')).toHaveText('La expresión regular entre barras no es válida.');
 });
 
+test('text is replaced across notes after seeing each change, and can be undone', async ({ page }) => {
+  await page.evaluate(() => {
+    const t = (window as any).__test;
+    t.files.a['Clientes.md'] = '# Clientes\n\nEl cliente paga.\nOtro cliente.\n';
+    t.files.b['Notas.md'] = 'Llamar al cliente.\n';
+  });
+  await open(page, 'Otra');
+  await page.keyboard.press('Control+Shift+f');
+  await page.getByRole('tab', { name: 'Reemplazar' }).click();
+  await page.getByRole('textbox', { name: 'Texto a buscar' }).fill('cliente');
+  await page.getByRole('textbox', { name: 'Reemplazar por' }).fill('socio');
+  await expect(page.getByRole('status')).toHaveText('4 líneas en 2 notas. Desmarca lo que no quieras cambiar.');
+  await page.getByRole('button', { name: 'Solo palabras completas' }).click();
+  await expect(page.getByRole('status')).toHaveText('3 líneas en 2 notas. Desmarca lo que no quieras cambiar.');
+
+  const clientes = page.getByRole('region', { name: 'Clientes' });
+  await expect(clientes.locator('ins')).toHaveText(['El socio paga.', 'Otro socio.']);
+  await clientes.locator('.line', { hasText: 'Otro' }).getByRole('checkbox').uncheck();
+  await page.getByRole('button', { name: 'Reemplazar (2)' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Se cambiaron' })).toHaveText('Se cambiaron 2 líneas en 2 notas.');
+  expect(await disk(page, 'a', 'Clientes.md')).toBe('# Clientes\n\nEl socio paga.\nOtro cliente.\n');
+  expect(await disk(page, 'b', 'Notas.md')).toBe('Llamar al socio.\n');
+
+  await page.getByRole('button', { name: 'Deshacer' }).click();
+  await expect.poll(() => disk(page, 'b', 'Notas.md')).toBe('Llamar al cliente.\n');
+  expect(await disk(page, 'a', 'Clientes.md')).toBe('# Clientes\n\nEl cliente paga.\nOtro cliente.\n');
+});
+
 test('search ignores accents and marks the words found', async ({ page }) => {
   await longNote(page);
   await searchFor(page, 'reunion MARZO');
