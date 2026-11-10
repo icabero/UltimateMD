@@ -49,6 +49,8 @@ jobs:
         run: cargo fmt --all -- --check
       - run: npm ci
       - run: npm run check
+      - name: Unit tests of the frontend
+        run: npm test
       - name: Lint TypeScript and Svelte
         if: runner.os == 'Linux'
         run: npm run lint
