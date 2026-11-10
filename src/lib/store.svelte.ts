@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { anchorLabel, findAnchor, parseAnchor } from './anchors';
-import { api, type TreeNode, type Vault, type VaultThemes } from './api';
+import { api, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
 import { fold } from './fold';
 import { fillTemplate } from './noteTemplates';
 import { withColors, type DiagramStyle } from './diagramStyle';
@@ -261,6 +261,8 @@ class Store {
   editDiagram = $state<{ key: string; index: number } | null>(null);
   /** The line with the cursor, or the top of the preview when it shows alone. */
   position = $state<{ key: string; line: number } | null>(null);
+  /** Vaults whose changes made outside the app are not followed, with why. */
+  unwatched = $state<Record<string, string>>({});
   /** Notes opened lately, the last one first. */
   recent = $state<Place[]>(loadPlaces(RECENT_KEY));
   /** Notes pinned to the top of the side bar, in the order they were added. */
@@ -495,10 +497,29 @@ class Store {
     await listen<{ vaultId: string; paths: string[] }>('vault-changed', (e) => this.onChanged(e.payload));
     await listen<string>('themes-changed', (e) => this.loadVaultThemes(e.payload));
     await listen<string[]>('open-files', (e) => this.openPaths(e.payload));
+    await listen<WatchProblem>('watch-failed', (e) => this.onUnwatched(e.payload));
     await this.loadVaults();
     await this.restore();
     await this.openPaths(await api.takePendingFiles());
+    for (const problem of await api.watchProblems().catch(() => [])) this.onUnwatched(problem);
     void this.checkUpdates();
+  }
+
+  /** A vault that cannot be watched: changes made outside the app only show when it is read again. */
+  onUnwatched({ vaultId, error }: WatchProblem) {
+    const vault = this.vault(vaultId);
+    if (!vault || this.unwatched[vaultId] === error) return;
+    this.unwatched[vaultId] = error;
+    this.notify(tr('watch.failed', { name: vault.name }), {
+      details: `${tr('watch.failedHint')}\n\n${error}`,
+      actions: [{ label: tr('watch.reread'), run: () => void this.reread(vaultId) }],
+    });
+  }
+
+  /** Reads a vault again from disk: its tree and the notes open from it. */
+  async reread(vaultId: string) {
+    await this.refreshTree(vaultId);
+    await this.onChanged({ vaultId, paths: this.tabs.filter((t) => t.vaultId === vaultId).map((t) => t.path) });
   }
 
   async loadVaults() {

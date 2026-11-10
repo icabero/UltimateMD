@@ -30,6 +30,10 @@ export const eu: Record<Key, string> = {
   'store.invalidThemes': 'Gai baliogabeak, baztertuta: {list}',
   'store.openFailed': 'Ezin izan da {path} ireki: {error}',
   'store.closeConflict': '«{name}» diskoan aldatu da eta gorde gabeko aldaketak ditu. Itxi eta galdu nahi dituzu?',
+  'watch.failed': '«{name}»-n aplikaziotik kanpo egindako aldaketak ez dira berez agertuko',
+  'watch.failedHint': 'Sistemak ez du karpeta hau zaintzen uzten. IAk, sinkronizazioak edo beste programek aldatutakoa berriro irakurtzean agertuko da.',
+  'watch.reread': 'Irakurri berriro',
+  'watch.badge': 'Kanpoko aldaketak ez dira berez ikusten. Sakatu vaulta berriro irakurtzeko.',
 
   'welcome.intro': 'Sortu vault bat edo ireki karpeta bat hasteko. Vault bat zure oharrak dituen karpeta arrunt bat da, formatu berezirik gabe.',
   'home.recent': 'Azkenak',

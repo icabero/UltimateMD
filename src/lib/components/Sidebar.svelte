@@ -148,6 +148,9 @@
               <span class="dot" style:background={colorOf(vault.id)}></span>
               <span class="label">{vault.name}</span>
             </button>
+            {#if store.unwatched[vault.id]}
+              <button class="icon small warn" title={tr('watch.badge')} onclick={() => store.reread(vault.id)}><Icon name="refresh" size={14} /></button>
+            {/if}
             <button class="icon small" title={tr('sidebar.newNote')} onclick={() => newNote(vault.id, '')}><Icon name="plus" size={14} /></button>
             <button class="icon small" title={tr('sidebar.newFolder')} onclick={() => newFolder(vault.id, '')}><Icon name="folderPlus" size={14} /></button>
             <button class="icon small" title={tr('word.openSettings')} onclick={() => (store.wordScreen = vault.id)}><Icon name="word" size={14} /></button>
@@ -188,7 +191,8 @@
   .vault.drop { background: var(--accent-soft); }
   .vhead { display: flex; align-items: center; height: 30px; }
   .vhead .small { opacity: 0; }
-  .vhead:hover .small, .vhead .small:focus-visible { opacity: 1; }
+  .vhead:hover .small, .vhead .small:focus-visible, .vhead .warn { opacity: 1; }
+  .vhead .warn { color: var(--danger); }
   .vname { display: flex; flex: 1; align-items: center; gap: var(--space-1-5); min-width: 0; padding: 0 var(--space-1); border: 0; background: none; color: var(--text); font-size: var(--font-sm); font-weight: 600; text-align: left; }
   .label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .chev { display: flex; flex: none; color: var(--text-3); transition: transform .12s; }

@@ -29,6 +29,10 @@ export const es = {
   'store.invalidThemes': 'Temas no válidos, ignorados: {list}',
   'store.openFailed': 'No se pudo abrir {path}: {error}',
   'store.closeConflict': '«{name}» cambió en disco y tiene ediciones sin guardar. ¿Cerrar y perderlas?',
+  'watch.failed': 'Los cambios hechos fuera de la app en «{name}» no se verán solos',
+  'watch.failedHint': 'El sistema no deja vigilar esta carpeta. Lo que cambien la IA, la sincronización u otros programas aparecerá al volver a leerla.',
+  'watch.reread': 'Volver a leer',
+  'watch.badge': 'Los cambios externos no se ven solos. Pulsa para volver a leer el vault.',
 
   'welcome.intro': 'Crea un vault o abre una carpeta para empezar. Un vault es una carpeta normal con tus notas, sin formato propio.',
   'home.recent': 'Recientes',

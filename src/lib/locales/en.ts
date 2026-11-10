@@ -30,6 +30,10 @@ export const en: Record<Key, string> = {
   'store.invalidThemes': 'Invalid themes ignored: {list}',
   'store.openFailed': 'Could not open {path}: {error}',
   'store.closeConflict': '“{name}” changed on disk and has unsaved edits. Close and lose them?',
+  'watch.failed': 'Changes made outside the app in “{name}” will not show by themselves',
+  'watch.failedHint': 'The system does not allow watching this folder. What the AI, syncing or other programs change will appear when it is read again.',
+  'watch.reread': 'Read again',
+  'watch.badge': 'Outside changes do not show by themselves. Click to read the vault again.',
 
   'welcome.intro': 'Create a vault or open a folder to begin. A vault is a plain folder with your notes, in no special format.',
   'home.recent': 'Recent',

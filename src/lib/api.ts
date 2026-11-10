@@ -42,6 +42,11 @@ export interface HomeInfo {
   recent: { vaultId: string; path: string; modified: number }[];
 }
 
+export interface WatchProblem {
+  vaultId: string;
+  error: string;
+}
+
 export interface LinkInfo {
   outgoing: string[];
   unresolved: string[];
@@ -198,6 +203,8 @@ export const api = {
   removeVaultTemplate: (id: string) => invoke<void>('remove_vault_template', { id }),
   wordSample: (id: string, settings: WordSettings, markdown: string, picture: number[]) => invoke<number[]>('word_sample', { id, settings, markdown, picture }),
   /** Tells the system spell checker which dictionaries to use, where it needs telling. */
+  /** Vaults whose changes on disk are not followed, and why. */
+  watchProblems: () => invoke<WatchProblem[]>('watch_problems'),
   setSpellcheck: (languages: string[]) => invoke<void>('set_spellcheck', { languages }),
   installerLanguage: () => invoke<string | null>('installer_language'),
   exportFile: (name: string, data: Uint8Array) => invoke<string | null>('export_file', { name, data: Array.from(data) }),

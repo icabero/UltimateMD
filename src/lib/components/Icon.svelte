@@ -31,6 +31,7 @@
     restore: 'M9 9h10v10H9zM6 15V6a1 1 0 0 1 1-1h8',
     panelLeft: 'M4 5h16v14H4zM9 5v14',
     panelRight: 'M4 5h16v14H4zM15 5v14',
+    refresh: 'M20 11a8 8 0 0 0-14.9-4M4 13a8 8 0 0 0 14.9 4M5 3v4h4M19 21v-4h-4',
     keyboard: 'M3 7h18v10H3zM7 10h.01M11 10h.01M15 10h.01M8 14h8',
     link: 'M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1',
   };

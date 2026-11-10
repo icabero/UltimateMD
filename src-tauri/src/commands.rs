@@ -719,3 +719,9 @@ pub fn set_spellcheck(window: tauri::WebviewWindow, languages: Vec<String>) -> R
     let _ = (window, languages);
     Ok(())
 }
+
+/// The vaults whose changes on disk are not being followed, and why.
+#[tauri::command]
+pub fn watch_problems(app: AppHandle) -> Vec<watcher::WatchProblem> {
+    watcher::problems(&app)
+}

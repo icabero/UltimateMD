@@ -70,6 +70,30 @@ test('a conflict can be resolved in favour of the disk', async ({ page }) => {
   await expect(page.locator('main footer')).toContainText('Guardado');
 });
 
+test('a vault that cannot be watched says so, and can be read again by hand', async ({ page }) => {
+  await open(page, 'Otra');
+  await page.evaluate(() => (window as any).__test.watchFailed('b', 'too many open files'));
+  await expect(page.getByRole('status')).toContainText('Los cambios hechos fuera de la app en «Personal» no se verán solos');
+  // Changed on disk without any notice, as happens then.
+  await page.evaluate(() => {
+    const t = (window as any).__test;
+    t.silentWrite('b', 'Otra.md', '# Cambiada fuera');
+    t.silentWrite('b', 'Nueva.md', '# Nueva');
+  });
+  const badge = page.locator('aside').getByTitle('Los cambios externos no se ven solos. Pulsa para volver a leer el vault.');
+  await badge.click();
+  await expect(prose(page).locator('h1')).toHaveText('Cambiada fuera');
+  await expect(page.locator('aside').getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+});
+
+test('a vault that could not be watched before the window opened is reported too', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__watchProblems = [{ vaultId: 'a', error: 'inotify watch limit reached' }];
+  });
+  await page.reload();
+  await expect(page.getByRole('status')).toContainText('«Trabajo»');
+});
+
 test('note HTML keeps its formatting but cannot run code', async ({ page }) => {
   await open(page, 'Inicio');
   await expect(prose(page).locator('b')).toHaveCSS('color', 'rgb(255, 0, 0)');

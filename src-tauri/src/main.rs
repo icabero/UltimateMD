@@ -123,6 +123,7 @@ fn main() {
             commands::reveal_exported,
             commands::installer_language,
             commands::set_spellcheck,
+            commands::watch_problems,
             commands::open_path,
             commands::close_loose,
             commands::take_pending_files,

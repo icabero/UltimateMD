@@ -307,6 +307,7 @@
     },
     take_pending_files: () => window.__pending ?? [],
     installer_language: () => window.__installerLanguage ?? null,
+    watch_problems: () => window.__watchProblems ?? [],
     set_spellcheck: ({ languages }) => void (window.__spellcheck = languages),
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),
   };
@@ -345,6 +346,15 @@
       files[id][path] = content;
       bump(id, path);
       window[`_${listeners['vault-changed']}`]?.({ payload: { vaultId: id, paths: [path] } });
+    },
+    /** Changes a file on disk without the app hearing of it. */
+    silentWrite(id, path, content) {
+      files[id][path] = content;
+      bump(id, path);
+    },
+    /** Simulates a vault that the system does not let the app watch. */
+    watchFailed(id, error) {
+      window[`_${listeners['watch-failed']}`]?.({ payload: { vaultId: id, error } });
     },
     /** Simulates the operating system opening files in the running app. */
     openFiles(paths) {
