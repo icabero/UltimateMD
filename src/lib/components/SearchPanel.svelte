@@ -4,6 +4,7 @@
   import { tr } from '../i18n.svelte';
   import { store } from '../store.svelte';
   import ReplacePanel from './ReplacePanel.svelte';
+  import TagsPanel from './TagsPanel.svelte';
 
   let query = $state('');
   let hits = $state<VaultHit[]>([]);
@@ -11,7 +12,17 @@
   let searched = $state(false);
   let problem = $state<string | null>(null);
   let help = $state(false);
-  let replacing = $state(false);
+  let mode = $state<'find' | 'replace' | 'tags'>('find');
+
+  // Another part of the app asks for a search, such as a tag clicked in a note.
+  $effect(() => {
+    const asked = store.searchQuery;
+    if (asked === null) return;
+    store.searchQuery = null;
+    mode = 'find';
+    query = asked;
+    onInput();
+  });
   let timer: ReturnType<typeof setTimeout>;
   let run = 0;
 
@@ -53,11 +64,14 @@
 
 <div class="panel">
   <div class="modes" role="tablist" aria-label={tr('search.modes')}>
-    <button role="tab" aria-selected={!replacing} class:on={!replacing} onclick={() => (replacing = false)}>{tr('search.find')}</button>
-    <button role="tab" aria-selected={replacing} class:on={replacing} onclick={() => (replacing = true)}>{tr('search.replace')}</button>
+    <button role="tab" aria-selected={mode === 'find'} class:on={mode === 'find'} onclick={() => (mode = 'find')}>{tr('search.find')}</button>
+    <button role="tab" aria-selected={mode === 'replace'} class:on={mode === 'replace'} onclick={() => (mode = 'replace')}>{tr('search.replace')}</button>
+    <button role="tab" aria-selected={mode === 'tags'} class:on={mode === 'tags'} onclick={() => (mode = 'tags')}>{tr('tags.title')}</button>
   </div>
-  {#if replacing}
+  {#if mode === 'replace'}
     <ReplacePanel />
+  {:else if mode === 'tags'}
+    <TagsPanel />
   {:else}
   <!-- svelte-ignore a11y_autofocus -->
   <div class="field">

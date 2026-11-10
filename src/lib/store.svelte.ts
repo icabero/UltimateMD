@@ -229,6 +229,8 @@ class Store {
   palette = $state<string | null>(null);
   settings = $state(false);
   searching = $state(false);
+  /** Text for the search panel to look for, handed over by another part of the app. */
+  searchQuery = $state<string | null>(null);
   exporting = $state(false);
   tutorial = $state(!tutorialSeen());
   about = $state(false);
@@ -261,6 +263,8 @@ class Store {
   editDiagram = $state<{ key: string; index: number } | null>(null);
   /** The line with the cursor, or the top of the preview when it shows alone. */
   position = $state<{ key: string; line: number } | null>(null);
+  /** Tags of each vault, the most used first. Dropped when the vault changes, read again when needed. */
+  tags = $state<Record<string, { tag: string; notes: number }[]>>({});
   /** Vaults whose changes made outside the app are not followed, with why. */
   unwatched = $state<Record<string, string>>({});
   /** Notes opened lately, the last one first. */
@@ -537,6 +541,21 @@ class Store {
     this.notify(skipped.length ? `${message} ${tr('replace.skipped', { list: skipped.map(baseName).join(', ') })}` : message, {
       actions: replaced.length ? [{ label: tr('common.undo'), run: () => void undo() }] : [],
     });
+  }
+
+  async loadTags(vaultId: string) {
+    const known = this.tags[vaultId];
+    if (known) return known;
+    const loaded = await api.tags(vaultId).catch(() => []);
+    this.tags[vaultId] = loaded;
+    return loaded;
+  }
+
+  /** Lists the notes with a tag in the search panel. */
+  searchTag(tag: string) {
+    this.searchQuery = `etiqueta:${tag}`;
+    this.searching = true;
+    this.toggleBar('left', true);
   }
 
   /** A vault that cannot be watched: changes made outside the app only show when it is read again. */
@@ -843,6 +862,7 @@ class Store {
     try {
       tab.version = await api.write(tab.vaultId, tab.path, text, tab.version);
       tab.dirty = tab.content !== text;
+      delete this.tags[tab.vaultId];
     } catch (e) {
       if (String(e).includes('changed since')) await this.detectConflict(tab);
       else this.notify(e);
@@ -901,6 +921,7 @@ class Store {
   }
 
   async onChanged({ vaultId, paths }: { vaultId: string; paths: string[] }) {
+    delete this.tags[vaultId];
     const inVault = this.tabs.every((t) => t.vaultId !== vaultId || !t.loose);
     if (inVault) await this.refreshTree(vaultId);
     const known = new Set(this.files(vaultId));

@@ -838,3 +838,9 @@ pub fn replace_apply(replace: replace::Replace, notes: Vec<ReplaceIn>) -> Result
     }
     Ok(result)
 }
+
+/// The tags of a vault with how many notes have each.
+#[tauri::command(async)]
+pub fn vault_tags(id: String) -> Result<Vec<ultimatemd_core::tags::TagCount>> {
+    ultimatemd_core::tags::vault_tags(&fs(&id)?)
+}

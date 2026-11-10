@@ -171,6 +171,7 @@
       root.getElementById(decodeURIComponent(href.slice(1)))?.scrollIntoView();
       return;
     }
+    if (a.dataset.tag) return store.searchTag(a.dataset.tag);
     if (a.dataset.note) return store.openNoteAt(tab.vaultId, a.dataset.note, a.dataset.anchor);
     if (a.dataset.external && /^(https?|mailto):/i.test(a.dataset.external)) return openUrl(a.dataset.external);
     if (a.dataset.wikilink !== undefined) await store.followLink(tab, a.dataset.wikilink, a.dataset.anchor);

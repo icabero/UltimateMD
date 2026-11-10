@@ -416,6 +416,38 @@ test('text is replaced across notes after seeing each change, and can be undone'
   expect(await disk(page, 'a', 'Clientes.md')).toBe('# Clientes\n\nEl cliente paga.\nOtro cliente.\n');
 });
 
+test('tags are marked, suggested, counted and lead to their notes', async ({ page }) => {
+  await page.evaluate(() => {
+    const t = (window as any).__test;
+    t.externalWrite('a', 'Acta.md', 'Reunión con #cliente sobre #presupuesto.');
+    t.externalWrite('a', 'Llamada.md', 'Llamar al #cliente. No es C#.');
+  });
+  await open(page, 'Acta');
+  await expect(prose(page).locator('a.tag')).toHaveText(['#cliente', '#presupuesto']);
+  await expect(page.locator('.cm-content .cm-tag')).toHaveText(['#cliente', '#presupuesto']);
+
+  // Suggested while typing.
+  await typeInEditor(page, ' #cli');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('cliente');
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.cm-content')).toContainText('#presupuesto. #cliente');
+
+  // Counted in the side bar.
+  await page.keyboard.press('Control+Shift+f');
+  await page.getByRole('tab', { name: 'Etiquetas' }).click();
+  const list = page.getByRole('list', { name: 'Etiquetas' });
+  await expect(list.locator('.name')).toHaveText(['#cliente', '#presupuesto']);
+  await expect(list.locator('.count')).toHaveText(['2', '1']);
+  await page.getByRole('textbox', { name: 'Filtrar etiquetas…' }).fill('pres');
+  await expect(list.locator('.name')).toHaveText(['#presupuesto']);
+
+  // A tag in a note lists the notes that have it.
+  await prose(page).locator('a.tag', { hasText: '#cliente' }).first().click();
+  await expect(page.getByRole('tab', { name: 'Buscar' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByPlaceholder('Buscar en los vaults abiertos')).toHaveValue('etiqueta:cliente');
+});
+
 test('search ignores accents and marks the words found', async ({ page }) => {
   await longNote(page);
   await searchFor(page, 'reunion MARZO');

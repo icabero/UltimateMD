@@ -67,6 +67,27 @@ md.renderer.rules.wikilink = (tokens: any, idx: number) => {
     : `<a data-wikilink="${t}" data-anchor="${escapeHtml(anchor)}" href="#">${escapeHtml(label)}</a>`;
 };
 
+// #etiqueta, as crates/core/src/tags.rs reads it. Code never gets here.
+const TAG_CHAR = /[\p{L}\p{N}_/-]/u;
+md.inline.ruler.before('link', 'tag', (state: any, silent: boolean) => {
+  const { src, pos } = state;
+  if (src[pos] !== '#') return false;
+  const before = pos > 0 ? src[pos - 1] : '';
+  if (before && (TAG_CHAR.test(before) || before === '&' || before === '#')) return false;
+  let end = pos + 1;
+  while (end < src.length && TAG_CHAR.test(src[end])) end++;
+  const name = src.slice(pos + 1, end).replace(/[/-]+$/, '');
+  if (!name || /^\d+$/.test(name)) return false;
+  if (!silent) state.push('tag', '', 0).meta = { name };
+  state.pos = pos + 1 + name.length;
+  return true;
+});
+
+md.renderer.rules.tag = (tokens: any, idx: number) => {
+  const name = escapeHtml(tokens[idx].meta.name);
+  return `<a class="tag" data-tag="${name}" href="#">#${name}</a>`;
+};
+
 function splitFrontmatter(text: string): { meta: string | null; body: string } {
   const m = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(text);
   return m ? { meta: m[1], body: text.slice(m[0].length) } : { meta: null, body: text };
@@ -105,7 +126,7 @@ function linkContent(root: DocumentFragment, ctx: RenderContext) {
     if (path) a.dataset.note = path;
     else a.classList.add('broken');
   }
-  for (const a of root.querySelectorAll<HTMLAnchorElement>('a[href]:not([data-wikilink])')) {
+  for (const a of root.querySelectorAll<HTMLAnchorElement>('a[href]:not([data-wikilink]):not([data-tag])')) {
     const href = a.getAttribute('href')!;
     if (isExternal(href)) {
       a.dataset.external = href;

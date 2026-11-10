@@ -24,6 +24,7 @@
   import { EDIT_DIAGRAM, visualMode } from '../visual';
   import { headingCompletions, linkAt, noteCompletions, wikilinks } from '../wikilinks';
   import { spellLanguage } from '../spellcheck';
+  import { tagCompletions, tagMarks } from '../tags';
 
   let { tab, onscroll }: { tab: Tab; onscroll?: (ratio: number) => void } = $props();
 
@@ -172,7 +173,7 @@
         mode.of(PLAIN),
         spelling.of(spellAttributes(null)),
         found,
-        ...(current.kind === 'md' ? [wikilinks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions], icons: false })] : []),
+        ...(current.kind === 'md' ? [wikilinks, tagMarks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions, tagCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
           if (u.docChanged || u.selectionSet) publishPosition(u.state);

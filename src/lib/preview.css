@@ -12,6 +12,8 @@ p, ul, ol { margin: .8em 0; }
 li { margin: .2em 0; }
 a { color: var(--accent-text); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 2px; cursor: pointer; }
 a:hover { text-decoration-color: currentColor; }
+a.tag { padding: 0 .2em; border-radius: .3em; background: var(--accent-soft); color: var(--accent-text); text-decoration: none; }
+a.tag:hover { text-decoration: underline; }
 a.broken { color: var(--text-2); text-decoration-style: dashed; text-decoration-color: currentColor; }
 img, video { max-width: 100%; border-radius: 6px; }
 /* Diagrams marked "animado": their connections flow. Never in documents or images. */

@@ -128,6 +128,7 @@ fn main() {
             commands::check_mcp,
             commands::replace_preview,
             commands::replace_apply,
+            commands::vault_tags,
             commands::open_path,
             commands::close_loose,
             commands::take_pending_files,

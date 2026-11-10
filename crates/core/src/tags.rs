@@ -117,6 +117,28 @@ pub fn tag_matches(tag: &str, wanted: &str) -> bool {
     tag == wanted || tag.starts_with(&format!("{wanted}/"))
 }
 
+/// A tag and how many notes have it.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct TagCount {
+    /// As written the first time it was found.
+    pub tag: String,
+    pub notes: usize,
+}
+
+/// Every tag in a vault, the most used first, then by name.
+pub fn vault_tags(vault: &crate::VaultFs) -> crate::Result<Vec<TagCount>> {
+    let mut counts: std::collections::HashMap<String, TagCount> = std::collections::HashMap::new();
+    for path in vault.notes()? {
+        let Ok(note) = vault.read(&path) else { continue };
+        for tag in tags(&note.content) {
+            counts.entry(fold(&tag)).or_insert(TagCount { tag, notes: 0 }).notes += 1;
+        }
+    }
+    let mut out: Vec<TagCount> = counts.into_values().collect();
+    out.sort_by(|a, b| b.notes.cmp(&a.notes).then_with(|| fold(&a.tag).cmp(&fold(&b.tag))));
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,5 +168,16 @@ mod tests {
         assert!(tag_matches("proyecto/web", "proyecto"));
         assert!(tag_matches("Reunión", "#reunion"));
         assert!(!tag_matches("proyectos", "proyecto"));
+    }
+
+    #[test]
+    fn a_vault_counts_notes_per_tag() {
+        let d = tempfile::tempdir().unwrap();
+        let v = crate::VaultFs::new(d.path());
+        v.write("a.md", "#plan #Cliente", crate::WriteMode::Create).unwrap();
+        v.write("b.md", "#cliente y #cliente", crate::WriteMode::Create).unwrap();
+        let found = vault_tags(&v).unwrap();
+        assert_eq!(found[0], TagCount { tag: "Cliente".into(), notes: 2 });
+        assert_eq!(found[1], TagCount { tag: "plan".into(), notes: 1 });
     }
 }

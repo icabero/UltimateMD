@@ -206,6 +206,8 @@ export const api = {
   replacePreview: (replace: ReplaceOptions) => invoke<ReplacePlan[]>('replace_preview', { replace }),
   replaceApply: (replace: ReplaceOptions, notes: { vaultId: string; path: string; version: string; lines: number[] }[]) =>
     invoke<ReplaceResult>('replace_apply', { replace, notes }),
+  /** The vault's tags, the most used first. */
+  tags: (id: string) => invoke<{ tag: string; notes: number }[]>('vault_tags', { id }),
   checkMcp: () => invoke<McpCheck>('check_mcp'),
   mcpInfo: () => invoke<{ binary: string; available: boolean }>('mcp_info'),
   openPath: (path: string) => invoke<Opened>('open_path', { path }),

@@ -363,6 +363,15 @@
       }
       return { replaced, skipped };
     },
+    // Only #tags in the text; the backend's rules have their own tests.
+    vault_tags: ({ id }) => {
+      const counts = new Map();
+      for (const text of Object.values(files[id] ?? {})) {
+        const found = new Set([...text.matchAll(/(?<![\p{L}\p{N}_&/#-])#([\p{L}_][\p{L}\p{N}_/-]*)/gu)].map((m) => m[1]));
+        for (const tag of found) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+      return [...counts].map(([tag, notes]) => ({ tag, notes })).sort((a, b) => b.notes - a.notes || a.tag.localeCompare(b.tag));
+    },
     watch_problems: () => window.__watchProblems ?? [],
     set_spellcheck: ({ languages }) => void (window.__spellcheck = languages),
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),
