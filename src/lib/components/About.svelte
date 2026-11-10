@@ -46,6 +46,7 @@
   <p>{tr('about.description')}</p>
 
   <div class="links">
+    <button onclick={() => { store.about = false; void store.showNews(); }}>{tr('news.open')}</button>
     <button onclick={() => open(REPOSITORY_URL)}>{tr('about.repository')}</button>
     <button onclick={() => open(`${REPOSITORY_URL}/blob/main/LICENSE`)}>{tr('about.license')}</button>
   </div>

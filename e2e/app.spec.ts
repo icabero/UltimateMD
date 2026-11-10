@@ -420,6 +420,25 @@ test('spelling is checked in the language of the app, of the note or none', asyn
   await expect.poll(() => page.evaluate(() => (window as any).__spellcheck)).toEqual([]);
 });
 
+test('after an update the app tells what is new, once', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__appVersion = '0.7.1';
+  });
+  await page.evaluate(() => localStorage.setItem('ultimatemd.newsSeen', '0.6'));
+  await page.reload();
+  const news = page.getByRole('dialog', { name: 'Novedades de UltimateMD 0.7' });
+  await expect(news.getByRole('listitem').first()).toContainText('La IA, a la vista');
+  await news.getByRole('button', { name: 'Entendido' }).click();
+  await page.reload();
+  await expect(page.locator('aside')).toContainText('Trabajo');
+  await expect(news).toBeHidden();
+  // It can be asked for again.
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('novedades');
+  await page.keyboard.press('Enter');
+  await expect(news).toBeVisible();
+});
+
 test('what goes wrong is written to a log that the settings show', async ({ page }) => {
   // Opening a file that is gone fails, and says so.
   await page.evaluate(() => (window as any).__test.openFiles(['/fuera/borrado.md']));

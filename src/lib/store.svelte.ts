@@ -10,6 +10,7 @@ import { withColors, type DiagramStyle } from './diagramStyle';
 import { tr } from './i18n.svelte';
 import { baseName, dirName, join, kindOf, linkFrom, resolveLink, type FileKind } from './paths';
 import { checksAtStart, isNewer, latestVersion } from './updates';
+import { newsFor, unseenNews } from './news';
 import { changedLines } from './diff';
 import { loadSpellSetting, saveSpellSetting, type SpellSetting } from './spellcheck';
 import { THEMES, applyTheme, frontmatterValue, resolveTheme, themeById, type Theme } from './themes';
@@ -259,6 +260,8 @@ class Store {
   outsideDiff = $state(false);
   /** Whether and in which language spelling is checked while writing. */
   spellcheck = $state<SpellSetting>(loadSpellSetting());
+  /** The version whose news show, as `0.7`. */
+  news = $state<string | null>(null);
   /** A newer published version, once known. */
   update = $state<string | null>(null);
   /** The view new tabs open in: the last one the user chose. */
@@ -539,6 +542,15 @@ class Store {
     await this.openPaths(await api.takePendingFiles());
     for (const problem of await api.watchProblems().catch(() => [])) this.onUnwatched(problem);
     void this.checkUpdates();
+    void this.showNews(false);
+  }
+
+  /** Shows what the running version brought: after an update by itself, or when asked. */
+  async showNews(asked = true) {
+    const version = await getVersion().catch(() => null);
+    if (!version) return;
+    const news = asked ? newsFor(version) : unseenNews(version);
+    if (news && !(this.tutorial && !asked)) this.news = news;
   }
 
   /** Re-reads the notes of some vaults, in tabs and trees, after the app changed them on disk. */
