@@ -47,6 +47,15 @@ export interface WatchProblem {
   error: string;
 }
 
+/** What the MCP server answered when tried. `failed` names the step that went wrong. */
+export interface McpCheck {
+  ok: boolean;
+  version: string | null;
+  vaults: { name: string; access: McpAccess }[];
+  failed: 'missing' | 'start' | 'silent' | 'answer' | null;
+  error: string | null;
+}
+
 export interface LinkInfo {
   outgoing: string[];
   unresolved: string[];
@@ -171,6 +180,7 @@ export const api = {
   /** How many links it changed. */
   repointLink: (id: string, note: string, target: string, to: string) => invoke<number>('repoint_link', { id, note, target, to }),
   openWithSystem: (id: string, path: string) => invoke<void>('open_with_system', { id, path }),
+  checkMcp: () => invoke<McpCheck>('check_mcp'),
   mcpInfo: () => invoke<{ binary: string; available: boolean }>('mcp_info'),
   openPath: (path: string) => invoke<Opened>('open_path', { path }),
   closeLoose: (id: string) => invoke<void>('close_loose', { id }),

@@ -337,6 +337,26 @@ test('spelling is checked in the language of the app, of the note or none', asyn
   await expect.poll(() => page.evaluate(() => (window as any).__spellcheck)).toEqual([]);
 });
 
+test('the AI connection can be tested from the settings', async ({ page }) => {
+  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  await page.getByRole('button', { name: 'Inteligencia artificial' }).click();
+  const check = page.getByRole('region', { name: 'Probar la conexión' });
+  await check.getByRole('button', { name: 'Probar' }).click();
+  await expect(check.getByRole('status')).toContainText('Funciona. Servidor 9.9.9.');
+  await expect(check.getByRole('listitem')).toHaveText(['Trabajo Lectura']);
+  await expect(check.getByRole('status')).toContainText('tienen el acceso desactivado: Personal.');
+  await check.getByRole('button', { name: 'Cambiar el acceso' }).click();
+  await expect(page.getByRole('group', { name: 'Acceso MCP de Personal' })).toBeVisible();
+
+  await page.evaluate(() => {
+    (window as any).__mcpCheck = { ok: false, version: null, vaults: [], failed: 'silent', error: 'config file is not valid JSON' };
+  });
+  await page.getByRole('button', { name: 'Inteligencia artificial' }).click();
+  await check.getByRole('button', { name: 'Probar' }).click();
+  await expect(check.getByRole('status')).toContainText('El servidor arrancó pero no respondió a tiempo.');
+  await expect(check.getByRole('status')).toContainText('config file is not valid JSON');
+});
+
 test('global search covers every vault', async ({ page }) => {
   await page.keyboard.press('Control+Shift+f');
   await page.getByPlaceholder('Buscar en los vaults abiertos').fill('#');

@@ -677,12 +677,22 @@ pub struct McpInfo {
 }
 
 /// The server is installed next to the app's executable.
-#[tauri::command(async)]
-pub fn mcp_info() -> Result<McpInfo> {
+fn mcp_binary() -> Result<PathBuf> {
     let exe = std::env::current_exe()?;
     let dir = exe.parent().unwrap_or(Path::new("."));
-    let binary = dir.join(format!("ultimatemd-mcp{}", std::env::consts::EXE_SUFFIX));
+    Ok(dir.join(format!("ultimatemd-mcp{}", std::env::consts::EXE_SUFFIX)))
+}
+
+#[tauri::command(async)]
+pub fn mcp_info() -> Result<McpInfo> {
+    let binary = mcp_binary()?;
     Ok(McpInfo { available: binary.is_file(), binary: binary.to_string_lossy().into_owned() })
+}
+
+/// Starts the MCP server as a client would and reports what it sees.
+#[tauri::command(async)]
+pub fn check_mcp() -> Result<crate::mcp_check::McpCheck> {
+    Ok(crate::mcp_check::check(&mcp_binary()?))
 }
 
 /// Saves a rendered diagram where the user picks. The dialog runs here so the

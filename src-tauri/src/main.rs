@@ -2,6 +2,7 @@
 
 mod commands;
 mod loose;
+mod mcp_check;
 mod protocol;
 mod startup;
 mod watcher;
@@ -124,6 +125,7 @@ fn main() {
             commands::installer_language,
             commands::set_spellcheck,
             commands::watch_problems,
+            commands::check_mcp,
             commands::open_path,
             commands::close_loose,
             commands::take_pending_files,

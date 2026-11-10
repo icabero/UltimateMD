@@ -307,6 +307,8 @@
     },
     take_pending_files: () => window.__pending ?? [],
     installer_language: () => window.__installerLanguage ?? null,
+    check_mcp: () =>
+      window.__mcpCheck ?? { ok: true, version: '9.9.9', vaults: vaults.filter((v) => v.mcp !== 'off').map((v) => ({ name: v.name, access: v.mcp })), failed: null, error: null },
     watch_problems: () => window.__watchProblems ?? [],
     set_spellcheck: ({ languages }) => void (window.__spellcheck = languages),
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),
