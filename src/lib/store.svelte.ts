@@ -253,6 +253,8 @@ class Store {
   about = $state(false);
   /** The list of every keyboard shortcut. */
   shortcuts = $state(false);
+  /** Choosing, place by place, between the edits in the tab on screen and its version on disk. */
+  merging = $state(false);
   /** Showing what changed outside the app in the note on screen. */
   outsideDiff = $state(false);
   /** Whether and in which language spelling is checked while writing. */
@@ -941,6 +943,17 @@ class Store {
     tab.conflict = null;
     tab.dirty = false;
     tab.revision++;
+  }
+
+  /** Ends a conflict with a text put together from both versions. */
+  async resolveConflict(tab: Tab, text: string) {
+    if (!tab.conflict) return;
+    tab.version = tab.conflict.version;
+    tab.conflict = null;
+    tab.content = text;
+    tab.dirty = true;
+    tab.revision++;
+    await this.save(tab);
   }
 
   /** Keeps the edits in this tab, replacing the version on disk. */

@@ -19,6 +19,7 @@
   import Shortcuts from './lib/components/Shortcuts.svelte';
   import OutsideChanges from './lib/components/OutsideChanges.svelte';
   import AiLog from './lib/components/AiLog.svelte';
+  import ConflictMerge from './lib/components/ConflictMerge.svelte';
   import WordScreen from './lib/components/WordScreen.svelte';
   import BrokenLinks from './lib/components/BrokenLinks.svelte';
   import Tabs from './lib/components/Tabs.svelte';
@@ -167,6 +168,7 @@
     {#if tab?.conflict}
       <div class="banner" role="alert">
         <span>{tr('app.conflictBanner')}</span>
+        <button onclick={() => (store.merging = true)}>{tr('merge.compare')}</button>
         <button onclick={() => store.acceptDisk(tab)}>{tr('app.useDisk')}</button>
         <button onclick={() => store.keepMine(tab)}>{tr('app.keepMine')}</button>
       </div>
@@ -224,6 +226,7 @@
 {#if store.outsideDiff && tab?.outside}<OutsideChanges {tab} />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
 {#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
+{#if store.merging && tab?.conflict}<ConflictMerge {tab} />{/if}
 {#if store.aiLog}<AiLog vaultId={store.aiLog} />{/if}
 {#if store.brokenLinks}<BrokenLinks vaultId={store.brokenLinks} />{/if}
 {#if store.templatePicker}<TemplatePicker {...store.templatePicker} />{/if}

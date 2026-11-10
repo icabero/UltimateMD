@@ -127,6 +127,23 @@ test('an external change never overwrites unsaved edits', async ({ page }) => {
   await expect.poll(() => disk(page, 'b', 'Otra.md')).toContain('mío');
 });
 
+test('a conflict can be merged place by place', async ({ page }) => {
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\nUno.\n\nDos.\n\nTres.\n'));
+  await open(page, 'Otra');
+  await typeInEditor(page, 'Cuatro mío.\n');
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\nUno del disco.\n\nDos.\n\nTres.\n'));
+  await page.getByRole('alert').getByRole('button', { name: 'Comparar y mezclar' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Tu versión y la del disco' });
+  await expect(dialog).toContainText('Difieren en 2 sitios.');
+  const places = dialog.getByRole('group', { name: 'Diferencia' });
+  // The first place takes the disk's line; the second keeps mine, the default.
+  await places.nth(0).getByRole('radio').nth(1).check();
+  await dialog.getByRole('button', { name: 'Guardar la mezcla' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('alert')).toBeHidden();
+  await expect.poll(() => disk(page, 'b', 'Otra.md')).toBe('# Otra\n\nUno del disco.\n\nDos.\n\nTres.\nCuatro mío.\n');
+});
+
 test('a conflict can be resolved in favour of the disk', async ({ page }) => {
   await open(page, 'Otra');
   await typeInEditor(page, 'mío');
