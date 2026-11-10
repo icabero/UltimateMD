@@ -95,6 +95,7 @@
       view('preview', 'tabs.preview'),
       { id: 'panel.outline', label: tr('cmd.outline'), when: md, run: () => store.openPanel('outline') },
       { id: 'panel.properties', label: tr('cmd.properties'), when: md, run: () => store.openPanel('properties') },
+      { id: 'panel.history', label: tr('cmd.history'), when: md && !tab?.loose, run: () => store.openPanel('history') },
       { id: 'panel.links', label: tr('cmd.links'), when: md && !tab?.loose, run: () => store.openPanel('links') },
       { id: 'bar.left', label: tr('cmd.toggleSidebar'), keys: ['Ctrl', 'Shift', 'E'], run: () => store.toggleBar('left') },
       { id: 'bar.right', label: tr('cmd.togglePanel'), keys: ['Ctrl', 'Shift', 'O'], when: md, run: () => store.toggleBar('right') },

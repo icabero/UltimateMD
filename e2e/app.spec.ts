@@ -89,6 +89,23 @@ test('what the AI did is listed per vault, shown and undone', async ({ page }) =
   await expect(page.locator('.cm-content')).not.toContainText('Escrito por la IA');
 });
 
+test('older versions of a note are listed, compared and restored', async ({ page }) => {
+  await page.evaluate(() => (window as any).__test.keepVersion('b', 'Otra.md', '# Otra\n\nComo era antes.\n', 'before-ai', Date.now() - 3_600_000));
+  await open(page, 'Otra');
+  await page.keyboard.press('Control+Shift+o');
+  await page.getByRole('tab', { name: 'Historial' }).click();
+  const versions = page.getByRole('list', { name: 'Historial' });
+  await expect(versions.getByRole('listitem')).toContainText(['Antes de un cambio de la IA']);
+  await versions.getByRole('button').first().click();
+  const dialog = page.getByRole('dialog', { name: /^Versión de / });
+  await expect(dialog.locator('.add')).toContainText(['Como era antes.']);
+  await dialog.getByRole('button', { name: 'Restaurar esta versión' }).click();
+  await expect(page.locator('.cm-content')).toContainText('Como era antes.');
+  await expect.poll(() => disk(page, 'b', 'Otra.md')).toBe('# Otra\n\nComo era antes.\n');
+  // What it replaced is now a version too.
+  await expect(versions.getByRole('listitem')).toContainText(['Antes de restaurar otra versión', 'Antes de un cambio de la IA']);
+});
+
 test('an outside change stops being offered for undo once the note is edited', async ({ page }) => {
   await open(page, 'Otra');
   await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\nNuevo.\n'));

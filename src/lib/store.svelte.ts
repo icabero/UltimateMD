@@ -31,6 +31,8 @@ export interface Tab {
   /** A different version on disk while this tab has unsaved edits. */
   conflict: { content: string; version: string } | null;
   missing: boolean;
+  /** Edited here since it was opened, so closing it keeps a version. */
+  touched: boolean;
   /** Changed on disk by someone else while open and untouched here, until seen or edited. */
   outside: OutsideChange | null;
   /** Set for a file outside any vault: its location on disk. */
@@ -58,7 +60,7 @@ export interface Reveal {
   heading?: number;
 }
 
-export type PanelTab = 'outline' | 'links' | 'properties';
+export type PanelTab = 'outline' | 'links' | 'properties' | 'history';
 
 /** Which side bars someone wants. A narrow window hides them anyway. */
 interface Layout {
@@ -730,7 +732,7 @@ class Store {
     }
     this.tabs.push({
       key, vaultId, path, kind, content, version,
-      dirty: false, saving: false, view: kind === 'md' || this.preferredView !== 'visual' ? this.preferredView : 'split', revision: 0, conflict: null, missing: false, outside: null, loose,
+      dirty: false, saving: false, view: kind === 'md' || this.preferredView !== 'visual' ? this.preferredView : 'split', revision: 0, conflict: null, missing: false, touched: false, outside: null, loose,
     });
     this.activeKey = key;
     this.persist();
@@ -895,6 +897,7 @@ class Store {
   edit(tab: Tab, content: string) {
     if (content === tab.content) return;
     tab.outside = null;
+    tab.touched = true;
     tab.content = content;
     tab.dirty = true;
     clearTimeout(this.#timers.get(tab.key));
@@ -949,8 +952,21 @@ class Store {
     await this.save(tab);
   }
 
+  /** Brings back an older version of a note, keeping the one it replaces. */
+  async restoreVersion(tab: Tab, text: string) {
+    await this.save(tab);
+    if (tab.conflict || tab.missing) return;
+    await api.historyKeep(tab.vaultId, tab.path, true).catch(() => false);
+    this.edit(tab, text);
+    tab.revision++;
+    await this.save(tab);
+    this.notify(tr('history.restored'));
+  }
+
   async close(tab: Tab) {
     await this.save(tab);
+    // What was written in this sitting stays as a version.
+    if (tab.touched && !tab.loose && isText(tab.kind) && !tab.conflict && !tab.missing) void api.historyKeep(tab.vaultId, tab.path, false).catch(() => false);
     const name = baseName(tab.path);
     if (tab.conflict && !(await this.confirm(tr('store.closeConflict', { name }), tr('common.close'), true))) return;
     const i = this.tabs.findIndex((t) => t.key === tab.key);
