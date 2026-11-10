@@ -1,0 +1,50 @@
+name: Algo no funciona
+description: La app falla, se comporta de forma rara o hace algo distinto de lo que dice.
+labels: [bug]
+body:
+  - type: textarea
+    id: que
+    attributes:
+      label: Qué ha pasado
+      description: Cuenta qué hacías y qué ocurrió. Una captura ayuda mucho.
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Qué esperabas
+    validations:
+      required: true
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Cómo repetirlo
+      description: Los pasos, uno por línea. Si ocurre con una nota concreta, pega un trozo que lo provoque (sin datos privados).
+      placeholder: |
+        1. Abro una nota con una tabla
+        2. Exporto a Word
+        3. …
+  - type: input
+    id: version
+    attributes:
+      label: Versión de UltimateMD
+      description: Está en «Acerca de».
+      placeholder: 0.7.0
+    validations:
+      required: true
+  - type: dropdown
+    id: sistema
+    attributes:
+      label: Sistema
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: textarea
+    id: registro
+    attributes:
+      label: Registro de errores
+      description: En Ajustes → General → Registro de errores, pulsa «Copiar» y pégalo aquí. No contiene el texto de tus notas.
+      render: text
