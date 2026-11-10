@@ -12,6 +12,7 @@ pub mod note_templates;
 pub mod paths;
 pub mod registry;
 pub mod search;
+pub mod tags;
 pub mod templates;
 pub mod vault_themes;
 pub mod word_settings;

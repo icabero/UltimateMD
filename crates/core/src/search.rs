@@ -67,36 +67,186 @@ fn snippet(line: &str, terms: &[String]) -> String {
     if start > 0 { format!("…{text}") } else { text }
 }
 
-/// Finds lines containing every word of `query`, ignoring case and accents.
-/// A note whose name matches reports line 0. Notes come best first: a match
+/// What a query asks for. Words, phrases and exclusions are folded.
+#[derive(Debug, Default)]
+pub struct Query {
+    /// Each must be in the line, anywhere.
+    pub words: Vec<String>,
+    /// Each must be in the line exactly as written, between quotes.
+    pub phrases: Vec<String>,
+    /// A note containing any of these is left out: `-palabra`.
+    pub exclude: Vec<String>,
+    /// The note's path must contain one of these: `ruta:proyectos`.
+    pub paths: Vec<String>,
+    /// The note must have one of these tags, or one inside them: `etiqueta:cliente`.
+    pub tags: Vec<String>,
+    /// The note must be one of these kinds, `md` or `html`: `tipo:html`.
+    pub kinds: Vec<String>,
+    /// A regular expression the line must match, ignoring case: `/acta \d+/`.
+    pub pattern: Option<regex::Regex>,
+}
+
+impl Query {
+    /// Words and phrases to mark in what is found.
+    pub fn marks(&self) -> Vec<String> {
+        self.words.iter().chain(&self.phrases).cloned().collect()
+    }
+
+    /// Asks for something in the text, not only filters.
+    fn has_text(&self) -> bool {
+        !self.words.is_empty() || !self.phrases.is_empty() || self.pattern.is_some()
+    }
+
+    fn is_empty(&self) -> bool {
+        !self.has_text() && self.paths.is_empty() && self.tags.is_empty() && self.kinds.is_empty()
+    }
+
+    fn matches_text(&self, text: &str) -> bool {
+        let folded = fold(text);
+        self.words.iter().chain(&self.phrases).all(|t| folded.contains(t.as_str()))
+            && self.pattern.as_ref().is_none_or(|p| p.is_match(text))
+    }
+
+    fn wants_path(&self, path: &str) -> bool {
+        let folded = fold(path);
+        let kind = if folded.ends_with(".html") || folded.ends_with(".htm") { "html" } else { "md" };
+        (self.paths.is_empty() || self.paths.iter().any(|p| folded.contains(p.as_str())))
+            && (self.kinds.is_empty() || self.kinds.iter().any(|k| k == kind))
+    }
+
+    fn wants_note(&self, name: &str, content: &str) -> bool {
+        let folded = fold(content);
+        let name = fold(name);
+        !self.exclude.iter().any(|t| folded.contains(t.as_str()) || name.contains(t.as_str()))
+            && (self.tags.is_empty() || {
+                let found = crate::tags::tags(content);
+                self.tags.iter().any(|w| found.iter().any(|t| crate::tags::tag_matches(t, w)))
+            })
+    }
+}
+
+/// Splits a query into pieces, keeping quoted text and expressions together:
+/// `-"dos palabras"` and `/acta \d+/` are one piece each.
+fn pieces(query: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut current = String::new();
+    let mut quoted = false;
+    let mut pattern = false;
+    for c in query.chars() {
+        if c == '/' && current.is_empty() {
+            pattern = true;
+            current.push(c);
+        } else if c == '/' && pattern && !current.ends_with('\\') {
+            pattern = false;
+            current.push(c);
+        } else if c == '"' && !pattern {
+            quoted = !quoted;
+            current.push(c);
+        } else if c.is_whitespace() && !quoted && !pattern {
+            if !current.is_empty() {
+                out.push(std::mem::take(&mut current));
+            }
+        } else {
+            current.push(c);
+        }
+    }
+    if !current.is_empty() {
+        out.push(current);
+    }
+    out
+}
+
+fn unquote(text: &str) -> &str {
+    let text = text.strip_prefix('"').unwrap_or(text);
+    text.strip_suffix('"').unwrap_or(text)
+}
+
+/// Reads a query: words, "exact phrases", -exclusions, `ruta:`, `etiqueta:`
+/// and `tipo:` filters (also `path:`, `tag:` and `type:`) and a `/regular
+/// expression/`. Fails only on an expression that is not valid.
+pub fn parse(query: &str) -> Result<Query> {
+    let mut q = Query::default();
+    for piece in pieces(query) {
+        if let Some(rest) = piece.strip_prefix('-').filter(|r| !r.is_empty()) {
+            q.exclude.push(fold(unquote(rest)));
+            continue;
+        }
+        if piece.len() > 2 && piece.starts_with('/') && piece.ends_with('/') {
+            let pattern = regex::RegexBuilder::new(&piece[1..piece.len() - 1])
+                .case_insensitive(true)
+                .size_limit(1 << 20)
+                .build()
+                .map_err(|e| crate::Error::Vault(format!("invalid regular expression: {e}")))?;
+            q.pattern = Some(pattern);
+            continue;
+        }
+        if let Some((key, value)) = piece.split_once(':') {
+            let value = fold(unquote(value));
+            let list = match fold(key).as_str() {
+                "ruta" | "path" | "carpeta" | "folder" => Some(&mut q.paths),
+                "etiqueta" | "tag" => Some(&mut q.tags),
+                "tipo" | "type" => Some(&mut q.kinds),
+                _ => None,
+            };
+            if let Some(list) = list {
+                let value = match value.as_str() {
+                    "nota" | "notas" | "note" | "markdown" => "md".to_string(),
+                    "htm" => "html".to_string(),
+                    _ => value.trim_start_matches('#').to_string(),
+                };
+                if !value.is_empty() {
+                    list.push(value);
+                }
+                continue;
+            }
+        }
+        if piece.starts_with('"') {
+            let phrase = fold(unquote(&piece));
+            if !phrase.trim().is_empty() {
+                q.phrases.push(phrase);
+            }
+        } else {
+            q.words.push(fold(&piece));
+        }
+    }
+    Ok(q)
+}
+
+/// Finds lines that match `query`, ignoring case and accents (see [`parse`]).
+/// A note whose name matches reports line 0, as does every note that passes
+/// the filters of a query with nothing else. Notes come best first: a match
 /// in the name counts most, then headings, then other lines.
 pub fn search(vault: &VaultFs, query: &str, limit: usize) -> Result<Vec<SearchHit>> {
-    let terms: Vec<String> = fold(query).split_whitespace().map(String::from).collect();
-    if terms.is_empty() {
+    let query = parse(query)?;
+    if query.is_empty() {
         return Ok(Vec::new());
     }
-    let matches = |text: &str| {
-        let folded = fold(text);
-        terms.iter().all(|t| folded.contains(t.as_str()))
-    };
+    let marks = query.marks();
     let hit = |path: &str, line, text| SearchHit { path: path.to_string(), line, text, score: 0 };
     let mut found: Vec<(u32, Vec<SearchHit>)> = Vec::new();
     for path in vault.notes()? {
+        if !query.wants_path(&path) {
+            continue;
+        }
+        let name = path.rsplit_once('.').map_or(path.as_str(), |(stem, _)| stem);
+        let Ok(note) = vault.read(&path) else { continue };
+        if !query.wants_note(name, &note.content) {
+            continue;
+        }
         let mut score = 0;
         let mut hits = Vec::new();
-        let name = path.rsplit_once('.').map_or(path.as_str(), |(stem, _)| stem);
-        if matches(name) {
+        if !query.has_text() || query.matches_text(name) {
             score += NAME_SCORE;
             hits.push(hit(&path, 0, String::new()));
         }
-        if let Ok(note) = vault.read(&path) {
+        if query.has_text() {
             for (i, line) in note.content.lines().enumerate() {
                 if hits.len() >= limit {
                     break;
                 }
-                if matches(line) {
+                if query.matches_text(line) {
                     score += if is_heading(line) { HEADING_SCORE } else { LINE_SCORE };
-                    hits.push(hit(&path, i + 1, snippet(line, &terms)));
+                    hits.push(hit(&path, i + 1, snippet(line, &marks)));
                 }
             }
         }
@@ -178,6 +328,51 @@ mod tests {
         assert!(text.chars().position(|c| c == 'c').unwrap() <= LEAD + 1, "{text}");
         assert!(text.contains("palabra clave"), "{text}");
         assert_eq!(snippet("  clave al principio ", &terms), "clave al principio");
+    }
+
+    fn found(v: &VaultFs, query: &str) -> Vec<(String, usize)> {
+        search(v, query, 50).unwrap().into_iter().map(|h| (h.path, h.line)).collect()
+    }
+
+    #[test]
+    fn phrases_must_be_exact_and_words_can_be_left_out() {
+        let (_d, v) = vault();
+        v.write("a.md", "plan de marzo\nmarzo y plan\n", WriteMode::Create).unwrap();
+        v.write("b.md", "plan de marzo borrador\n", WriteMode::Create).unwrap();
+        assert_eq!(found(&v, "\"plan de marzo\""), [("a.md".into(), 1), ("b.md".into(), 1)]);
+        assert_eq!(found(&v, "\"plan de marzo\" -borrador"), [("a.md".into(), 1)]);
+        assert_eq!(found(&v, "marzo -\"y plan\""), [("b.md".into(), 1)]);
+    }
+
+    #[test]
+    fn filters_by_path_tag_and_kind() {
+        let (_d, v) = vault();
+        v.write("proyectos/web.md", "acta #cliente/acme\n", WriteMode::Create).unwrap();
+        v.write("personal/diario.md", "acta\n", WriteMode::Create).unwrap();
+        v.write("proyectos/informe.html", "<p>acta</p>\n", WriteMode::Create).unwrap();
+        assert_eq!(found(&v, "acta ruta:proyectos tipo:nota"), [("proyectos/web.md".into(), 1)]);
+        assert_eq!(found(&v, "acta tipo:html"), [("proyectos/informe.html".into(), 1)]);
+        // Filters alone list the notes that pass them.
+        assert_eq!(found(&v, "etiqueta:cliente"), [("proyectos/web.md".into(), 0)]);
+        assert_eq!(found(&v, "tag:#Cliente/acme ruta:Proyectos"), [("proyectos/web.md".into(), 0)]);
+    }
+
+    #[test]
+    fn regular_expressions_match_lines_and_bad_ones_fail() {
+        let (_d, v) = vault();
+        v.write("a.md", "Acta 12\nacta sin número\n", WriteMode::Create).unwrap();
+        assert_eq!(found(&v, r"/acta \d+/"), [("a.md".into(), 1)]);
+        assert!(search(&v, "/(sin cerrar/", 10).is_err());
+        // A lone slash is just a word.
+        assert!(search(&v, "/", 10).is_ok());
+    }
+
+    #[test]
+    fn a_word_with_a_colon_is_still_a_word() {
+        let q = parse("hora:10 ruta: tipo:x").unwrap();
+        assert_eq!(q.words, ["hora:10"]);
+        assert!(q.paths.is_empty());
+        assert_eq!(q.kinds, ["x"]);
     }
 
     #[test]

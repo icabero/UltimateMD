@@ -196,6 +196,8 @@ pub struct VaultHit {
 /// Searches the vaults open in the sidebar.
 #[tauri::command(async)]
 pub fn search_all(query: String) -> Result<Vec<VaultHit>> {
+    // A query that cannot be read fails once, not quietly in every vault.
+    search::parse(&query)?;
     let mut out = Vec::new();
     for vault in Registry::load()?.vaults.iter().filter(|v| v.open) {
         // One unreachable vault, such as an unplugged drive, must not end the search.

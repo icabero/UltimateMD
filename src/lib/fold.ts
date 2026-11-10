@@ -9,6 +9,26 @@ export const fold = (text: string) => text.normalize('NFD').replace(MARKS, '').t
 /** The words of a query, folded. */
 export const terms = (query: string) => fold(query).split(/\s+/).filter(Boolean);
 
+const FILTERS = /^(ruta|path|carpeta|folder|etiqueta|tag|tipo|type):/;
+
+/**
+ * What to mark of a search query, as the backend reads it: words and
+ * "phrases", folded, leaving out -exclusions, filters and /expressions/.
+ */
+export function queryMarks(query: string): string[] {
+  const out: string[] = [];
+  const pieces = query.match(/-?"[^"]*"?|\/(?:[^/\\]|\\.)+\/|\S+/g) ?? [];
+  for (const piece of pieces) {
+    const folded = fold(piece);
+    if (piece.startsWith('-') && piece.length > 1) continue;
+    if (piece.length > 2 && piece.startsWith('/') && piece.endsWith('/')) continue;
+    if (FILTERS.test(folded)) continue;
+    const text = piece.startsWith('"') ? folded.replace(/^"|"$/g, '') : folded;
+    if (text.trim()) out.push(text);
+  }
+  return out;
+}
+
 /** Where any of `words` (already folded) occurs in `text`, as sorted, merged [from, to) ranges. */
 export function findTerms(text: string, words: string[]): [number, number][] {
   if (!words.length) return [];

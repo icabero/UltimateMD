@@ -216,7 +216,12 @@
     // Like the backend: every word, ignoring case and accents, one hit per line.
     search_all: ({ query }) => {
       const fold = (t) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-      const words = fold(query).split(/\s+/).filter(Boolean);
+      if (query.includes('/(')) throw 'invalid regular expression: unclosed group';
+      // Words and "phrases"; the rest of the syntax is the backend's, tested there.
+      const words = (query.match(/"[^"]*"?|\S+/g) ?? [])
+        .filter((w) => !w.startsWith('-') && !/^\w+:/.test(w))
+        .map((w) => fold(w.replace(/^"|"$/g, '')))
+        .filter(Boolean);
       const matches = (t) => words.every((w) => fold(t).includes(w));
       return Object.entries(files).flatMap(([vaultId, notes]) =>
         Object.entries(notes).flatMap(([path, text]) =>

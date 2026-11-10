@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api, type VaultHit } from '../api';
-  import { pieces, terms } from '../fold';
+  import { pieces, queryMarks } from '../fold';
   import { tr } from '../i18n.svelte';
   import { store } from '../store.svelte';
 
@@ -8,6 +8,8 @@
   let hits = $state<VaultHit[]>([]);
   let words = $state<string[]>([]);
   let searched = $state(false);
+  let problem = $state<string | null>(null);
+  let help = $state(false);
   let timer: ReturnType<typeof setTimeout>;
   let run = 0;
 
@@ -28,10 +30,17 @@
     timer = setTimeout(async () => {
       const id = ++run;
       const asked = query;
-      const found = asked.trim() ? await api.search(asked).catch(() => []) : [];
+      let failed: string | null = null;
+      const found = asked.trim()
+        ? await api.search(asked).catch((e) => {
+            failed = String(e);
+            return [];
+          })
+        : [];
       if (id !== run) return;
       hits = found;
-      words = terms(asked);
+      problem = failed;
+      words = queryMarks(asked);
       searched = !!asked.trim();
     }, 200);
   }
@@ -42,7 +51,20 @@
 
 <div class="panel">
   <!-- svelte-ignore a11y_autofocus -->
-  <input autofocus bind:value={query} oninput={onInput} placeholder={tr('search.placeholder')} />
+  <div class="field">
+    <input autofocus bind:value={query} oninput={onInput} placeholder={tr('search.placeholder')} />
+    <button class="help" class:on={help} aria-expanded={help} title={tr('search.helpTitle')} onclick={() => (help = !help)}>?</button>
+  </div>
+  {#if help}
+    <dl class="syntax" aria-label={tr('search.helpTitle')}>
+      <dt>"…"</dt><dd>{tr('search.helpPhrase')}</dd>
+      <dt>{tr('search.kwExclude')}</dt><dd>{tr('search.helpExclude')}</dd>
+      <dt>{tr('search.kwPath')}</dt><dd>{tr('search.helpPath')}</dd>
+      <dt>{tr('search.kwTag')}</dt><dd>{tr('search.helpTag')}</dd>
+      <dt>{tr('search.kwKind')}</dt><dd>{tr('search.helpKind')}</dd>
+      <dt>/…/</dt><dd>{tr('search.helpRegex')}</dd>
+    </dl>
+  {/if}
   <div class="results">
     {#each groups as g (`${g.vaultId}:${g.path}`)}
       <div class="note">
@@ -58,14 +80,23 @@
         {/each}
       </div>
     {:else}
-      {#if searched}<p>{tr('search.empty')}</p>{/if}
+      {#if problem?.includes('regular expression')}
+        <p class="bad" role="alert">{tr('search.badRegex')}</p>
+      {:else if searched}<p>{tr('search.empty')}</p>{/if}
     {/each}
   </div>
 </div>
 
 <style>
   .panel { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 0 var(--space-2) var(--space-2); }
-  input { width: 100%; }
+  .field { display: flex; gap: var(--space-1); }
+  input { flex: 1; min-width: 0; }
+  .help { flex: none; justify-content: center; width: 28px; padding: 0; border: 1px solid var(--line); color: var(--text-3); font-size: var(--font-sm); }
+  .help.on { border-color: var(--accent); color: var(--accent-text); }
+  .syntax { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-2); margin: var(--space-2) 0 0; padding: var(--space-2); border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: var(--font-xs); }
+  .syntax dt { color: var(--text); font-family: var(--mono); }
+  .syntax dd { margin: 0; color: var(--text-2); }
+  .bad { color: var(--danger); }
   .results { flex: 1; min-height: 0; margin-top: var(--space-2); overflow-y: auto; }
   .note + .note { margin-top: var(--space-1-5); }
   button { display: flex; width: 100%; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text); text-align: left; }

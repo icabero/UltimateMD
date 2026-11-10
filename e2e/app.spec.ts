@@ -377,6 +377,17 @@ async function searchFor(page: Page, query: string) {
   await page.getByPlaceholder('Buscar en los vaults abiertos').fill(query);
 }
 
+test('search explains its syntax, marks phrases and says when an expression is wrong', async ({ page }) => {
+  await longNote(page);
+  await searchFor(page, '"reunion de marzo" -borrador ruta:notas');
+  await expect(page.locator('.results .line mark')).toHaveText(['Reunión de marzo']);
+  await page.getByTitle('Cómo afinar la búsqueda').click();
+  const help = page.getByRole('definition');
+  await expect(help).toContainText(['Frase exacta', 'Deja fuera las notas que la contienen']);
+  await page.getByPlaceholder('Buscar en los vaults abiertos').fill('/(acta/');
+  await expect(page.getByRole('alert')).toHaveText('La expresión regular entre barras no es válida.');
+});
+
 test('search ignores accents and marks the words found', async ({ page }) => {
   await longNote(page);
   await searchFor(page, 'reunion MARZO');

@@ -42,7 +42,7 @@ struct NoteArg {
 struct SearchArg {
     /// Vault name or id. Omit it to search every vault
     vault: Option<String>,
-    /// Words to find, in any order and ignoring case
+    /// Words to find, in any order and ignoring case. Supports "phrases", -exclusions, path:, tag:, type: and /regex/
     query: String,
     /// Maximum results per vault (default 50)
     limit: Option<usize>,
@@ -164,7 +164,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Search note names and contents, ignoring case and accents. Returns matching lines, best notes first; line 0 means the file name matched.",
+        description = "Search note names and contents, ignoring case and accents. Returns matching lines, best notes first; line 0 means the file name matched. Words may be in any order. Also: \"exact phrase\", -word to leave out notes containing it, path:folder, tag:name (also nested tags), type:md or type:html, and /regular expression/. Filters alone list the notes that pass them.",
         annotations(read_only_hint = true)
     )]
     async fn search_notes(&self, Parameters(a): Parameters<SearchArg>) -> Result<CallToolResult, ErrorData> {
