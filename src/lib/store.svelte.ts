@@ -8,7 +8,7 @@ import { fold } from './fold';
 import { fillTemplate } from './noteTemplates';
 import { withColors, type DiagramStyle } from './diagramStyle';
 import { tr } from './i18n.svelte';
-import { baseName, dirName, join, kindOf, linkFrom, resolveLink, type FileKind } from './paths';
+import { baseName, dirName, join, kindOf, linkFrom, resolveLink, stem, type FileKind } from './paths';
 import { checksAtStart, isNewer, latestVersion } from './updates';
 import { newsFor, unseenNews } from './news';
 import { changedLines } from './diff';
@@ -32,6 +32,8 @@ export interface Tab {
   /** A different version on disk while this tab has unsaved edits. */
   conflict: { content: string; version: string } | null;
   missing: boolean;
+  /** Kept at the left, without a close button, and spared by "close the others". */
+  pinned: boolean;
   /** Edited here since it was opened, so closing it keeps a version. */
   touched: boolean;
   /** Changed on disk by someone else while open and untouched here, until seen or edited. */
@@ -69,6 +71,17 @@ interface Layout {
   right: boolean;
   panelTab: PanelTab;
   rightWidth: number;
+}
+
+/** An entry of a context menu. `separator` draws a line above it. */
+export interface MenuItem {
+  label: string;
+  icon?: string;
+  keys?: string[];
+  danger?: boolean;
+  disabled?: boolean;
+  separator?: boolean;
+  run: () => void;
 }
 
 export interface ToastAction {
@@ -256,6 +269,10 @@ class Store {
   shortcuts = $state(false);
   /** Choosing, place by place, between the edits in the tab on screen and its version on disk. */
   merging = $state(false);
+  /** The context menu on screen, and where. */
+  menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  /** The tab shown beside the one being edited, for reference. */
+  sideKey = $state<string | null>(null);
   /** Showing what changed outside the app in the note on screen. */
   outsideDiff = $state(false);
   /** Whether and in which language spelling is checked while writing. */
@@ -442,6 +459,107 @@ class Store {
     this.favorites = fix(this.favorites);
     savePlaces(RECENT_KEY, this.recent);
     savePlaces(FAVORITES_KEY, this.favorites);
+  }
+
+  /** Opens a context menu where the pointer is, or by the element when it came from the keyboard. */
+  openMenu(e: MouseEvent, items: MenuItem[]) {
+    e.preventDefault();
+    e.stopPropagation();
+    let { clientX: x, clientY: y } = e;
+    if (!x && !y && e.target instanceof Element) {
+      const box = e.target.getBoundingClientRect();
+      [x, y] = [box.left + 12, box.bottom - 4];
+    }
+    this.menu = { x, y, items };
+  }
+
+  /** Where a file is on this computer. */
+  absolutePath(tab: { vaultId: string; path: string; loose?: Tab['loose'] }) {
+    if (tab.loose) return tab.loose.absolute;
+    const root = this.vault(tab.vaultId)?.path ?? '';
+    const back = String.fromCharCode(92);
+    return root.includes(back) ? `${root}${back}${tab.path.replaceAll('/', back)}` : `${root}/${tab.path}`;
+  }
+
+  async copyText(text: string, message: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      this.notify(message);
+    } catch (e) {
+      this.fail(e);
+    }
+  }
+
+  /** Copies a `[[link]]` to a note, as short as it can be told apart. */
+  copyLink(vaultId: string, path: string) {
+    const short = stem(path);
+    const unique = this.files(vaultId).filter((f) => stem(f) === short).length < 2;
+    void this.copyText(`[[${unique ? short : path.slice(0, path.lastIndexOf('.'))}]]`, tr('menu.linkCopied'));
+  }
+
+  revealInFolder(vaultId: string, path: string) {
+    void api.revealPath(vaultId, path).catch((e) => this.fail(e));
+  }
+
+  get sideTab() {
+    const tab = this.tabs.find((t) => t.key === this.sideKey) ?? null;
+    return tab && tab.key !== this.activeKey ? tab : null;
+  }
+
+  /** Shows a note beside the one being edited, to read while writing. */
+  async openBeside(vaultId: string, path: string) {
+    const before = this.activeKey;
+    await this.openFile(vaultId, path);
+    const key = tabKey(vaultId, path);
+    if (!this.tabs.some((t) => t.key === key)) return;
+    if (before && before !== key) {
+      this.sideKey = key;
+      this.activeKey = before;
+    }
+    this.persist();
+  }
+
+  /** The note at the side becomes the one being edited, and the other goes to the side. */
+  swapSide() {
+    const side = this.sideTab;
+    if (!side) return;
+    [this.sideKey, this.activeKey] = [this.activeKey, side.key];
+    this.persist();
+  }
+
+  togglePin(tab: Tab) {
+    const from = this.tabs.indexOf(tab);
+    if (from < 0) return;
+    this.tabs.splice(from, 1);
+    tab.pinned = !tab.pinned;
+    // Pinned tabs sit together at the left: the tab goes to the end of that group, or right after it.
+    this.tabs.splice(this.tabs.filter((t) => t.pinned).length, 0, tab);
+    this.persist();
+  }
+
+  /** Moves a tab to another place, within its group: pinned ones stay before the rest. */
+  moveTab(key: string, to: number) {
+    const from = this.tabs.findIndex((t) => t.key === key);
+    if (from < 0) return;
+    const tab = this.tabs[from];
+    const pinned = this.tabs.filter((t) => t.pinned).length;
+    const [min, max] = tab.pinned ? [0, pinned - 1] : [pinned, this.tabs.length - 1];
+    const target = Math.min(max, Math.max(min, to));
+    if (target === from) return;
+    this.tabs.splice(from, 1);
+    this.tabs.splice(target, 0, tab);
+    this.persist();
+  }
+
+  /** Closes every tab but this one and the pinned ones. */
+  async closeOthers(keep: Tab) {
+    for (const tab of this.tabs.filter((t) => t.key !== keep.key && !t.pinned)) await this.close(tab);
+    this.activeKey = keep.key;
+    this.persist();
+  }
+
+  async closeAll() {
+    for (const tab of this.tabs.filter((t) => !t.pinned)) await this.close(tab);
   }
 
   get active() {
@@ -753,7 +871,7 @@ class Store {
     }
     this.tabs.push({
       key, vaultId, path, kind, content, version,
-      dirty: false, saving: false, view: kind === 'md' || this.preferredView !== 'visual' ? this.preferredView : 'split', revision: 0, conflict: null, missing: false, touched: false, outside: null, loose,
+      dirty: false, saving: false, view: kind === 'md' || this.preferredView !== 'visual' ? this.preferredView : 'split', revision: 0, conflict: null, missing: false, pinned: false, touched: false, outside: null, loose,
     });
     this.activeKey = key;
     this.persist();
@@ -1005,6 +1123,7 @@ class Store {
     if (i < 0) return;
     this.tabs.splice(i, 1);
     if (tab.loose) await api.closeLoose(tab.vaultId);
+    if (this.sideKey === tab.key) this.sideKey = null;
     if (this.activeKey === tab.key) this.activeKey = this.tabs[Math.min(i, this.tabs.length - 1)]?.key ?? null;
     this.persist();
   }
@@ -1105,6 +1224,12 @@ class Store {
     else this.notify(tr(links === 1 ? 'links.updatedOne' : 'links.updatedNote', { links, note }));
   }
 
+  /** Asks for the new name of a file or folder and renames it. */
+  async renamePrompt(vaultId: string, path: string) {
+    const name = await this.prompt(tr('sidebar.newName'), baseName(path), tr('common.rename'));
+    if (name?.trim()) await this.renameEntry(vaultId, path, name.trim());
+  }
+
   async renameEntry(vaultId: string, path: string, name: string) {
     await this.move(vaultId, path, join(dirName(path), name));
   }
@@ -1161,8 +1286,8 @@ class Store {
 
   persist() {
     try {
-      const open = this.tabs.map(({ vaultId, path, view, loose }) => ({ vaultId, path, view, file: loose?.absolute }));
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ open, active: this.activeKey }));
+      const open = this.tabs.map(({ vaultId, path, view, loose, pinned }) => ({ vaultId, path, view, file: loose?.absolute, pinned: pinned || undefined }));
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ open, active: this.activeKey, side: this.sideKey }));
     } catch {
       // The session is a convenience; the app works without it.
     }
@@ -1173,11 +1298,12 @@ class Store {
     try {
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) return;
-      const { open, active } = JSON.parse(raw) as {
-        open: { vaultId: string; path: string; view: ViewMode; file?: string }[];
+      const { open, active, side } = JSON.parse(raw) as {
+        open: { vaultId: string; path: string; view: ViewMode; file?: string; pinned?: boolean }[];
         active: string | null;
+        side?: string | null;
       };
-      for (const { vaultId, path, view, file } of open) {
+      for (const { vaultId, path, view, file, pinned } of open) {
         if (file) {
           // A loose file gets a new id each run, and may no longer exist.
           const opened = await api.openPath(file).catch(() => null);
@@ -1187,9 +1313,13 @@ class Store {
           if (!this.vault(vaultId)?.open || !this.files(vaultId).includes(path)) continue;
           await this.openFile(vaultId, path);
         }
-        if (this.active) this.active.view = view;
+        if (this.active) {
+          this.active.view = view;
+          this.active.pinned = !!pinned;
+        }
       }
       if (active && this.tabs.some((t) => t.key === active)) this.activeKey = active;
+      if (side && this.tabs.some((t) => t.key === side)) this.sideKey = side;
     } catch {
       // A damaged session only means starting with no tabs.
     } finally {

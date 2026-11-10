@@ -19,6 +19,10 @@
   import Shortcuts from './lib/components/Shortcuts.svelte';
   import OutsideChanges from './lib/components/OutsideChanges.svelte';
   import AiLog from './lib/components/AiLog.svelte';
+  import ContextMenu from './lib/components/ContextMenu.svelte';
+  import Icon from './lib/components/Icon.svelte';
+  import { baseName } from './lib/paths';
+  import { manageDialogFocus } from './lib/dialogFocus';
   import News from './lib/components/News.svelte';
   import ConflictMerge from './lib/components/ConflictMerge.svelte';
   import WordScreen from './lib/components/WordScreen.svelte';
@@ -38,6 +42,7 @@
   let preview = $state<Preview>();
   let sidebarWidth = $state(260);
   const tab = $derived(store.active);
+  const side = $derived(store.sideTab);
   const panel = $derived(store.showRight && tab?.kind === 'md');
   const columns = $derived(`${store.showLeft ? `${sidebarWidth}px ` : ''}minmax(0, 1fr)${panel ? ` ${store.layout.rightWidth}px` : ''}`);
   const words = $derived(tab?.content.trim() ? tab.content.trim().split(/\s+/).length : 0);
@@ -65,6 +70,7 @@
     // Failures nobody caught still reach the log.
     addEventListener('error', (e) => void api.logError('window', e.error?.stack ?? e.message).catch(() => {}));
     addEventListener('unhandledrejection', (e) => void api.logError('promise', e.reason?.stack ?? String(e.reason)).catch(() => {}));
+    const stopDialogFocus = manageDialogFocus();
     store.init().catch((e) => store.fail(e));
     void frame.watch();
     void store.applyZoom();
@@ -76,6 +82,7 @@
         // Outside the app, in the interface tests.
       }
     });
+    return stopDialogFocus;
   });
 
 
@@ -201,6 +208,16 @@
           </div>
         {/if}
       {/if}
+      {#if tab && side}
+        <section class="pane beside" aria-label={tr('side.title', { name: baseName(side.path) })}>
+          <header>
+            <span class="name" title={side.path}>{baseName(side.path).replace(/\.(md|markdown)$/i, '')}</span>
+            <button class="icon small" title={tr('side.edit')} onclick={() => store.swapSide()}><Icon name="edit" size={14} /></button>
+            <button class="icon small" title={tr('side.close')} onclick={() => (store.sideKey = null)}><Icon name="close" size={14} /></button>
+          </header>
+          <div class="body">{#key side.key}<Preview tab={side} />{/key}</div>
+        </section>
+      {/if}
     </div>
     <footer>
       {#if tab}
@@ -236,6 +253,7 @@
 {#if store.brokenLinks}<BrokenLinks vaultId={store.brokenLinks} />{/if}
 {#if store.templatePicker}<TemplatePicker {...store.templatePicker} />{/if}
 {#if store.exporting && tab}<Export {tab} />{/if}
+{#if store.menu}{#key store.menu}<ContextMenu {...store.menu} />{/key}{/if}
 {#if store.dialog}
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}
 {/if}
@@ -251,6 +269,10 @@
   .pane { flex: 1 1 0; min-width: 0; min-height: 0; }
   .pane.hidden { display: none; }
   .pane.preview:not(:first-child) { border-left: 1px solid var(--line); }
+  .beside { display: flex; flex-direction: column; border-left: 1px solid var(--line); }
+  .beside header { display: flex; align-items: center; gap: var(--space-1); height: 28px; flex: none; padding: 0 var(--space-1-5) 0 var(--space-3); border-bottom: 1px solid var(--line); background: var(--panel); color: var(--text-2); font-size: var(--font-sm); }
+  .beside .name { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .beside .body { flex: 1; min-height: 0; }
   .banner { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); flex: none; background: var(--warn); color: var(--text); font-size: var(--font-md); }
   .banner span { flex: 1; }
   .banner.info { background: var(--accent-soft); }

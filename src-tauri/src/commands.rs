@@ -849,3 +849,11 @@ pub fn replace_apply(replace: replace::Replace, notes: Vec<ReplaceIn>) -> Result
 pub fn vault_tags(id: String) -> Result<Vec<ultimatemd_core::tags::TagCount>> {
     ultimatemd_core::tags::vault_tags(&fs(&id)?)
 }
+
+/// Shows a file or folder of a vault in the system's file manager.
+#[tauri::command(async)]
+pub fn reveal_path(app: AppHandle, id: String, path: String) -> Result<()> {
+    let vault = file_fs(&id, &path)?;
+    let target = if path.is_empty() { vault.root().to_path_buf() } else { vault.resolve_existing(&path)? };
+    app.opener().reveal_item_in_dir(target).map_err(|e| Error::Vault(e.to_string()))
+}

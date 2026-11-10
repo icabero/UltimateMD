@@ -24,6 +24,14 @@
     if (node.isDir && store.active?.vaultId === vaultId && store.active.path.startsWith(`${node.path}/`)) expanded = true;
   });
 
+  function onKey(e: KeyboardEvent) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'F2') void store.renamePrompt(vaultId, node.path);
+    else if (e.key === 'Delete') void store.trash(vaultId, node.path);
+    else return;
+    e.preventDefault();
+  }
+
   function dragStart(e: DragEvent) {
     e.dataTransfer!.setData('application/x-umd', JSON.stringify({ vaultId, path: node.path }));
     e.dataTransfer!.effectAllowed = 'move';
@@ -45,6 +53,10 @@
   class="row"
   class:active
   class:over
+  data-row
+  data-depth={depth}
+  aria-expanded={node.isDir ? expanded : undefined}
+  onkeydown={onKey}
   style:padding-left="{depth * 14 + 8}px"
   draggable="true"
   ondragstart={dragStart}

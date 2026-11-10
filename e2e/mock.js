@@ -399,6 +399,7 @@
     log_error: ({ source, message }) => void (window.__log = [...(window.__log ?? []), `[error] ${source}: ${message}`]),
     read_log: () => (window.__log ?? []).join('\n'),
     reveal_log: () => {},
+    reveal_path: ({ id, path }) => void (window.__revealed = `${id}:${path}`),
     update_supported: () => window.__selfUpdate ?? true,
     update_install: async () => {
       if (window.__updateFails) throw 'signature does not match';

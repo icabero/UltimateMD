@@ -450,6 +450,125 @@ test('what goes wrong is written to a log that the settings show', async ({ page
   await expect(section.locator('pre')).toContainText('[error] promise: Error: fallo sin atrapar');
 });
 
+const tabNames = (page: Page) => page.locator('[role=tablist] [role=tab] .name');
+
+test('a tab has a menu to close the others, pin it and reach its file', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await open(page, 'Inicio');
+  await open(page, 'D2');
+  await open(page, 'Otra');
+  const tab = (name: string) => page.getByRole('tab', { name, exact: true });
+  await tab('Inicio').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Fijar la pestaña' }).click();
+  await expect(tab('Inicio').getByTitle('Cerrar (Ctrl+W)')).toHaveCount(0);
+
+  await tab('Otra').click({ button: 'right' });
+  await expect(page.getByRole('menuitem').first().locator('kbd')).toHaveText(['Ctrl', 'W']);
+  await page.getByRole('menuitem', { name: 'Cerrar las demás' }).click();
+  // The pinned one stays, at the left.
+  await expect(tabNames(page)).toHaveText(['Inicio', 'Otra']);
+
+  await tab('Otra').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Copiar enlace a la nota' }).click();
+  await expect(page.getByRole('status')).toHaveText('Enlace copiado');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('[[Otra]]');
+  await tab('Otra').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Mostrar en el explorador' }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__revealed)).toBe('b:Otra.md');
+
+  // Pins survive a restart.
+  await page.reload();
+  await expect(tab('Inicio').getByTitle('Pestaña fijada')).toBeVisible();
+});
+
+test('tabs are reordered by dragging and with the keyboard', async ({ page }) => {
+  await open(page, 'Inicio');
+  await open(page, 'D2');
+  await open(page, 'Otra');
+  await page.getByRole('tab', { name: 'Otra', exact: true }).dragTo(page.getByRole('tab', { name: 'Inicio', exact: true }), { targetPosition: { x: 4, y: 10 } });
+  await expect(tabNames(page)).toHaveText(['Otra', 'Inicio', 'D2']);
+  await page.getByRole('tab', { name: 'Otra', exact: true }).focus();
+  await page.keyboard.press('Control+Shift+ArrowRight');
+  await expect(tabNames(page)).toHaveText(['Inicio', 'Otra', 'D2']);
+  await expect(page.getByRole('tab', { name: 'Otra', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main footer')).toContainText('Trabajo / D2.md');
+});
+
+test('a second note opens beside the one being edited, and they can swap', async ({ page }) => {
+  await open(page, 'Otra');
+  await page.locator('aside').getByRole('button', { name: 'Inicio', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Abrir al lado' }).click();
+  const beside = page.getByRole('region', { name: 'Al lado: Inicio.md' });
+  await expect(beside.locator('article h1')).toHaveText('Inicio');
+  // The one being edited stays the same.
+  await expect(page.locator('main footer')).toContainText('Personal / Otra.md');
+  await expect(page.locator('.cm-content')).toContainText('# Otra');
+
+  await beside.getByTitle('Editar esta nota (cambia de lado con la otra)').click();
+  await expect(page.locator('main footer')).toContainText('Trabajo / Inicio.md');
+  await expect(page.getByRole('region', { name: 'Al lado: Otra.md' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Al lado: Otra.md' })).toBeVisible();
+  await page.getByRole('region', { name: 'Al lado: Otra.md' }).getByTitle('Cerrar la nota del lado').click();
+  await expect(page.getByRole('region', { name: /^Al lado/ })).toHaveCount(0);
+});
+
+test('the file tree and its menu work with the keyboard alone', async ({ page }) => {
+  const row = (name: string) => page.locator('aside').getByRole('button', { name, exact: true });
+  await row('Trabajo').focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(row('dir')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(row('dir')).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(row('sub')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(row('Destino')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(row('dir')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(row('dir')).toHaveAttribute('aria-expanded', 'false');
+
+  // The menu key opens the menu by the row; arrows and Enter choose from it.
+  await row('D2').focus();
+  await row('D2').dispatchEvent('contextmenu');
+  const menu = page.getByRole('menu');
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(menu.getByRole('menuitem', { name: 'Enviar a la papelera' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(row('D2')).toBeFocused();
+
+  await page.keyboard.press('F2');
+  await page.getByRole('form', { name: 'Nuevo nombre' }).getByRole('textbox').fill('Diagramas.md');
+  await page.keyboard.press('Enter');
+  await expect(row('Diagramas')).toBeVisible();
+  await row('Diagramas').focus();
+  await page.keyboard.press('Delete');
+  await expect(page.getByRole('status')).toContainText('«Diagramas»');
+  await expect(row('Diagramas')).toHaveCount(0);
+});
+
+test('a dialog takes the focus, keeps Tab inside and gives the focus back', async ({ page }) => {
+  const opener = page.locator('aside').getByTitle('Acerca de');
+  await opener.focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Acerca de' });
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  await expect.poll(() => dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press('Tab');
+    expect(await dialog.evaluate((el) => el.contains(document.activeElement)), 'Tab stays in the dialog').toBe(true);
+  }
+  await page.keyboard.press('Shift+Tab');
+  expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(opener).toBeFocused();
+});
+
 test('the AI connection can be tested from the settings', async ({ page }) => {
   await page.locator('aside').getByTitle('Ajustes y MCP').click();
   await page.getByRole('button', { name: 'Inteligencia artificial' }).click();

@@ -135,6 +135,7 @@ fn main() {
             commands::replace_preview,
             commands::replace_apply,
             commands::vault_tags,
+            commands::reveal_path,
             update::update_supported,
             update::update_install,
             logbook::log_error,

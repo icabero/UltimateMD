@@ -245,6 +245,8 @@ export const api = {
   updateSupported: () => invoke<boolean>('update_supported'),
   /** Downloads and installs the newest version, then restarts. Progress comes as `update-progress` events. */
   updateInstall: () => invoke<void>('update_install'),
+  /** Shows a file or folder in the system's file manager. */
+  revealPath: (id: string, path: string) => invoke<void>('reveal_path', { id, path }),
   checkMcp: () => invoke<McpCheck>('check_mcp'),
   mcpInfo: () => invoke<{ binary: string; available: boolean }>('mcp_info'),
   openPath: (path: string) => invoke<Opened>('open_path', { path }),

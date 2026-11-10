@@ -7,6 +7,7 @@ export function keyLabel(key: string) {
   if (IS_MAC && key === 'Ctrl') return '⌘';
   if (IS_MAC && key === 'Alt') return '⌥';
   if (key === 'Click') return tr('keys.click');
+  if (key === 'Del') return tr('keys.delete');
   return key;
 }
 
@@ -40,9 +41,21 @@ export const SHORTCUTS: { title: Key; items: Shortcut[] }[] = [
       { label: 'shortcuts.nextView', keys: [['Ctrl', '\\']] },
       { label: 'cmd.toggleSidebar', keys: [['Ctrl', 'Shift', 'E']] },
       { label: 'cmd.togglePanel', keys: [['Ctrl', 'Shift', 'O']] },
+      { label: 'shortcuts.moveTab', keys: [['Ctrl', 'Shift', '←'], ['Ctrl', 'Shift', '→']] },
       { label: 'cmd.zoomIn', keys: [['Ctrl', '+']] },
       { label: 'cmd.zoomOut', keys: [['Ctrl', '-']] },
       { label: 'cmd.zoomReset', keys: [['Ctrl', '0']] },
+    ],
+  },
+  {
+    title: 'shortcuts.tree',
+    items: [
+      { label: 'shortcuts.treeMove', keys: [['↑'], ['↓']] },
+      { label: 'shortcuts.treeOpen', keys: [['→'], ['←']] },
+      { label: 'shortcuts.treeEnter', keys: [['Enter']] },
+      { label: 'common.rename', keys: [['F2']] },
+      { label: 'sidebar.trash', keys: [['Del']] },
+      { label: 'shortcuts.menu', keys: [['Shift', 'F10']] },
     ],
   },
   {

@@ -65,6 +65,12 @@ impl Vault {
         if path.is_file() { Ok(path) } else { Err(Error::NotFound(rel.to_string())) }
     }
 
+    /// Resolves a file or folder that exists, for showing it in the file manager.
+    pub fn resolve_existing(&self, rel: &str) -> Result<PathBuf> {
+        let path = resolve(&self.root, rel)?;
+        if path.exists() { Ok(path) } else { Err(Error::NotFound(rel.to_string())) }
+    }
+
     pub fn tree(&self) -> Result<Vec<TreeNode>> {
         let root = self.root.canonicalize()?;
         read_tree(&root, &root)
