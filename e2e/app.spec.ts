@@ -569,6 +569,26 @@ test('a dialog takes the focus, keeps Tab inside and gives the focus back', asyn
   await expect(opener).toBeFocused();
 });
 
+test('code blocks name their language and copy, and line spacing can be chosen', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\n```rust\nfn main() {}\n```\n'));
+  await open(page, 'Otra');
+  const block = prose(page).locator('pre');
+  await expect(block.locator('.code-tools span')).toHaveText('rust');
+  await block.hover();
+  await block.getByRole('button', { name: 'Copiar' }).click();
+  await expect(block.getByRole('button')).toHaveText('Copiado');
+  expect((await page.evaluate(() => navigator.clipboard.readText())).trim()).toBe('fn main() {}');
+
+  const height = () => prose(page).locator('h1').evaluate((el) => parseFloat(getComputedStyle(el.parentElement!).lineHeight));
+  const before = await height();
+  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  await page.getByRole('button', { name: 'Apariencia' }).click();
+  await page.getByLabel('Interlineado').selectOption('Amplio');
+  await page.keyboard.press('Escape');
+  expect(await height()).toBeGreaterThan(before);
+});
+
 test('the AI connection can be tested from the settings', async ({ page }) => {
   await page.locator('aside').getByTitle('Ajustes y MCP').click();
   await page.getByRole('button', { name: 'Inteligencia artificial' }).click();

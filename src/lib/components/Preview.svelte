@@ -47,6 +47,31 @@
     return b;
   }
 
+  /** Each code block names its language and can be copied with one click. Only on screen, never in an export. */
+  function codeTools() {
+    for (const pre of body.querySelectorAll<HTMLElement>('pre:not(.frontmatter)')) {
+      const code = pre.querySelector('code');
+      if (!code || pre.closest('.diagram, .diagram-error')) continue;
+      const lang = pre.dataset.lang ?? /language-(\S+)/.exec(code.className)?.[1] ?? '';
+      const tools = document.createElement('div');
+      tools.className = 'code-tools';
+      if (lang) {
+        const name = document.createElement('span');
+        name.textContent = lang;
+        tools.append(name);
+      }
+      const copy = exportButton(tr('common.copy'), () => {
+        void navigator.clipboard.writeText(code.textContent ?? '').then(() => {
+          copy.textContent = tr('common.copied');
+          setTimeout(() => (copy.textContent = tr('common.copy')), 1500);
+        });
+      });
+      tools.append(copy);
+      pre.classList.add('with-tools');
+      pre.prepend(tools);
+    }
+  }
+
   async function hydrate(id: number) {
     const blocks = [...body.querySelectorAll<HTMLElement>('.diagram')];
     await Promise.all(blocks.map(async (el, index) => {
@@ -93,6 +118,7 @@
     if ('highlights' in CSS) CSS.highlights.delete(FOUND);
     body.replaceChildren(fragment);
     markOutside();
+    codeTools();
     rendered = true;
     reveal();
     publishPosition();

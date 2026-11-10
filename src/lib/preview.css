@@ -1,6 +1,6 @@
 /* Colours come from the theme's variables, which pierce the shadow root. */
 /* --text-scale and --prose-width are the reader's choice on screen; exports keep the defaults. */
-.prose { max-width: var(--prose-width, 720px); margin: 0 auto; padding: 32px 36px 30vh; color: var(--text); font: calc(16px * var(--text-scale, 1))/1.7 var(--prose-font); overflow-wrap: break-word; }
+.prose { max-width: var(--prose-width, 720px); margin: 0 auto; padding: 32px 36px 30vh; color: var(--text); font: calc(16px * var(--text-scale, 1))/1.7 var(--prose-font); line-height: calc(1.7 + var(--leading, 0)); overflow-wrap: break-word; }
 h1, h2, h3, h4, h5, h6 { margin: 1.6em 0 .5em; font-family: var(--sans); font-weight: 650; line-height: 1.25; letter-spacing: -.012em; text-wrap: balance; }
 h1 { font-size: 1.85em; font-weight: 700; letter-spacing: -.02em; }
 h2 { font-size: 1.4em; padding-bottom: .25em; border-bottom: 1px solid var(--line); }
@@ -35,16 +35,32 @@ img, video { max-width: 100%; border-radius: 6px; }
 .callout-body > :last-child { margin-bottom: 0; }
 summary.callout-title { cursor: pointer; }
 details.callout:not([open]) > summary { margin-bottom: 0; }
-blockquote { margin: 1.1em 0; padding: 0 0 0 1em; border-left: 2px solid var(--accent); color: var(--text-2); }
+blockquote { margin: 1.2em 0; padding: .15em 0 .15em 1.1em; border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); color: var(--text-2); font-style: italic; }
+blockquote > :first-child { margin-top: 0; }
+blockquote > :last-child { margin-bottom: 0; }
+blockquote em { font-style: normal; }
+blockquote blockquote { margin: .7em 0; }
 code { padding: .12em .32em; border-radius: 4px; background: var(--panel); font: .86em var(--mono); }
-pre { padding: 13px 15px; overflow-x: auto; border-radius: 8px; background: var(--panel); line-height: 1.55; }
+pre { position: relative; padding: 13px 15px; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); line-height: 1.55; }
+/* The language and a copy button, at the top right: quiet until the pointer or the focus is on the block. */
+.code-tools { position: absolute; top: 5px; right: 6px; display: flex; align-items: center; gap: 6px; color: var(--text-3); font: 11px var(--sans); user-select: none; }
+.code-tools button { padding: 2px 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--raised); color: var(--text-2); font: inherit; cursor: pointer; opacity: 0; transition: opacity var(--ease); }
+pre:hover .code-tools button, .code-tools button:focus-visible { opacity: 1; }
+.code-tools button:hover { border-color: var(--accent); color: var(--text); }
 pre code { padding: 0; background: none; font-size: .84em; }
-table { display: block; width: max-content; max-width: 100%; margin: 1.2em 0; overflow-x: auto; border-collapse: collapse; font-family: var(--sans); font-size: .9em; }
-th, td { padding: 6px 13px; border-bottom: 1px solid var(--line); text-align: left; }
-th { border-bottom-color: var(--text-3); font-weight: 600; }
-hr { margin: 2.2em 0; border: 0; border-top: 1px solid var(--line); }
-.task-list-item { list-style: none; margin-left: -1.3em; }
-.task-list-item input { accent-color: var(--accent); }
+table { display: block; width: max-content; max-width: 100%; margin: 1.2em 0; overflow-x: auto; border-collapse: collapse; font-family: var(--sans); font-size: .9em; line-height: 1.5; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { border-bottom-color: var(--text-3); font-weight: 600; white-space: nowrap; }
+tbody tr:nth-child(even) { background: color-mix(in srgb, var(--text) 3.5%, transparent); }
+tbody tr:last-child td { border-bottom-color: var(--text-3); }
+/* A separator is a pause, not a rule across the page. */
+hr { height: 1.2em; margin: 2em 0; border: 0; color: var(--text-3); text-align: center; line-height: 1.2; }
+hr::after { content: '\00b7\2002\00b7\2002\00b7'; font-size: 1.3em; letter-spacing: .3em; }
+.task-list-item { list-style: none; margin-left: -1.5em; }
+.task-list-item input { appearance: none; position: relative; top: .14em; width: 1em; height: 1em; margin: 0 .45em 0 0; border: 1.5px solid var(--text-3); border-radius: .25em; background: var(--bg); }
+.task-list-item input:checked { border-color: var(--accent); background: var(--accent); }
+.task-list-item input:checked::after { content: ''; position: absolute; left: .27em; top: .06em; width: .25em; height: .5em; border: solid var(--on-accent, #fff); border-width: 0 .13em .13em 0; transform: rotate(45deg); }
+.task-list-item:has(> input:checked), .task-list-item:has(> label > input:checked) { color: var(--text-2); }
 .frontmatter { margin-bottom: 1.6em; color: var(--text-2); font: 12px/1.5 var(--mono); }
 .footnotes { color: var(--text-2); font-size: .9em; }
 .diagram { position: relative; display: flex; justify-content: center; min-height: 48px; margin: 1.4em 0; padding: 14px; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }

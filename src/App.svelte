@@ -30,7 +30,7 @@
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
   import { applyInstallerLanguage, tr } from './lib/i18n.svelte';
-  import { LINE_WIDTHS, ZOOM, store, type ViewMode } from './lib/store.svelte';
+  import { LEADINGS, LINE_WIDTHS, ZOOM, store, type ViewMode } from './lib/store.svelte';
   import { applyTheme } from './lib/themes';
   import { api } from './lib/api';
   import { dictionaryOf, spellLanguage } from './lib/spellcheck';
@@ -193,7 +193,7 @@
         <button class="dismiss" title={tr('common.close')} aria-label={tr('common.close')} onclick={() => (tab.outside = null)}>×</button>
       </div>
     {/if}
-    <div class="content" style:--text-scale={store.reading.textScale} style:--prose-width={LINE_WIDTHS[store.reading.lineWidth]}>
+    <div class="content" style:--text-scale={store.reading.textScale} style:--prose-width={LINE_WIDTHS[store.reading.lineWidth]} style:--leading={LEADINGS[store.reading.leading] ?? 0}>
       {#if !tab}
         <Welcome />
       {:else if tab.kind === 'image'}

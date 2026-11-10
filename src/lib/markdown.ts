@@ -23,7 +23,7 @@ const md: any = new MarkdownIt({
   linkify: true,
   highlight(code: string, lang: string) {
     if (lang && hljs.getLanguage(lang)) {
-      return `<pre class="hljs"><code>${hljs.highlight(code, { language: lang }).value}</code></pre>`;
+      return `<pre class="hljs" data-lang="${escapeHtml(lang)}"><code>${hljs.highlight(code, { language: lang }).value}</code></pre>`;
     }
     return '';
   },

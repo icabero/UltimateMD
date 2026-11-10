@@ -154,12 +154,16 @@ export const ZOOM = { min: 0.6, max: 2, step: 0.1 };
 export const TEXT_SCALES = [0.9, 1, 1.15, 1.3] as const;
 export const LINE_WIDTHS = { narrow: '600px', normal: null, wide: '960px', full: 'none' } as const;
 export type LineWidth = keyof typeof LINE_WIDTHS;
+/** How far apart lines are, as an amount added to each view's own spacing. */
+export const LEADINGS = { compact: -0.2, normal: 0, relaxed: 0.25 } as const;
+export type Leading = keyof typeof LEADINGS;
 
-/** How someone likes to read: the interface zoom, the notes' text size and line width. */
+/** How someone likes to read: the interface zoom, the notes' text size, line width and line spacing. */
 interface Reading {
   zoom: number;
   textScale: number;
   lineWidth: LineWidth;
+  leading: Leading;
 }
 /** Below these window widths a side bar folds away by itself. */
 const LEFT_MIN = 760;
@@ -183,7 +187,7 @@ function loadThemeChoice(): ThemeChoice {
 }
 
 function loadReading(): Reading {
-  const fallback: Reading = { zoom: 1, textScale: 1, lineWidth: 'normal' };
+  const fallback: Reading = { zoom: 1, textScale: 1, lineWidth: 'normal', leading: 'normal' };
   try {
     return { ...fallback, ...JSON.parse(localStorage.getItem(READING_KEY) ?? '{}') };
   } catch {

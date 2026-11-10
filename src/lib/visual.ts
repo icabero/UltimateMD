@@ -355,7 +355,7 @@ const keepBlocksWhole = EditorView.inputHandler.of((view, from, to, text) => {
 
 const look = EditorView.theme({
   '.cm-gutters': { display: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--sans)', fontSize: 'calc(15px * var(--text-scale, 1))', lineHeight: '1.65' },
+  '.cm-scroller': { fontFamily: 'var(--sans)', fontSize: 'calc(15px * var(--text-scale, 1))', lineHeight: 'calc(1.65 + var(--leading, 0))' },
   '.cm-content': { maxWidth: 'var(--prose-width, 760px)', margin: '0 auto', width: '100%' },
   '.cm-activeLine': { background: 'transparent' },
   '.cm-v-h1': { fontSize: '1.9em', fontWeight: '700', lineHeight: '1.3' },

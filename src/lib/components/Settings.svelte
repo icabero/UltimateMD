@@ -1,6 +1,6 @@
 <script lang="ts">
   import { frame } from '../frame.svelte';
-  import { IMAGE_FOLDER, LINE_WIDTHS, TEXT_SCALES, type ImagePlace, type LineWidth } from '../store.svelte';
+  import { IMAGE_FOLDER, LEADINGS, LINE_WIDTHS, TEXT_SCALES, type ImagePlace, type Leading, type LineWidth } from '../store.svelte';
   import { dim, pop } from '../motion';
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
@@ -245,6 +245,11 @@
       <label>{tr('reading.lineWidth')}
         <select value={store.reading.lineWidth} onchange={(e) => store.setReading({ lineWidth: e.currentTarget.value as LineWidth })}>
           {#each Object.keys(LINE_WIDTHS) as w}<option value={w}>{tr(`reading.width.${w}` as Key)}</option>{/each}
+        </select>
+      </label>
+      <label>{tr('reading.leading')}
+        <select value={store.reading.leading} onchange={(e) => store.setReading({ leading: e.currentTarget.value as Leading })}>
+          {#each Object.keys(LEADINGS) as l}<option value={l}>{tr(`reading.leading.${l}` as Key)}</option>{/each}
         </select>
       </label>
       <div class="zoom">
