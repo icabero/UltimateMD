@@ -79,6 +79,28 @@ export interface ReplaceResult {
   skipped: string[];
 }
 
+/** One thing the AI did through the MCP server. */
+export interface AiEntry {
+  id: string;
+  /** Milliseconds since the epoch. */
+  time: number;
+  tool: string;
+  path: string;
+  /** Where a moved note was. */
+  from: string | null;
+  /** Names the note's text before, for `historyRead`. */
+  before: string | null;
+  after: string | null;
+  undone: boolean;
+}
+
+/** A version the app kept of a note. */
+export interface Snapshot {
+  time: number;
+  blob: string;
+  source: 'edit' | 'before-ai' | 'before-restore';
+}
+
 export interface LinkInfo {
   outgoing: string[];
   unresolved: string[];
@@ -208,6 +230,13 @@ export const api = {
     invoke<ReplaceResult>('replace_apply', { replace, notes }),
   /** The vault's tags, the most used first. */
   tags: (id: string) => invoke<{ tag: string; notes: number }[]>('vault_tags', { id }),
+  aiLog: (id: string) => invoke<AiEntry[]>('ai_log', { id }),
+  aiUndo: (id: string, entry: string) => invoke<void>('ai_undo', { id, entry }),
+  aiWrote: (id: string, path: string, version: string) => invoke<boolean>('ai_wrote', { id, path, version }),
+  historyList: (id: string, path: string) => invoke<Snapshot[]>('history_list', { id, path }),
+  historyRead: (id: string, blob: string) => invoke<string>('history_read', { id, blob }),
+  /** Keeps the note as it is on disk as a version. True if one was kept. */
+  historyKeep: (id: string, path: string, beforeRestore: boolean) => invoke<boolean>('history_keep', { id, path, beforeRestore }),
   checkMcp: () => invoke<McpCheck>('check_mcp'),
   mcpInfo: () => invoke<{ binary: string; available: boolean }>('mcp_info'),
   openPath: (path: string) => invoke<Opened>('open_path', { path }),

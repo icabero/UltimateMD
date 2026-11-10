@@ -122,6 +122,9 @@ pub fn read_note(id: String, path: String) -> Result<Note> {
 
 #[tauri::command(async)]
 pub fn write_note(id: String, path: String, content: String, expected: Option<String>) -> Result<String> {
+    if loose::folder_for(&id, &path).is_none() {
+        crate::past::before_write(&id, &path);
+    }
     file_fs(&id, &path)?.write(&path, &content, WriteMode::Replace(expected.as_deref()))
 }
 
@@ -138,7 +141,9 @@ pub fn create_dir(id: String, path: String) -> Result<()> {
 #[tauri::command(async)]
 /// Moves or renames, rewriting the links that would otherwise break.
 pub fn rename_path(id: String, from: String, to: String) -> Result<links::LinkUpdate> {
-    links::move_path(&fs(&id)?, &from, &to)
+    let update = links::move_path(&fs(&id)?, &from, &to)?;
+    crate::past::moved(&id, &from, &to);
+    Ok(update)
 }
 
 /// The names of the vault's note templates.

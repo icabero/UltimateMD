@@ -14,6 +14,7 @@ use rmcp::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
+use ultimatemd_core::history::History;
 use ultimatemd_core::{Error, McpAccess, Registry, VaultFs, WriteMode, links, paths, search, sections, tags};
 
 const INSTRUCTIONS: &str = "UltimateMD exposes the user's vaults: folders of Markdown and HTML notes. \
@@ -143,6 +144,32 @@ fn open(key: &str, need_write: bool) -> ultimatemd_core::Result<VaultFs> {
         (McpAccess::Off, _) => Err(Error::UnknownVault(key.to_string())),
         (McpAccess::Read, true) => Err(Error::AccessDenied(vault.name.clone())),
         _ => Ok(VaultFs::new(&vault.path)),
+    }
+}
+
+/// A vault open for writing, which notes down what is done to it so the user
+/// can see it in the app and take it back.
+struct Writable {
+    id: String,
+    fs: VaultFs,
+}
+
+impl std::ops::Deref for Writable {
+    type Target = VaultFs;
+    fn deref(&self) -> &VaultFs {
+        &self.fs
+    }
+}
+
+fn open_rw(key: &str) -> ultimatemd_core::Result<Writable> {
+    let fs = open(key, true)?;
+    Ok(Writable { id: Registry::load()?.find(key)?.id.clone(), fs })
+}
+
+impl Writable {
+    /// A failure to log never fails the tool: the change is already made.
+    fn log(&self, tool: &str, path: &str, from: Option<&str>, before: Option<&str>, after: Option<&str>) {
+        let _ = History::default().record_ai(&self.id, tool, path, from, before, after);
     }
 }
 
@@ -282,7 +309,7 @@ impl Server {
     async fn insert_at_heading(&self, Parameters(a): Parameters<InsertArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let path = note_path(&a.path)?;
-            let vault = open(&a.vault, true)?;
+            let vault = open_rw(&a.vault)?;
             let note = vault.read(&path)?;
             if a.expected_version.as_ref().is_some_and(|v| *v != note.version) {
                 return Err(Error::Conflict(path));
@@ -296,6 +323,7 @@ impl Server {
             };
             let text = sections::insert(&note.content, heading, place, &a.content);
             let version = vault.write(&path, &text, WriteMode::Replace(Some(&note.version)))?;
+            vault.log("insert_at_heading", &path, None, Some(&note.content), Some(&version));
             Ok(json!({ "path": path, "version": version }))
         })())
     }
@@ -315,7 +343,9 @@ impl Server {
     async fn create_note(&self, Parameters(a): Parameters<WriteArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let path = note_path(&with_extension(&a.path))?;
-            let version = open(&a.vault, true)?.write(&path, &a.content, WriteMode::Create)?;
+            let vault = open_rw(&a.vault)?;
+            let version = vault.write(&path, &a.content, WriteMode::Create)?;
+            vault.log("create_note", &path, None, None, Some(&version));
             Ok(json!({ "path": path, "version": version }))
         })())
     }
@@ -328,7 +358,10 @@ impl Server {
         reply((|| {
             let path = note_path(&a.path)?;
             let mode = WriteMode::Replace(a.expected_version.as_deref());
-            let version = open(&a.vault, true)?.write(&path, &a.content, mode)?;
+            let vault = open_rw(&a.vault)?;
+            let before = vault.read(&path).ok().map(|n| n.content);
+            let version = vault.write(&path, &a.content, mode)?;
+            vault.log("update_note", &path, None, before.as_deref(), Some(&version));
             Ok(json!({ "path": path, "version": version }))
         })())
     }
@@ -340,11 +373,12 @@ impl Server {
     async fn append_note(&self, Parameters(a): Parameters<AppendArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let path = note_path(&a.path)?;
-            let vault = open(&a.vault, true)?;
+            let vault = open_rw(&a.vault)?;
             let note = vault.read(&path)?;
             let separator = if note.content.is_empty() || note.content.ends_with('\n') { "" } else { "\n" };
             let text = format!("{}{separator}{}", note.content, a.content);
             let version = vault.write(&path, &text, WriteMode::Replace(Some(&note.version)))?;
+            vault.log("append_note", &path, None, Some(&note.content), Some(&version));
             Ok(json!({ "path": path, "version": version }))
         })())
     }
@@ -356,12 +390,18 @@ impl Server {
     async fn move_note(&self, Parameters(a): Parameters<MoveArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let (from, to) = (note_path(&a.from)?, note_path(&with_extension(&a.to))?);
-            let vault = open(&a.vault, true)?;
+            let vault = open_rw(&a.vault)?;
+            let log = || {
+                let _ = History::default().moved(&vault.id, &from, &to);
+                vault.log("move_note", &to, Some(&from), None, None);
+            };
             if a.update_links == Some(false) {
                 vault.rename(&from, &to)?;
+                log();
                 return Ok(json!({ "path": to }));
             }
             let update = links::move_path(&vault, &from, &to)?;
+            log();
             Ok(json!({ "path": to, "linksUpdated": update.links, "notesUpdated": update.notes }))
         })())
     }
@@ -373,7 +413,10 @@ impl Server {
     async fn delete_note(&self, Parameters(a): Parameters<NoteArg>) -> Result<CallToolResult, ErrorData> {
         reply((|| {
             let path = note_path(&a.path)?;
-            open(&a.vault, true)?.trash(&path)?;
+            let vault = open_rw(&a.vault)?;
+            let before = vault.read(&path).ok().map(|n| n.content);
+            vault.trash(&path)?;
+            vault.log("delete_note", &path, None, before.as_deref(), None);
             Ok(json!({ "trashed": path }))
         })())
     }

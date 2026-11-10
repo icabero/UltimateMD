@@ -68,6 +68,27 @@ test('what changed outside the app is marked, can be seen and undone', async ({ 
   await expect(banner).toBeHidden();
 });
 
+test('what the AI did is listed per vault, shown and undone', async ({ page }) => {
+  await open(page, 'Otra');
+  await page.evaluate(() => (window as any).__test.aiWrite('b', 'Otra.md', '# Otra\n\nEscrito por la IA.\n'));
+  // The note on screen says who changed it.
+  await expect(page.locator('.banner.info')).toContainText('La IA ha editado esta nota');
+  await page.locator('.banner.info').getByRole('button', { name: 'Cerrar' }).click();
+
+  await page.locator('aside').getByRole('button', { name: 'Personal', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Actividad de la IA' }).click();
+  const log = page.getByRole('dialog', { name: 'Actividad de la IA · Personal' });
+  await expect(log.getByRole('listitem')).toHaveCount(1);
+  await expect(log.getByRole('listitem')).toContainText('Reescribió «Otra»');
+  await log.getByRole('button', { name: 'Ver cambios' }).click();
+  await expect(log.locator('.add')).toContainText(['Escrito por la IA.']);
+  await log.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(log.getByRole('listitem')).toContainText('Deshecho');
+  expect(await disk(page, 'b', 'Otra.md')).toBe('# Otra\n');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.cm-content')).not.toContainText('Escrito por la IA');
+});
+
 test('an outside change stops being offered for undo once the note is edited', async ({ page }) => {
   await open(page, 'Otra');
   await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\nNuevo.\n'));

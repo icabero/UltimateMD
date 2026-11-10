@@ -18,6 +18,7 @@
   import Tutorial from './lib/components/Tutorial.svelte';
   import Shortcuts from './lib/components/Shortcuts.svelte';
   import OutsideChanges from './lib/components/OutsideChanges.svelte';
+  import AiLog from './lib/components/AiLog.svelte';
   import WordScreen from './lib/components/WordScreen.svelte';
   import BrokenLinks from './lib/components/BrokenLinks.svelte';
   import Tabs from './lib/components/Tabs.svelte';
@@ -223,6 +224,7 @@
 {#if store.outsideDiff && tab?.outside}<OutsideChanges {tab} />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
 {#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
+{#if store.aiLog}<AiLog vaultId={store.aiLog} />{/if}
 {#if store.brokenLinks}<BrokenLinks vaultId={store.brokenLinks} />{/if}
 {#if store.templatePicker}<TemplatePicker {...store.templatePicker} />{/if}
 {#if store.exporting && tab}<Export {tab} />{/if}

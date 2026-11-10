@@ -264,6 +264,8 @@ class Store {
   themeEditor = $state<string | null>(null);
   /** The vault whose broken links are listed. */
   brokenLinks = $state<string | null>(null);
+  /** The vault whose log of what the AI did is open. */
+  aiLog = $state<string | null>(null);
   /** The vault whose Word settings are open. */
   wordScreen = $state<string | null>(null);
   /** Where a note from a template goes, while choosing the template. */
@@ -581,8 +583,8 @@ class Store {
   }
 
   /** Whether the AI wrote this note a moment ago, by the MCP server's log. */
-  async changedByAi(_vaultId: string, _path: string) {
-    return false;
+  async changedByAi(vaultId: string, path: string, version: string) {
+    return api.aiWrote(vaultId, path, version).catch(() => false);
   }
 
   /** Puts back a note as it was before a change made outside the app. */
@@ -989,7 +991,7 @@ class Store {
           const before = tab.outside?.before ?? tab.content;
           const lines = changedLines(before, disk.content);
           tab.outside = lines.length
-            ? { before, version: disk.version, lines, ai: await this.changedByAi(vaultId, tab.path), seen: (tab.outside?.seen ?? 0) + 1 }
+            ? { before, version: disk.version, lines, ai: await this.changedByAi(vaultId, tab.path, disk.version), seen: (tab.outside?.seen ?? 0) + 1 }
             : null;
         }
         tab.content = disk.content;

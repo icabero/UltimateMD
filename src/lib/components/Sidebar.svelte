@@ -69,6 +69,7 @@
         { label: tr('sidebar.newFolder'), run: () => newFolder(vault.id, '') },
         { label: tr('broken.open'), run: () => (store.brokenLinks = vault.id) },
         { label: tr('word.openSettings'), run: () => (store.wordScreen = vault.id) },
+        { label: tr('aiLog.open'), run: () => (store.aiLog = vault.id) },
         { label: tr('sidebar.closeVault'), run: () => store.setVaultOpen(vault.id, false) },
       ],
     };

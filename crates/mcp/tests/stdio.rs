@@ -243,3 +243,22 @@ fn sections_are_read_and_written_without_touching_the_rest() {
     let tags = c.ok("list_tags", json!({ "vault": "rw" }));
     assert_eq!(tags["tags"], json!([{ "tag": "proyecto", "notes": 1 }]));
 }
+
+#[test]
+fn what_it_writes_is_logged_for_the_user_to_see_and_undo() {
+    let (d, mut c) = setup();
+    c.ok("append_note", json!({ "vault": "rw", "path": "base.md", "content": "añadido" }));
+    c.ok("create_note", json!({ "vault": "rw", "path": "nueva", "content": "x" }));
+    c.ok("read_note", json!({ "vault": "rw", "path": "base.md" }));
+
+    let registry = Registry::load_from(&d.path().join("cfg/vaults.json")).unwrap();
+    let id = registry.find("rw").unwrap().id.clone();
+    let history = ultimatemd_core::history::History::at(&d.path().join("cfg"));
+    let log = history.ai_log(&id).unwrap();
+    let tools: Vec<&str> = log.iter().map(|e| e.tool.as_str()).collect();
+    assert_eq!(tools, ["create_note", "append_note"], "reading is not logged");
+
+    let vault = ultimatemd_core::VaultFs::new(d.path().join("rw"));
+    history.undo_ai(&vault, &id, &log[1].id).unwrap();
+    assert_eq!(std::fs::read_to_string(d.path().join("rw/base.md")).unwrap(), "hola [[otra]]\n");
+}

@@ -66,6 +66,14 @@
     return root;
   }
 
+  const past = { log: [], blobs: {}, versions: {} };
+  function keepVersion(id, path, content, source, time = Date.now()) {
+    const blob = `b${Object.keys(past.blobs).length}`;
+    past.blobs[blob] = content;
+    (past.versions[`${id}:${path}`] ??= []).push({ time, blob, source });
+    return blob;
+  }
+
   function replacePattern({ find, matchCase, wholeWord, regex }) {
     if (!find) throw 'nothing to find';
     let source = regex ? find : find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -372,6 +380,22 @@
       }
       return [...counts].map(([tag, notes]) => ({ tag, notes })).sort((a, b) => b.notes - a.notes || a.tag.localeCompare(b.tag));
     },
+    // Versions of notes and the AI's log: the real ones are in crates/core/src/history.rs.
+    ai_log: ({ id }) => past.log.filter((e) => e.vault === id),
+    ai_wrote: ({ id, path, version }) => past.log.some((e) => e.vault === id && e.path === path && e.after === version),
+    ai_undo: ({ id, entry }) => {
+      const found = past.log.find((e) => e.id === entry);
+      if (found.after !== versionOf(id, found.path)) throw 'the file changed since it was read: ' + found.path;
+      files[id][found.path] = past.blobs[found.before];
+      bump(id, found.path);
+      found.undone = true;
+    },
+    history_list: ({ id, path }) => [...(past.versions[`${id}:${path}`] ?? [])].reverse(),
+    history_read: ({ blob }) => past.blobs[blob],
+    history_keep: ({ id, path, beforeRestore }) => {
+      keepVersion(id, path, files[id][path], beforeRestore ? 'before-restore' : 'edit');
+      return true;
+    },
     watch_problems: () => window.__watchProblems ?? [],
     set_spellcheck: ({ languages }) => void (window.__spellcheck = languages),
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),
@@ -410,6 +434,15 @@
     externalWrite(id, path, content) {
       files[id][path] = content;
       bump(id, path);
+      window[`_${listeners['vault-changed']}`]?.({ payload: { vaultId: id, paths: [path] } });
+    },
+    keepVersion,
+    /** Simulates the AI rewriting a note through the MCP server, which logs it. */
+    aiWrite(id, path, content, tool = 'update_note') {
+      const before = keepVersion(id, path, files[id][path], 'before-ai');
+      files[id][path] = content;
+      const after = bump(id, path);
+      past.log.unshift({ id: `e${past.log.length}`, vault: id, time: Date.now(), tool, path, from: null, before, after, undone: false });
       window[`_${listeners['vault-changed']}`]?.({ payload: { vaultId: id, paths: [path] } });
     },
     /** Changes a file on disk without the app hearing of it. */

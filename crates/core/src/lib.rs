@@ -7,6 +7,7 @@ pub mod callouts;
 pub mod docx;
 pub mod error;
 pub mod files;
+pub mod history;
 pub mod links;
 pub mod note_templates;
 pub mod paths;

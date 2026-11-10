@@ -3,6 +3,7 @@
 mod commands;
 mod loose;
 mod mcp_check;
+mod past;
 mod protocol;
 mod startup;
 mod watcher;
@@ -87,6 +88,7 @@ fn main() {
                     }
                 });
             }
+            past::tidy();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -129,6 +131,12 @@ fn main() {
             commands::replace_preview,
             commands::replace_apply,
             commands::vault_tags,
+            past::history_list,
+            past::history_read,
+            past::history_keep,
+            past::ai_log,
+            past::ai_undo,
+            past::ai_wrote,
             commands::open_path,
             commands::close_loose,
             commands::take_pending_files,
