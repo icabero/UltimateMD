@@ -77,13 +77,13 @@
     try {
       if (await api.chooseVaultTemplate(vaultId)) await load();
     } catch (e) {
-      store.notify(e);
+      store.fail(e);
     }
   }
 
   async function removeTemplate() {
     if (!(await store.confirm(tr('word.removeConfirm', { name: vaultName }), tr('common.remove'), true))) return;
-    await api.removeVaultTemplate(vaultId).catch((e) => store.notify(e));
+    await api.removeVaultTemplate(vaultId).catch((e) => store.fail(e));
     await load();
   }
 
@@ -94,7 +94,7 @@
     void makePicture().then((bytes) => {
       picture = bytes;
       return load();
-    }).catch((e) => store.notify(e));
+    }).catch((e) => store.fail(e));
     return () => clearTimeout(timer);
   });
 </script>

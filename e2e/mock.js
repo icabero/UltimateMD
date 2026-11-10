@@ -396,6 +396,9 @@
       keepVersion(id, path, files[id][path], beforeRestore ? 'before-restore' : 'edit');
       return true;
     },
+    log_error: ({ source, message }) => void (window.__log = [...(window.__log ?? []), `[error] ${source}: ${message}`]),
+    read_log: () => (window.__log ?? []).join('\n'),
+    reveal_log: () => {},
     watch_problems: () => window.__watchProblems ?? [],
     set_spellcheck: ({ languages }) => void (window.__spellcheck = languages),
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),

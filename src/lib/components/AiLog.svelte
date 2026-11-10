@@ -32,7 +32,7 @@
 
   async function load() {
     entries = await api.aiLog(vaultId).catch((e) => {
-      store.notify(e);
+      store.fail(e);
       return [];
     });
   }
@@ -45,7 +45,7 @@
       const after = entry.tool === 'delete_note' ? '' : (await api.read(vaultId, entry.path)).content;
       shown = { id: entry.id, before, after };
     } catch (e) {
-      store.notify(e);
+      store.fail(e);
     }
   }
 

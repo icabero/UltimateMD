@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod logbook;
 mod loose;
 mod mcp_check;
 mod past;
@@ -35,6 +36,7 @@ fn main() {
         unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") };
     }
 
+    logbook::start();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             if let Some(window) = app.get_webview_window("main") {
@@ -131,6 +133,9 @@ fn main() {
             commands::replace_preview,
             commands::replace_apply,
             commands::vault_tags,
+            logbook::log_error,
+            logbook::read_log,
+            logbook::reveal_log,
             past::history_list,
             past::history_read,
             past::history_keep,

@@ -420,6 +420,17 @@ test('spelling is checked in the language of the app, of the note or none', asyn
   await expect.poll(() => page.evaluate(() => (window as any).__spellcheck)).toEqual([]);
 });
 
+test('what goes wrong is written to a log that the settings show', async ({ page }) => {
+  // Opening a file that is gone fails, and says so.
+  await page.evaluate(() => (window as any).__test.openFiles(['/fuera/borrado.md']));
+  await expect(page.getByRole('status')).toContainText('No se pudo abrir');
+  await page.evaluate(() => void Promise.reject(new Error('fallo sin atrapar')));
+  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  const section = page.getByRole('region', { name: 'Registro de errores' });
+  await section.getByRole('button', { name: 'Ver' }).click();
+  await expect(section.locator('pre')).toContainText('[error] promise: Error: fallo sin atrapar');
+});
+
 test('the AI connection can be tested from the settings', async ({ page }) => {
   await page.locator('aside').getByTitle('Ajustes y MCP').click();
   await page.getByRole('button', { name: 'Inteligencia artificial' }).click();

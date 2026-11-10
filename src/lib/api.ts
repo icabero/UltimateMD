@@ -237,6 +237,10 @@ export const api = {
   historyRead: (id: string, blob: string) => invoke<string>('history_read', { id, blob }),
   /** Keeps the note as it is on disk as a version. True if one was kept. */
   historyKeep: (id: string, path: string, beforeRestore: boolean) => invoke<boolean>('history_keep', { id, path, beforeRestore }),
+  /** Writes an error to the log file. */
+  logError: (source: string, message: string) => invoke<void>('log_error', { source, message }),
+  readLog: () => invoke<string>('read_log'),
+  revealLog: () => invoke<void>('reveal_log'),
   checkMcp: () => invoke<McpCheck>('check_mcp'),
   mcpInfo: () => invoke<{ binary: string; available: boolean }>('mcp_info'),
   openPath: (path: string) => invoke<Opened>('open_path', { path }),

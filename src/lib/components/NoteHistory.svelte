@@ -42,7 +42,7 @@
     try {
       shown = { version, text: await api.historyRead(tab.vaultId, version.blob) };
     } catch (e) {
-      store.notify(e);
+      store.fail(e);
     }
   }
 

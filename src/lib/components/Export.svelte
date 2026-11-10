@@ -137,7 +137,7 @@
     try {
       return await action();
     } catch (e) {
-      store.notify(e);
+      store.fail(e);
     }
   }
 

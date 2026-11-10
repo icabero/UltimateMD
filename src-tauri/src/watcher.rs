@@ -97,6 +97,7 @@ fn fail(app: &AppHandle, id: &str, error: String) {
     let state = app.state::<Watchers>();
     let mut failed = state.failed.lock().unwrap_or_else(|e| e.into_inner());
     if failed.insert(id.to_string(), error.clone()).is_none() {
+        crate::logbook::error("watcher", &format!("cannot watch vault {id}: {error}"));
         let _ = app.emit("watch-failed", WatchProblem { vault_id: id.to_string(), error });
     }
 }

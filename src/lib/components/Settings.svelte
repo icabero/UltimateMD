@@ -38,6 +38,19 @@
   let copied = $state(false);
 
   let defaultApp = $state<DefaultAppInfo | null>(null);
+  let log = $state<string | null>(null);
+  let logCopied = $state(false);
+
+  async function showLog() {
+    log = await api.readLog().catch(() => '');
+  }
+
+  async function copyLog() {
+    await navigator.clipboard.writeText(await api.readLog().catch(() => ''));
+    logCopied = true;
+    setTimeout(() => (logCopied = false), 1500);
+  }
+
   let checking = $state(false);
   let checked = $state<McpCheck | null>(null);
   /** Vaults the AI cannot reach because their access is off. */
@@ -64,7 +77,7 @@
       await api.setDefaultApp();
       defaultApp = await api.defaultAppInfo();
     } catch (e) {
-      store.notify(e);
+      store.fail(e);
     }
   }
 
@@ -86,19 +99,19 @@
   const following = $derived(store.themeChoice.fixed === null);
 
   async function setAccess(vault: Vault, value: McpAccess) {
-    await api.setVaultAccess(vault.id, value).catch((e) => store.notify(e));
+    await api.setVaultAccess(vault.id, value).catch((e) => store.fail(e));
     await store.loadVaults();
   }
 
   async function setScripts(vault: Vault, allow: boolean) {
-    await api.setVaultScripts(vault.id, allow).catch((e) => store.notify(e));
+    await api.setVaultScripts(vault.id, allow).catch((e) => store.fail(e));
     await store.loadVaults();
   }
 
   async function rename(vault: Vault) {
     const name = await store.prompt(tr('sidebar.vaultName'), vault.name, tr('common.rename'));
     if (name?.trim() && name.trim() !== vault.name) {
-      await api.renameVault(vault.id, name.trim()).catch((e) => store.notify(e));
+      await api.renameVault(vault.id, name.trim()).catch((e) => store.fail(e));
       await store.loadVaults();
     }
   }
@@ -159,6 +172,18 @@
       <option value="note">{tr('images.note')}</option>
     </select>
     <p class="hint">{tr('images.hint')}</p>
+  </section>
+  <section aria-label={tr('log.title')}>
+    <h3>{tr('log.title')}</h3>
+    <p class="muted">{tr('log.intro')}</p>
+    <div class="logbar">
+      <button class="plain" onclick={showLog}>{tr(log === null ? 'log.show' : 'log.refresh')}</button>
+      <button class="plain" onclick={copyLog}>{tr(logCopied ? 'common.copied' : 'common.copy')}</button>
+      <button class="plain" onclick={() => api.revealLog().catch((e) => store.fail(e))}>{tr('log.reveal')}</button>
+    </div>
+    {#if log !== null}
+      <pre class="log" aria-label={tr('log.title')}>{log || tr('log.empty')}</pre>
+    {/if}
   </section>
   <section>
     <h3>{tr('tutorial.label')}</h3>
@@ -369,6 +394,8 @@
   .result ul { margin: 0 0 var(--space-2); padding-left: var(--space-5); }
   .result .access { color: var(--text-3); }
   .result pre { max-height: 140px; margin: var(--space-1) 0 0; overflow: auto; color: var(--text-2); font: var(--font-xs)/1.5 var(--mono); white-space: pre-wrap; }
+  .logbar { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .log { max-height: 200px; margin: var(--space-2) 0 0; padding: var(--space-2); overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text-2); font: var(--font-xs)/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
   .muted :global(code) { font: var(--font-sm) var(--mono); }
   .muted { margin: var(--space-1) 0; color: var(--text-2); font-size: var(--font-sm); }
   .warn { color: var(--danger); font-size: var(--font-sm); }

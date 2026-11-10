@@ -469,6 +469,13 @@ class Store {
     this.holdToast(false);
   }
 
+  /** Shows something that went wrong and writes it to the log, where it can be read later. */
+  fail(error: unknown, options: Parameters<Store['notify']>[1] = {}) {
+    const text = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    void api.logError('ui', text).catch(() => {});
+    this.notify(error instanceof Error ? error.message : error, options);
+  }
+
   /** Takes the notice away, letting whatever waited on it finish. */
   dismissToast() {
     clearTimeout(this.#toastTimer);
@@ -490,8 +497,8 @@ class Store {
     if (!path) return;
     this.notify(tr('export.done'), {
       actions: [
-        { label: tr('export.openFile'), run: () => void api.openExported(path).catch((e) => this.notify(e)) },
-        { label: tr('export.showInFolder'), run: () => void api.revealExported(path).catch((e) => this.notify(e)) },
+        { label: tr('export.openFile'), run: () => void api.openExported(path).catch((e) => this.fail(e)) },
+        { label: tr('export.showInFolder'), run: () => void api.revealExported(path).catch((e) => this.fail(e)) },
       ],
     });
   }
@@ -549,7 +556,7 @@ class Store {
     try {
       result = await api.replaceApply(replace, notes);
     } catch (e) {
-      this.notify(e);
+      this.fail(e);
       return;
     } finally {
       this.#ownWrites--;
@@ -599,7 +606,7 @@ class Store {
       tab.version = await api.write(tab.vaultId, tab.path, change.before, change.version);
     } catch (e) {
       if (String(e).includes('changed since')) this.notify(tr('outside.changedAgain'));
-      else this.notify(e);
+      else this.fail(e);
       return;
     }
     tab.content = change.before;
@@ -635,7 +642,7 @@ class Store {
       this.trees[id] = await api.tree(id);
     } catch (e) {
       this.trees[id] = [];
-      this.notify(e);
+      this.fail(e);
     }
   }
 
@@ -659,7 +666,7 @@ class Store {
       await this.loadVaults();
       return vault;
     } catch (e) {
-      this.notify(e);
+      this.fail(e);
     }
   }
 
@@ -689,7 +696,7 @@ class Store {
           await this.openFile(opened.id, opened.name, { absolute: opened.absolute, dir: opened.dir });
         }
       } catch (e) {
-        this.notify(tr('store.openFailed', { path, error: String(e) }));
+        this.fail(tr('store.openFailed', { path, error: String(e) }));
       }
     }
   }
@@ -719,7 +726,7 @@ class Store {
     const kind = kindOf(path);
     if (kind === 'other') {
       // Not text this app can edit: hand it to the system's default program.
-      await api.openWithSystem(vaultId, path).catch((e) => this.notify(e));
+      await api.openWithSystem(vaultId, path).catch((e) => this.fail(e));
       return;
     }
     let content = '';
@@ -728,7 +735,7 @@ class Store {
       try {
         ({ content, version } = await api.read(vaultId, path));
       } catch (e) {
-        this.notify(e);
+        this.fail(e);
         return;
       }
     }
@@ -820,7 +827,7 @@ class Store {
         const path = await api.saveImage(tab.vaultId, dir, name, new Uint8Array(await file.arrayBuffer()));
         links.push(`![](${linkFrom(tab.path, path)})`);
       } catch (e) {
-        this.notify(e);
+        this.fail(e);
       }
     }
     if (!links.length) return null;
@@ -871,7 +878,7 @@ class Store {
       try {
         content = fillTemplate(await api.noteTemplate(vaultId, template), { titulo: name.replace(/\.md$/i, ''), vault: this.vault(vaultId)?.name ?? '' });
       } catch (e) {
-        return this.notify(e);
+        return this.fail(e);
       }
     }
     await this.createNote(vaultId, dir, name, content);
@@ -885,7 +892,7 @@ class Store {
       await api.saveNoteTemplate(tab.vaultId, name, tab.content);
       this.notify(tr('templates.saved', { name }));
     } catch (e) {
-      this.notify(e);
+      this.fail(e);
     }
   }
 
@@ -917,7 +924,7 @@ class Store {
       delete this.tags[tab.vaultId];
     } catch (e) {
       if (String(e).includes('changed since')) await this.detectConflict(tab);
-      else this.notify(e);
+      else this.fail(e);
     } finally {
       tab.saving = false;
     }
@@ -1038,7 +1045,7 @@ class Store {
       await this.refreshTree(vaultId);
       if (open) await this.openFile(vaultId, path);
     } catch (e) {
-      this.notify(e);
+      this.fail(e);
     }
   }
 
@@ -1047,7 +1054,7 @@ class Store {
       await api.createDir(vaultId, join(dir, name));
       await this.refreshTree(vaultId);
     } catch (e) {
-      this.notify(e);
+      this.fail(e);
     }
   }
 
@@ -1061,7 +1068,7 @@ class Store {
       update = await api.rename(vaultId, from, to);
     } catch (e) {
       this.#ownWrites--;
-      this.notify(e);
+      this.fail(e);
       return;
     }
     for (const tab of this.tabs) {
@@ -1101,7 +1108,7 @@ class Store {
     try {
       token = await api.trash(vaultId, path);
     } catch (e) {
-      this.notify(e);
+      this.fail(e);
       return;
     }
     const inside = (t: Tab) => t.vaultId === vaultId && (t.path === path || t.path.startsWith(`${path}/`));
@@ -1119,7 +1126,7 @@ class Store {
       try {
         await api.undoTrash(vaultId, token);
       } catch (e) {
-        this.notify(e);
+        this.fail(e);
         return;
       }
       await this.refreshTree(vaultId);
@@ -1135,7 +1142,7 @@ class Store {
     this.notify(tr('store.trashed', { name: baseName(path).replace(/\.(md|markdown)$/i, '') }), {
       actions: [{ label: tr('common.undo'), run: () => void undo() }],
       onDone: () => {
-        if (!undone) void api.finishTrash(vaultId, token).catch((e) => this.notify(e));
+        if (!undone) void api.finishTrash(vaultId, token).catch((e) => this.fail(e));
       },
     });
   }

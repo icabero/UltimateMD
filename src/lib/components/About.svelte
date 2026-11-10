@@ -33,7 +33,7 @@
     }
   }
 
-  const open = (url: string) => openUrl(url).catch((e) => store.notify(e));
+  const open = (url: string) => openUrl(url).catch((e) => store.fail(e));
 </script>
 
 <button in:dim class="scrim" aria-label={tr('common.close')} onclick={() => (store.about = false)}></button>

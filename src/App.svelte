@@ -61,7 +61,10 @@
     } catch {
       // Keeps the default width.
     }
-    store.init().catch((e) => store.notify(e));
+    // Failures nobody caught still reach the log.
+    addEventListener('error', (e) => void api.logError('window', e.error?.stack ?? e.message).catch(() => {}));
+    addEventListener('unhandledrejection', (e) => void api.logError('promise', e.reason?.stack ?? String(e.reason)).catch(() => {}));
+    store.init().catch((e) => store.fail(e));
     void frame.watch();
     void store.applyZoom();
     // The window starts hidden so it first appears with the right theme, language and frame.
