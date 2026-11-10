@@ -114,6 +114,7 @@
       { id: 'app.settings', label: tr('cmd.settings'), run: () => (store.settings = true) },
       { id: 'app.shortcuts', label: tr('cmd.shortcuts'), keys: ['Ctrl', '/'], run: () => (store.shortcuts = true) },
       { id: 'app.news', label: tr('news.open'), run: () => void store.showNews() },
+      { id: 'app.sample', label: tr('sample.create'), run: () => void store.createSampleVault() },
       { id: 'app.tutorial', label: tr('cmd.tutorial'), run: () => (store.tutorial = true) },
       { id: 'app.about', label: tr('cmd.about'), run: () => (store.about = true) },
     ].filter((c) => c.when !== false),

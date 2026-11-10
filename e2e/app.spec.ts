@@ -589,6 +589,27 @@ test('code blocks name their language and copy, and line spacing can be chosen',
   expect(await height()).toBeGreaterThan(before);
 });
 
+test('an example vault is created to learn with, and empty places suggest what to do', async ({ page }) => {
+  await page.evaluate(() => ((window as any).__picked = '/home/yo'));
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('vault de ejemplo');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('aside')).toContainText('Ejemplo UltimateMD');
+  await expect(page.locator('main footer')).toContainText('Ejemplo UltimateMD / Empieza aquí.md');
+  // Its links lead to notes that exist, except the one meant to be missing.
+  await page.getByTitle('Vista previa', { exact: true }).click();
+  await expect(prose(page).locator('a[data-wikilink]')).toHaveCount(3);
+  await expect(prose(page).locator('a.broken')).toHaveCount(0);
+  const vault = await page.evaluate(() => Object.keys((window as any).__test.files.n2));
+  expect(vault).toHaveLength(5);
+
+  // A search that finds nothing offers to create that note.
+  await searchFor(page, 'Acta de enero');
+  await expect(page.locator('.results')).toContainText('Prueba con menos palabras');
+  await page.getByRole('button', { name: 'Crear la nota «Acta de enero»' }).click();
+  await expect(page.locator('main footer')).toContainText('Acta de enero.md');
+});
+
 test('the AI connection can be tested from the settings', async ({ page }) => {
   await page.locator('aside').getByTitle('Ajustes y MCP').click();
   await page.getByRole('button', { name: 'Inteligencia artificial' }).click();

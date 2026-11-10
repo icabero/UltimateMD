@@ -399,6 +399,13 @@
     log_error: ({ source, message }) => void (window.__log = [...(window.__log ?? []), `[error] ${source}: ${message}`]),
     read_log: () => (window.__log ?? []).join('\n'),
     reveal_log: () => {},
+    'plugin:dialog|open': () => window.__picked ?? null,
+    create_vault: ({ parent, name }) => {
+      const vault = { id: `n${vaults.length}`, name, path: `${parent}/${name}`, open: true, mcp: 'off', allowScripts: false };
+      vaults.push(vault);
+      files[vault.id] = {};
+      return vault;
+    },
     reveal_path: ({ id, path }) => void (window.__revealed = `${id}:${path}`),
     update_supported: () => window.__selfUpdate ?? true,
     update_install: async () => {

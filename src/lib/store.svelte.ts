@@ -7,7 +7,8 @@ import { api, type ReplaceOptions, type TreeNode, type Vault, type VaultThemes, 
 import { fold } from './fold';
 import { fillTemplate } from './noteTemplates';
 import { withColors, type DiagramStyle } from './diagramStyle';
-import { tr } from './i18n.svelte';
+import { language, tr } from './i18n.svelte';
+import { sampleVault } from './sampleVault';
 import { baseName, dirName, join, kindOf, linkFrom, resolveLink, stem, type FileKind } from './paths';
 import { checksAtStart, isNewer, latestVersion } from './updates';
 import { newsFor, unseenNews } from './news';
@@ -786,6 +787,24 @@ class Store {
     if (typeof parent !== 'string') return;
     const name = await this.prompt(tr('sidebar.vaultName'), '', tr('common.create'));
     if (name?.trim()) await this.addVault(() => api.createVault(parent, name.trim()));
+  }
+
+  /** Asks where, and creates a vault of invented notes to learn with. */
+  async createSampleVault() {
+    const parent = await openDialog({ directory: true, title: tr('sample.where') });
+    if (typeof parent !== 'string') return;
+    const sample = sampleVault(language());
+    const vault = await this.addVault(() => api.createVault(parent, sample.name));
+    if (!vault) return;
+    try {
+      for (const [path, content] of Object.entries(sample.files)) await api.create(vault.id, path, content);
+    } catch (e) {
+      this.fail(e);
+    }
+    await this.refreshTree(vault.id);
+    this.closeTutorial();
+    await this.openFile(vault.id, sample.start);
+    this.notify(tr('sample.created', { name: sample.name }));
   }
 
   /** Asks for a folder and opens it as a vault. */

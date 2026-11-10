@@ -62,6 +62,10 @@ export const eu: Record<Key, string> = {
   'watch.badge': 'Kanpoko aldaketak ez dira berez ikusten. Sakatu vaulta berriro irakurtzeko.',
 
   'welcome.intro': 'Sortu vault bat edo ireki karpeta bat hasteko. Vault bat zure oharrak dituen karpeta arrunt bat da, formatu berezirik gabe.',
+  'sample.create': 'Sortu adibidezko vault bat',
+  'sample.hint': 'Adibidezko vaultak asmatutako ohar batzuk dakartza, estekekin, diagramekin, taulekin eta esportatzeko prest dagoen txosten batekin: ukituz gehiago ikasten da irakurriz baino.',
+  'sample.where': 'Zein karpetatan sortu adibidezko vaulta?',
+  'sample.created': '«{name}» sortu da. Zurea da: aldatu edo ezabatu nahi duzunean.',
   'home.recent': 'Azkenak',
   'home.vaults': 'Vaultak',
   'home.search': 'Bilatu denetan',
@@ -100,6 +104,7 @@ export const eu: Record<Key, string> = {
   'sidebar.searchTitle': 'Bilatu vault guztietan (Ctrl+Maius+F)',
   'sidebar.settingsTitle': 'Ezarpenak eta MCP',
   'sidebar.emptyVault': 'Vault hutsa',
+  'sidebar.firstNote': 'Sortu lehen oharra',
   'sidebar.favorites': 'Gogokoak',
   'sidebar.addFavorite': 'Gehitu gogokoetara',
   'sidebar.removeFavorite': 'Kendu gogokoetatik',
@@ -209,6 +214,8 @@ export const eu: Record<Key, string> = {
 
   'search.placeholder': 'Bilatu irekitako vaultetan',
   'search.empty': 'Emaitzarik ez',
+  'search.emptyTips': 'Probatu hitz gutxiagorekin edo iragazkirik gabe. Bilaketak ez ditu maiuskulak eta azentuak bereizten.',
+  'search.createNote': 'Sortu «{name}» oharra',
   'search.modes': 'Bilatu edo ordeztu',
   'search.find': 'Bilatu',
   'search.replace': 'Ordeztu',

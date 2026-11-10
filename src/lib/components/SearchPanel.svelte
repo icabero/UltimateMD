@@ -59,6 +59,13 @@
   }
 
   const name = (path: string) => path.split('/').pop()!.replace(/\.md$/i, '');
+
+  /** A search for plain words that finds nothing can become a note with that name. */
+  const creatable = $derived.by(() => {
+    const text = query.trim();
+    const vaultId = (store.active && !store.active.loose ? store.active.vaultId : null) ?? store.openVaults[0]?.id;
+    return vaultId && text && text.length <= 80 && /^[^"/:*?<>|\\-][^"/:*?<>|\\]*$/.test(text) ? { vaultId, name: text } : null;
+  });
   const folder = (path: string) => path.split('/').slice(0, -1).join('/');
 </script>
 
@@ -105,7 +112,13 @@
     {:else}
       {#if problem?.includes('regular expression')}
         <p class="bad" role="alert">{tr('search.badRegex')}</p>
-      {:else if searched}<p>{tr('search.empty')}</p>{/if}
+      {:else if searched}
+        <p>{tr('search.empty')}</p>
+        <p class="tips">{tr('search.emptyTips')}</p>
+        {#if creatable}
+          <button class="create" onclick={() => store.createNote(creatable.vaultId, '', creatable.name)}>{tr('search.createNote', { name: creatable.name })}</button>
+        {/if}
+      {/if}
     {/each}
   </div>
   {/if}
@@ -124,6 +137,8 @@
   .syntax dt { color: var(--text); font-family: var(--mono); }
   .syntax dd { margin: 0; color: var(--text-2); }
   .bad { color: var(--danger); }
+  .tips { padding-top: 0; font-size: var(--font-sm); line-height: 1.5; }
+  .create { margin: 0 var(--space-2); padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); color: var(--accent-text); font-size: var(--font-sm); }
   .results { flex: 1; min-height: 0; margin-top: var(--space-2); overflow-y: auto; }
   .note + .note { margin-top: var(--space-1-5); }
   button { display: flex; width: 100%; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text); text-align: left; }

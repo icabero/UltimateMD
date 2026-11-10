@@ -174,7 +174,10 @@
             {#each store.trees[vault.id] ?? [] as node (node.path)}
               <TreeItem vaultId={vault.id} {node} depth={1} onmenu={entryMenu} />
             {:else}
-              <p class="empty">{tr('sidebar.emptyVault')}</p>
+              <div class="empty">
+                <p>{tr('sidebar.emptyVault')}</p>
+                <button onclick={() => newNote(vault.id, '')}>{tr('sidebar.firstNote')}</button>
+              </div>
             {/each}
           {/if}
         </section>
@@ -210,6 +213,9 @@
   .fav { display: flex; align-items: center; gap: var(--space-2); width: 100%; height: 27px; padding: 0 var(--space-2) 0 var(--space-3); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-md); text-align: left; }
   .fav:hover { background: var(--hover); color: var(--text); }
   .fav.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 500; }
+  .empty p { margin: 0; }
+  .empty button { margin-top: var(--space-1); padding: 0; border: 0; background: none; color: var(--accent-text); font-size: var(--font-sm); }
+  .empty button:hover { text-decoration: underline; }
   .empty { margin: var(--space-0-5) 0 var(--space-1-5) var(--space-8); color: var(--text-3); font-size: var(--font-sm); }
   footer { display: flex; gap: var(--space-1); padding: var(--space-2); border-top: 1px solid var(--line); }
   footer button { display: flex; flex: 1; align-items: center; justify-content: center; gap: var(--space-1-5); height: 30px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); white-space: nowrap; }

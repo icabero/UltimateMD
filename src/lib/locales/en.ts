@@ -62,6 +62,10 @@ export const en: Record<Key, string> = {
   'watch.badge': 'Outside changes do not show by themselves. Click to read the vault again.',
 
   'welcome.intro': 'Create a vault or open a folder to begin. A vault is a plain folder with your notes, in no special format.',
+  'sample.create': 'Create an example vault',
+  'sample.hint': 'The example vault brings a few made-up notes with links, diagrams, tables and a report ready to export: touching teaches more than reading.',
+  'sample.where': 'In which folder should the example vault go?',
+  'sample.created': '“{name}” created. It is yours: change it or delete it whenever you like.',
   'home.recent': 'Recent',
   'home.vaults': 'Vaults',
   'home.search': 'Search everything',
@@ -100,6 +104,7 @@ export const en: Record<Key, string> = {
   'sidebar.searchTitle': 'Search all vaults (Ctrl+Shift+F)',
   'sidebar.settingsTitle': 'Settings and MCP',
   'sidebar.emptyVault': 'Empty vault',
+  'sidebar.firstNote': 'Create the first note',
   'sidebar.favorites': 'Favourites',
   'sidebar.addFavorite': 'Add to favourites',
   'sidebar.removeFavorite': 'Remove from favourites',
@@ -209,6 +214,8 @@ export const en: Record<Key, string> = {
 
   'search.placeholder': 'Search open vaults',
   'search.empty': 'No results',
+  'search.emptyTips': 'Try fewer words or no filters. The search ignores case and accents.',
+  'search.createNote': 'Create the note “{name}”',
   'search.modes': 'Find or replace',
   'search.find': 'Find',
   'search.replace': 'Replace',
