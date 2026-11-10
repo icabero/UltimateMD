@@ -255,6 +255,10 @@ export const es = {
 
   'settings.title': 'Ajustes',
   'settings.language': 'Idioma',
+  'spell.title': 'Corrector ortográfico',
+  'spell.app': 'En el idioma de la app',
+  'spell.off': 'Desactivado',
+  'spell.hint': 'Subraya las palabras mal escritas al editar. Una nota puede tener su propio idioma con «idioma: en» en sus propiedades.',
   'images.title': 'Imágenes pegadas o arrastradas',
   'images.vault': 'En la carpeta «{folder}» del vault',
   'images.note': 'Junto a la nota',

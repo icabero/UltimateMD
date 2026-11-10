@@ -24,6 +24,8 @@
   import { applyInstallerLanguage, tr } from './lib/i18n.svelte';
   import { LINE_WIDTHS, ZOOM, store, type ViewMode } from './lib/store.svelte';
   import { applyTheme } from './lib/themes';
+  import { api } from './lib/api';
+  import { dictionaryOf, spellLanguage } from './lib/spellcheck';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
   const VIEWS: ViewMode[] = ['visual', 'edit', 'split', 'preview'];
@@ -41,6 +43,12 @@
 
   $effect(() => {
     applyTheme(store.theme);
+  });
+
+  // Linux's spell checker needs telling which dictionary to use; elsewhere this does nothing.
+  const spelling = $derived(tab?.kind === 'md' ? spellLanguage(store.spellcheck, tab.content) : null);
+  $effect(() => {
+    void api.setSpellcheck(spelling ? [dictionaryOf(spelling)] : []).catch(() => {});
   });
 
   onMount(() => {

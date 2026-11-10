@@ -197,6 +197,8 @@ export const api = {
   chooseVaultTemplate: (id: string) => invoke<boolean>('choose_vault_template', { id }),
   removeVaultTemplate: (id: string) => invoke<void>('remove_vault_template', { id }),
   wordSample: (id: string, settings: WordSettings, markdown: string, picture: number[]) => invoke<number[]>('word_sample', { id, settings, markdown, picture }),
+  /** Tells the system spell checker which dictionaries to use, where it needs telling. */
+  setSpellcheck: (languages: string[]) => invoke<void>('set_spellcheck', { languages }),
   installerLanguage: () => invoke<string | null>('installer_language'),
   exportFile: (name: string, data: Uint8Array) => invoke<string | null>('export_file', { name, data: Array.from(data) }),
 };

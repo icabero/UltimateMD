@@ -10,6 +10,7 @@ import { withColors, type DiagramStyle } from './diagramStyle';
 import { tr } from './i18n.svelte';
 import { baseName, dirName, join, kindOf, linkFrom, resolveLink, type FileKind } from './paths';
 import { checksAtStart, isNewer, latestVersion } from './updates';
+import { loadSpellSetting, saveSpellSetting, type SpellSetting } from './spellcheck';
 import { THEMES, applyTheme, frontmatterValue, resolveTheme, themeById, type Theme } from './themes';
 
 export type ViewMode = 'visual' | 'edit' | 'split' | 'preview';
@@ -233,6 +234,8 @@ class Store {
   about = $state(false);
   /** The list of every keyboard shortcut. */
   shortcuts = $state(false);
+  /** Whether and in which language spelling is checked while writing. */
+  spellcheck = $state<SpellSetting>(loadSpellSetting());
   /** A newer published version, once known. */
   update = $state<string | null>(null);
   /** The view new tabs open in: the last one the user chose. */
@@ -660,6 +663,11 @@ class Store {
     } catch {
       // Outside the app, in the interface tests.
     }
+  }
+
+  setSpellcheck(setting: SpellSetting) {
+    this.spellcheck = setting;
+    saveSpellSetting(setting);
   }
 
   setImagePlace(place: ImagePlace) {

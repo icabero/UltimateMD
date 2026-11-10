@@ -23,6 +23,7 @@
   import { frontmatterChange, frontmatterValue } from '../themes';
   import { EDIT_DIAGRAM, visualMode } from '../visual';
   import { headingCompletions, linkAt, noteCompletions, wikilinks } from '../wikilinks';
+  import { spellLanguage } from '../spellcheck';
 
   let { tab, onscroll }: { tab: Tab; onscroll?: (ratio: number) => void } = $props();
 
@@ -79,6 +80,10 @@
   const states = new Map<string, EditorState>();
   const language = new Compartment();
   const mode = new Compartment();
+  const spelling = new Compartment();
+  /** The language the shown note is checked in, and which note that was. */
+  let spelledAs: string | null | undefined;
+  let spelledKey = '';
   const PLAIN: Extension = [];
   let builder = $state<{ initial: BuilderStart | null; replace: { from: number; to: number } | null } | null>(null);
   let styling = $state(false);
@@ -165,6 +170,7 @@
         syntaxHighlighting(highlight), baseTheme, EditorView.lineWrapping,
         language.of(languageFor(current.kind)),
         mode.of(PLAIN),
+        spelling.of(spellAttributes(null)),
         found,
         ...(current.kind === 'md' ? [wikilinks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
@@ -203,6 +209,19 @@
     }
     const wanted = current.kind === 'md' && current.view === 'visual' ? visualMode : PLAIN;
     if (mode.get(view.state) !== wanted) view.dispatch({ effects: mode.reconfigure(wanted) });
+    const lang = current.kind === 'md' ? spellLanguage(store.spellcheck, current.content) : null;
+    if (lang !== spelledAs || shownKey !== spelledKey) {
+      spelledAs = lang;
+      spelledKey = shownKey;
+      view.dispatch({ effects: spelling.reconfigure(spellAttributes(lang)) });
+    }
+  }
+
+  /** Marks misspelt words in a note's language; code and HTML files are left alone. */
+  function spellAttributes(lang: string | null) {
+    return EditorView.contentAttributes.of(
+      lang ? { spellcheck: 'true', lang, autocorrect: 'off', autocapitalize: 'off' } : { spellcheck: 'false' },
+    );
   }
 
   /** Opens the diagram under the cursor when the builder can read it. */
@@ -324,6 +343,7 @@
     tab.content;
     tab.revision;
     tab.view;
+    store.spellcheck;
     show(tab);
   });
 

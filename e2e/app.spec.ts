@@ -295,6 +295,24 @@ test('Ctrl+/ lists every shortcut, and the list can be filtered', async ({ page 
   expect(await disk(page, 'b', 'Otra.md')).toBe('# Otra\n');
 });
 
+test('spelling is checked in the language of the app, of the note or none', async ({ page }) => {
+  await open(page, 'Otra');
+  const content = page.locator('.cm-content');
+  await expect(content).toHaveAttribute('spellcheck', 'true');
+  await expect(content).toHaveAttribute('lang', 'es');
+  await expect.poll(() => page.evaluate(() => (window as any).__spellcheck)).toEqual(['es_ES']);
+
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '---\nidioma: en\n---\n# Other\n'));
+  await expect(content).toHaveAttribute('lang', 'en');
+  await expect.poll(() => page.evaluate(() => (window as any).__spellcheck)).toEqual(['en_US']);
+
+  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  await page.getByRole('combobox', { name: 'Corrector ortográfico' }).selectOption('Desactivado');
+  await page.keyboard.press('Escape');
+  await expect(content).toHaveAttribute('spellcheck', 'false');
+  await expect.poll(() => page.evaluate(() => (window as any).__spellcheck)).toEqual([]);
+});
+
 test('global search covers every vault', async ({ page }) => {
   await page.keyboard.press('Control+Shift+f');
   await page.getByPlaceholder('Buscar en los vaults abiertos').fill('#');

@@ -256,6 +256,10 @@ export const en: Record<Key, string> = {
 
   'settings.title': 'Settings',
   'settings.language': 'Language',
+  'spell.title': 'Spell checker',
+  'spell.app': 'In the app\'s language',
+  'spell.off': 'Off',
+  'spell.hint': 'Underlines misspelt words while editing. A note can have its own language with “idioma: en” in its properties.',
   'images.title': 'Pasted or dropped images',
   'images.vault': 'In the vault’s “{folder}” folder',
   'images.note': 'Beside the note',

@@ -256,6 +256,10 @@ export const eu: Record<Key, string> = {
 
   'settings.title': 'Ezarpenak',
   'settings.language': 'Hizkuntza',
+  'spell.title': 'Zuzentzaile ortografikoa',
+  'spell.app': 'Aplikazioaren hizkuntzan',
+  'spell.off': 'Desaktibatuta',
+  'spell.hint': 'Gaizki idatzitako hitzak azpimarratzen ditu editatzean. Ohar batek bere hizkuntza izan dezake «idioma: en» bere propietateetan jarrita.',
   'images.title': 'Itsatsitako edo arrastatutako irudiak',
   'images.vault': 'Vaulteko «{folder}» karpetan',
   'images.note': 'Oharraren ondoan',

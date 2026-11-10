@@ -698,3 +698,24 @@ pub fn installer_language() -> Option<String> {
     let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
     Some(std::fs::read_to_string(dir.join("language.txt")).ok()?.trim().to_string())
 }
+
+/// Turns the spell checker on with these dictionaries, or off with none.
+/// Only WebKitGTK needs telling; the Windows and macOS webviews follow the
+/// page and the system.
+#[tauri::command]
+pub fn set_spellcheck(window: tauri::WebviewWindow, languages: Vec<String>) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    window
+        .with_webview(move |webview| {
+            use webkit2gtk::{WebContextExt, WebViewExt};
+            if let Some(context) = webview.inner().context() {
+                let names: Vec<&str> = languages.iter().map(String::as_str).collect();
+                context.set_spell_checking_languages(&names);
+                context.set_spell_checking_enabled(!names.is_empty());
+            }
+        })
+        .map_err(|e| Error::Vault(e.to_string()))?;
+    #[cfg(not(target_os = "linux"))]
+    let _ = (window, languages);
+    Ok(())
+}

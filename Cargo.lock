@@ -6104,6 +6104,7 @@ dependencies = [
  "tempfile",
  "ultimatemd-core",
  "ultimatemd-pdf",
+ "webkit2gtk",
 ]
 
 [[package]]

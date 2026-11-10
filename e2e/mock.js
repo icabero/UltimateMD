@@ -307,6 +307,7 @@
     },
     take_pending_files: () => window.__pending ?? [],
     installer_language: () => window.__installerLanguage ?? null,
+    set_spellcheck: ({ languages }) => void (window.__spellcheck = languages),
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),
   };
 

@@ -8,6 +8,7 @@
   import { LANGUAGES, language, setLanguage, themeName, tr, type Key, type Language } from '../i18n.svelte';
   import { store } from '../store.svelte';
   import { THEMES, type Theme } from '../themes';
+  import { SPELL_LANGUAGES, type SpellSetting } from '../spellcheck';
 
   type Client = 'claude-code' | 'claude-desktop' | 'cursor' | 'other';
   type Section = 'general' | 'appearance' | 'vaults' | 'ai';
@@ -126,6 +127,15 @@
     <select aria-label={tr('settings.language')} value={language()} onchange={(e) => setLanguage(e.currentTarget.value as Language)}>
       {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
     </select>
+  </section>
+  <section>
+    <h3>{tr('spell.title')}</h3>
+    <select aria-label={tr('spell.title')} value={store.spellcheck} onchange={(e) => store.setSpellcheck(e.currentTarget.value as SpellSetting)}>
+      <option value="app">{tr('spell.app')}</option>
+      {#each SPELL_LANGUAGES as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
+      <option value="off">{tr('spell.off')}</option>
+    </select>
+    <p class="hint">{tr('spell.hint')}</p>
   </section>
   <section>
     <h3>{tr('images.title')}</h3>
