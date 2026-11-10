@@ -399,6 +399,13 @@
     log_error: ({ source, message }) => void (window.__log = [...(window.__log ?? []), `[error] ${source}: ${message}`]),
     read_log: () => (window.__log ?? []).join('\n'),
     reveal_log: () => {},
+    update_supported: () => window.__selfUpdate ?? true,
+    update_install: async () => {
+      if (window.__updateFails) throw 'signature does not match';
+      window[`_${listeners['update-progress']}`]?.({ payload: { done: 40, total: 100 } });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      window.__updated = true;
+    },
     watch_problems: () => window.__watchProblems ?? [],
     set_spellcheck: ({ languages }) => void (window.__spellcheck = languages),
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),

@@ -7,6 +7,7 @@ mod mcp_check;
 mod past;
 mod protocol;
 mod startup;
+mod update;
 mod watcher;
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
@@ -47,6 +48,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(commands::RegistryLock::default())
         .manage(startup::Pending::from_args())
         .manage(watcher::Watchers::default())
@@ -133,6 +135,8 @@ fn main() {
             commands::replace_preview,
             commands::replace_apply,
             commands::vault_tags,
+            update::update_supported,
+            update::update_install,
             logbook::log_error,
             logbook::read_log,
             logbook::reveal_log,

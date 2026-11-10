@@ -241,6 +241,10 @@ export const api = {
   logError: (source: string, message: string) => invoke<void>('log_error', { source, message }),
   readLog: () => invoke<string>('read_log'),
   revealLog: () => invoke<void>('reveal_log'),
+  /** Whether this copy can update itself, rather than through the system's packages. */
+  updateSupported: () => invoke<boolean>('update_supported'),
+  /** Downloads and installs the newest version, then restarts. Progress comes as `update-progress` events. */
+  updateInstall: () => invoke<void>('update_install'),
   checkMcp: () => invoke<McpCheck>('check_mcp'),
   mcpInfo: () => invoke<{ binary: string; available: boolean }>('mcp_info'),
   openPath: (path: string) => invoke<Opened>('open_path', { path }),

@@ -51,8 +51,12 @@ jobs:
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update packages; the app holds the public key. Free: Tauri's own signing.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
           releaseName: UltimateMD ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
           releaseDraft: true
-          args: --target ${{ matrix.target }}
+          # Update packages and latest.json, which running apps read to update themselves.
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json

@@ -1950,6 +1950,37 @@ test('about reports being up to date, a new version and a failure', async ({ pag
   await expect(dialog.getByRole('status')).toContainText('No se pudo comprobar');
 });
 
+test('a new version installs from the app, saving first, or says why not', async ({ page }) => {
+  await release(page, 'v0.2.0');
+  await open(page, 'Otra');
+  await typeInEditor(page, 'sin guardar aún');
+  await about(page);
+  const dialog = page.getByRole('dialog', { name: 'Acerca de' });
+  await dialog.getByRole('button', { name: 'Buscar actualizaciones' }).click();
+  await dialog.getByRole('button', { name: 'Actualizar ahora' }).click();
+  await expect(dialog).toContainText('Descargando… 40 %');
+  await expect.poll(() => page.evaluate(() => (window as any).__updated)).toBe(true);
+  expect(await disk(page, 'b', 'Otra.md')).toContain('sin guardar aún');
+
+  await page.evaluate(() => ((window as any).__updateFails = true));
+  await dialog.getByRole('button', { name: 'Actualizar ahora' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('No se pudo actualizar desde la app.');
+  await expect(dialog.getByRole('button', { name: 'Ir a descargas' })).toBeVisible();
+});
+
+test('a copy installed by the system is told to update through it', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__selfUpdate = false;
+  });
+  await page.reload();
+  await release(page, 'v0.2.0');
+  await about(page);
+  const dialog = page.getByRole('dialog', { name: 'Acerca de' });
+  await dialog.getByRole('button', { name: 'Buscar actualizaciones' }).click();
+  await expect(dialog).toContainText('Esta copia la instaló el sistema');
+  await expect(dialog.getByRole('button', { name: 'Actualizar ahora' })).toHaveCount(0);
+});
+
 test('a new version is announced at startup unless turned off', async ({ page }) => {
   await release(page, 'v0.2.0');
   await page.reload();

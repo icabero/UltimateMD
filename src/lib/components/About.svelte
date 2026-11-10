@@ -2,7 +2,9 @@
   import { dim, pop } from '../motion';
   import { getVersion } from '@tauri-apps/api/app';
   import { openUrl } from '@tauri-apps/plugin-opener';
+  import { listen } from '@tauri-apps/api/event';
   import { onMount, untrack } from 'svelte';
+  import { api } from '../api';
   import Icon from './Icon.svelte';
   import { tr } from '../i18n.svelte';
   import { store } from '../store.svelte';
@@ -15,9 +17,33 @@
   let check = $state<Check>(known ? { state: 'available', version: known } : { state: 'idle' });
   let auto = $state(checksAtStart());
 
-  onMount(async () => {
-    version = await getVersion().catch(() => '');
+  /** Whether this copy can install the update itself. */
+  let selfUpdate = $state(false);
+  let installing = $state<{ percent: number | null } | null>(null);
+  let installFailed = $state(false);
+
+  onMount(() => {
+    void getVersion().then((v) => (version = v), () => {});
+    void api.updateSupported().then((ok) => (selfUpdate = ok), () => {});
+    const stop = listen<{ done: number; total: number | null }>('update-progress', ({ payload }) => {
+      if (installing) installing = { percent: payload.total ? Math.min(100, Math.round((payload.done / payload.total) * 100)) : null };
+    });
+    return () => void stop.then((off) => off());
   });
+
+  /** Saves everything, then lets the app replace itself and start again. */
+  async function install() {
+    installFailed = false;
+    installing = { percent: null };
+    try {
+      await store.saveAll();
+      await api.updateInstall();
+    } catch (e) {
+      void api.logError('update', String(e)).catch(() => {});
+      installFailed = true;
+    }
+    installing = null;
+  }
 
   async function search() {
     check = { state: 'checking' };
@@ -62,7 +88,14 @@
       <span role="status" class="bad">{tr('about.failed')}</span>
     {:else if check.state === 'available'}
       <span role="status">{tr('about.available', { version: check.version })}</span>
-      <button class="plain" onclick={() => open(RELEASES_URL)}>{tr('about.download')}</button>
+      {#if installing}
+        <span role="status">{installing.percent === null ? tr('about.installing') : tr('about.downloading', { n: installing.percent })}</span>
+      {:else}
+        {#if selfUpdate}<button class="plain primary" onclick={install}>{tr('about.install')}</button>{/if}
+        <button class="plain" onclick={() => open(RELEASES_URL)}>{tr('about.download')}</button>
+      {/if}
+      {#if installFailed}<p class="bad" role="alert">{tr('about.installFailed')}</p>{/if}
+      {#if !selfUpdate}<p class="note">{tr('about.systemPackage')}</p>{/if}
     {/if}
   </div>
   <label><input type="checkbox" bind:checked={auto} onchange={() => setChecksAtStart(auto)} /> {tr('about.auto')}</label>
@@ -83,5 +116,8 @@
   .bad { color: var(--danger); }
   .plain { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: none; color: var(--text); font-size: var(--font-sm); }
   .plain:hover { background: var(--hover); }
+  .plain.primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+  .check p { flex-basis: 100%; margin: 0; font-size: var(--font-sm); }
+  .note { color: var(--text-3); }
   label { display: flex; align-items: center; gap: var(--space-1-5); margin-top: var(--space-3); color: var(--text-2); font-size: var(--font-sm); }
 </style>
