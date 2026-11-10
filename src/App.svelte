@@ -17,6 +17,7 @@
   import ThemeEditor from './lib/components/ThemeEditor.svelte';
   import Tutorial from './lib/components/Tutorial.svelte';
   import Shortcuts from './lib/components/Shortcuts.svelte';
+  import OutsideChanges from './lib/components/OutsideChanges.svelte';
   import WordScreen from './lib/components/WordScreen.svelte';
   import BrokenLinks from './lib/components/BrokenLinks.svelte';
   import Tabs from './lib/components/Tabs.svelte';
@@ -170,6 +171,13 @@
       </div>
     {:else if tab?.missing}
       <div class="banner" role="alert"><span>{tr('app.missingBanner')}</span></div>
+    {:else if tab?.outside}
+      <div class="banner info" aria-live="polite">
+        <span>{tr(tab.outside.ai ? 'outside.aiBanner' : 'outside.banner', { n: tab.outside.lines.length })}</span>
+        <button onclick={() => (store.outsideDiff = true)}>{tr('outside.show')}</button>
+        <button onclick={() => store.undoOutside(tab)}>{tr('common.undo')}</button>
+        <button class="dismiss" title={tr('common.close')} aria-label={tr('common.close')} onclick={() => (tab.outside = null)}>×</button>
+      </div>
     {/if}
     <div class="content" style:--text-scale={store.reading.textScale} style:--prose-width={LINE_WIDTHS[store.reading.lineWidth]}>
       {#if !tab}
@@ -212,6 +220,7 @@
 {#if store.settings}<Settings />{/if}
 {#if store.about}<About />{/if}
 {#if store.shortcuts}<Shortcuts />{/if}
+{#if store.outsideDiff && tab?.outside}<OutsideChanges {tab} />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
 {#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
 {#if store.brokenLinks}<BrokenLinks vaultId={store.brokenLinks} />{/if}
@@ -234,6 +243,8 @@
   .pane.preview:not(:first-child) { border-left: 1px solid var(--line); }
   .banner { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); flex: none; background: var(--warn); color: var(--text); font-size: var(--font-md); }
   .banner span { flex: 1; }
+  .banner.info { background: var(--accent-soft); }
+  .banner .dismiss { padding: 0 var(--space-2); border: 0; background: none; font-size: var(--font-lg); line-height: 1; }
   .banner button { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--raised); color: var(--text); font-size: var(--font-sm); }
   footer { display: flex; gap: var(--space-4); align-items: center; height: 24px; flex: none; padding: 0 var(--space-3); background: var(--panel); border-top: 1px solid var(--line); color: var(--text-3); font-size: var(--font-xs); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
   .spacer { flex: 1; }

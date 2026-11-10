@@ -12,6 +12,9 @@ p, ul, ol { margin: .8em 0; }
 li { margin: .2em 0; }
 a { color: var(--accent-text); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 2px; cursor: pointer; }
 a:hover { text-decoration-color: currentColor; }
+/* Blocks just changed outside the app, by the AI or another program. */
+.outside-change { animation: outside-change 6s ease-out; border-radius: .2em; }
+@keyframes outside-change { 0%, 40% { background: var(--found); box-shadow: 0 0 0 .3em var(--found); } 100% { background: transparent; box-shadow: 0 0 0 .3em transparent; } }
 a.tag { padding: 0 .2em; border-radius: .3em; background: var(--accent-soft); color: var(--accent-text); text-decoration: none; }
 a.tag:hover { text-decoration: underline; }
 a.broken { color: var(--text-2); text-decoration-style: dashed; text-decoration-color: currentColor; }
@@ -19,7 +22,7 @@ img, video { max-width: 100%; border-radius: 6px; }
 /* Diagrams marked "animado": their connections flow. Never in documents or images. */
 .diagram.animated svg :is(polyline.edge, .message line, path.connection, .flowchart-link, path.transition, .messageLine0, .messageLine1) { stroke-dasharray: 8 6; animation: umd-flow 1s linear infinite; }
 @keyframes umd-flow { to { stroke-dashoffset: -28; } }
-@media (prefers-reduced-motion: reduce) { .diagram svg * { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .diagram svg * { animation: none !important; } .outside-change { animation: none; background: var(--found); } }
 /* Callouts: a coloured box per kind, readable on light and dark themes. */
 .callout { --callout: #2563eb; margin: 1.1em 0; padding: .7em 1em; border-left: 3px solid var(--callout); border-radius: 4px; background: color-mix(in srgb, var(--callout) 9%, transparent); }
 .callout[data-callout='tip'] { --callout: #16a34a; }

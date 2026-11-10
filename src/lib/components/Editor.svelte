@@ -57,8 +57,28 @@
     '.cm-selectionBackground, &.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { background: 'var(--selection) !important' },
     '.cm-panels': { background: 'var(--panel)', color: 'var(--text)', borderColor: 'var(--line)' },
     '.cm-searchMatch': { background: 'var(--accent-soft)' },
+    '.cm-outside': { animation: 'cm-outside 6s ease-out' },
+    '@keyframes cm-outside': { '0%, 40%': { background: 'var(--found)' }, '100%': { background: 'transparent' } },
     '.cm-found': { background: 'var(--found)', borderRadius: 'var(--radius-2xs)' },
   });
+
+  // Lines just changed outside the app, marked for a moment.
+  const setOutside = StateEffect.define<number[]>();
+  const outsideMark = Decoration.line({ class: 'cm-outside' });
+  const outside = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update(marks, tr) {
+      for (const e of tr.effects) {
+        if (e.is(setOutside)) {
+          const doc = tr.state.doc;
+          return Decoration.set(e.value.filter((l) => l <= doc.lines).map((l) => outsideMark.range(doc.line(l).from)));
+        }
+      }
+      return tr.docChanged && !tr.annotation(external) ? Decoration.none : marks.map(tr.changes);
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  });
+  let outsideSeen = 0;
 
   // The words of a search, marked until the next edit.
   const setFound = StateEffect.define<[number, number][]>();
@@ -173,6 +193,7 @@
         mode.of(PLAIN),
         spelling.of(spellAttributes(null)),
         found,
+        outside,
         ...(current.kind === 'md' ? [wikilinks, tagMarks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions, tagCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
@@ -210,6 +231,11 @@
     }
     const wanted = current.kind === 'md' && current.view === 'visual' ? visualMode : PLAIN;
     if (mode.get(view.state) !== wanted) view.dispatch({ effects: mode.reconfigure(wanted) });
+    const change = current.outside;
+    if (change && change.seen !== outsideSeen) {
+      outsideSeen = change.seen;
+      view.dispatch({ effects: setOutside.of(change.lines) });
+    }
     const lang = current.kind === 'md' ? spellLanguage(store.spellcheck, current.content) : null;
     if (lang !== spelledAs || shownKey !== spelledKey) {
       spelledAs = lang;
@@ -344,6 +370,7 @@
     tab.content;
     tab.revision;
     tab.view;
+    tab.outside;
     store.spellcheck;
     show(tab);
   });

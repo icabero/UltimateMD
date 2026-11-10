@@ -31,12 +31,23 @@ const md: any = new MarkdownIt({
   .use(footnote)
   .use(taskLists, { enabled: false, label: true });
 
+// Each top-level block says which lines of the note it comes from, so the
+// preview can mark the ones that changed.
+md.core.ruler.push('source_lines', (state: any) => {
+  const offset = state.env?.offset ?? 0;
+  for (const token of state.tokens) {
+    if (token.level === 0 && token.block && token.map && token.nesting >= 0 && token.type !== 'inline') {
+      token.attrSet('data-lines', `${token.map[0] + 1 + offset}-${token.map[1] + offset}`);
+    }
+  }
+});
+
 const defaultFence = md.renderer.rules.fence!;
 md.renderer.rules.fence = (tokens: any, idx: number, options: any, env: any, self: any) => {
   const token = tokens[idx];
   const { lang, words } = splitFence(token.info);
   if (lang === 'mermaid' || lang === 'd2') {
-    return `<div class="diagram" data-lang="${lang}" data-style="${escapeHtml(words)}" data-src="${encodeURIComponent(token.content)}"></div>`;
+    return `<div class="diagram" data-lines="${token.attrGet('data-lines') ?? ''}" data-lang="${lang}" data-style="${escapeHtml(words)}" data-src="${encodeURIComponent(token.content)}"></div>`;
   }
   return defaultFence(tokens, idx, options, env, self);
 };
@@ -209,7 +220,8 @@ export function headingAt(headings: Heading[], line: number) {
 export function renderMarkdown(text: string, ctx: RenderContext): DocumentFragment {
   const { meta, body } = splitFrontmatter(text);
   const head = meta === null ? '' : `<pre class="frontmatter">${escapeHtml(meta)}</pre>`;
-  const fragment = DOMPurify.sanitize(head + md.render(body), {
+  const offset = meta === null ? 0 : text.slice(0, text.length - body.length).split('\n').length - 1;
+  const fragment = DOMPurify.sanitize(head + md.render(body, { offset }), {
     RETURN_DOM_FRAGMENT: true,
     FORCE_BODY: true,
     ADD_TAGS: ['style'],

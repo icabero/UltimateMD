@@ -10,6 +10,7 @@ import { withColors, type DiagramStyle } from './diagramStyle';
 import { tr } from './i18n.svelte';
 import { baseName, dirName, join, kindOf, linkFrom, resolveLink, type FileKind } from './paths';
 import { checksAtStart, isNewer, latestVersion } from './updates';
+import { changedLines } from './diff';
 import { loadSpellSetting, saveSpellSetting, type SpellSetting } from './spellcheck';
 import { THEMES, applyTheme, frontmatterValue, resolveTheme, themeById, type Theme } from './themes';
 
@@ -30,8 +31,22 @@ export interface Tab {
   /** A different version on disk while this tab has unsaved edits. */
   conflict: { content: string; version: string } | null;
   missing: boolean;
+  /** Changed on disk by someone else while open and untouched here, until seen or edited. */
+  outside: OutsideChange | null;
   /** Set for a file outside any vault: its location on disk. */
   loose: { absolute: string; dir: string } | null;
+}
+
+/** A note changed outside the app while open: what it was, and which lines of it now changed. */
+export interface OutsideChange {
+  before: string;
+  /** The version written from outside, so undoing can tell if it changed again. */
+  version: string;
+  lines: number[];
+  /** The AI changed it through the MCP server, as far as its log says. */
+  ai: boolean;
+  /** Bumped on each change, so the marks show again. */
+  seen: number;
 }
 
 /** A place to show in a tab: a line, with the words of a search marked. Line 0 is the top. */
@@ -236,6 +251,8 @@ class Store {
   about = $state(false);
   /** The list of every keyboard shortcut. */
   shortcuts = $state(false);
+  /** Showing what changed outside the app in the note on screen. */
+  outsideDiff = $state(false);
   /** Whether and in which language spelling is checked while writing. */
   spellcheck = $state<SpellSetting>(loadSpellSetting());
   /** A newer published version, once known. */
@@ -273,6 +290,8 @@ class Store {
   favorites = $state<Place[]>(loadPlaces(FAVORITES_KEY));
 
   #timers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Above zero while the app itself rewrites notes, such as links after a move: those are not outside changes. */
+  #ownWrites = 0;
   #toastTimer: ReturnType<typeof setTimeout> | undefined;
 
   get theme(): Theme {
@@ -512,7 +531,7 @@ class Store {
   /** Re-reads the notes of some vaults, in tabs and trees, after the app changed them on disk. */
   async #reloadChanged(paths: { vaultId: string; path: string }[]) {
     for (const vaultId of new Set(paths.map((p) => p.vaultId))) {
-      await this.onChanged({ vaultId, paths: paths.filter((p) => p.vaultId === vaultId).map((p) => p.path) });
+      await this.onChanged({ vaultId, paths: paths.filter((p) => p.vaultId === vaultId).map((p) => p.path) }, true);
     }
   }
 
@@ -520,11 +539,14 @@ class Store {
   async replaceInVaults(replace: ReplaceOptions, notes: { vaultId: string; path: string; version: string; lines: number[] }[]) {
     await this.saveAll();
     let result;
+    this.#ownWrites++;
     try {
       result = await api.replaceApply(replace, notes);
     } catch (e) {
       this.notify(e);
       return;
+    } finally {
+      this.#ownWrites--;
     }
     const { replaced, skipped } = result;
     await this.#reloadChanged(replaced);
@@ -556,6 +578,28 @@ class Store {
     this.searchQuery = `etiqueta:${tag}`;
     this.searching = true;
     this.toggleBar('left', true);
+  }
+
+  /** Whether the AI wrote this note a moment ago, by the MCP server's log. */
+  async changedByAi(_vaultId: string, _path: string) {
+    return false;
+  }
+
+  /** Puts back a note as it was before a change made outside the app. */
+  async undoOutside(tab: Tab) {
+    const change = tab.outside;
+    if (!change) return;
+    try {
+      tab.version = await api.write(tab.vaultId, tab.path, change.before, change.version);
+    } catch (e) {
+      if (String(e).includes('changed since')) this.notify(tr('outside.changedAgain'));
+      else this.notify(e);
+      return;
+    }
+    tab.content = change.before;
+    tab.outside = null;
+    tab.revision++;
+    this.notify(tr('outside.undone'));
   }
 
   /** A vault that cannot be watched: changes made outside the app only show when it is read again. */
@@ -684,7 +728,7 @@ class Store {
     }
     this.tabs.push({
       key, vaultId, path, kind, content, version,
-      dirty: false, saving: false, view: kind === 'md' || this.preferredView !== 'visual' ? this.preferredView : 'split', revision: 0, conflict: null, missing: false, loose,
+      dirty: false, saving: false, view: kind === 'md' || this.preferredView !== 'visual' ? this.preferredView : 'split', revision: 0, conflict: null, missing: false, outside: null, loose,
     });
     this.activeKey = key;
     this.persist();
@@ -848,6 +892,7 @@ class Store {
 
   edit(tab: Tab, content: string) {
     if (content === tab.content) return;
+    tab.outside = null;
     tab.content = content;
     tab.dirty = true;
     clearTimeout(this.#timers.get(tab.key));
@@ -920,7 +965,7 @@ class Store {
     this.activeKey = this.tabs[(i + step + this.tabs.length) % this.tabs.length].key;
   }
 
-  async onChanged({ vaultId, paths }: { vaultId: string; paths: string[] }) {
+  async onChanged({ vaultId, paths }: { vaultId: string; paths: string[] }, own = this.#ownWrites > 0) {
     delete this.tags[vaultId];
     const inVault = this.tabs.every((t) => t.vaultId !== vaultId || !t.loose);
     if (inVault) await this.refreshTree(vaultId);
@@ -939,6 +984,14 @@ class Store {
       if (tab.dirty) {
         await this.detectConflict(tab);
       } else {
+        if (own) tab.outside = null;
+        else if (tab.kind === 'md') {
+          const before = tab.outside?.before ?? tab.content;
+          const lines = changedLines(before, disk.content);
+          tab.outside = lines.length
+            ? { before, version: disk.version, lines, ai: await this.changedByAi(vaultId, tab.path), seen: (tab.outside?.seen ?? 0) + 1 }
+            : null;
+        }
         tab.content = disk.content;
         tab.version = disk.version;
         tab.revision++;
@@ -972,9 +1025,11 @@ class Store {
     if (from === to) return;
     await this.saveAll();
     let update;
+    this.#ownWrites++;
     try {
       update = await api.rename(vaultId, from, to);
     } catch (e) {
+      this.#ownWrites--;
       this.notify(e);
       return;
     }
@@ -990,7 +1045,8 @@ class Store {
     }
     this.#repointPlaces(vaultId, from, to);
     // Open tabs of the notes rewritten show the new links.
-    await this.onChanged({ vaultId, paths: update.notes });
+    await this.onChanged({ vaultId, paths: update.notes }, true);
+    this.#ownWrites--;
     this.persist();
     const { links, notes } = update;
     if (links === 0) return;

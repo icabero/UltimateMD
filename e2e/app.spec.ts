@@ -48,6 +48,34 @@ test('an external change refreshes a note without unsaved edits', async ({ page 
   await expect(page.locator('.cm-content')).toContainText('Escrito por la IA');
 });
 
+test('what changed outside the app is marked, can be seen and undone', async ({ page }) => {
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\nUno.\n\nDos.\n'));
+  await open(page, 'Otra');
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\nUno cambiado.\n\nDos.\n\nTres.\n'));
+  const banner = page.locator('.banner.info');
+  await expect(banner).toContainText('Esta nota ha cambiado fuera de la app (2 líneas resaltadas).');
+  await expect(page.locator('.cm-outside')).toHaveText(['Uno cambiado.', 'Tres.']);
+  await expect(prose(page).locator('.outside-change')).toHaveText(['Uno cambiado.', 'Tres.']);
+
+  await banner.getByRole('button', { name: 'Ver cambios' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Cambios en «Otra» hechos fuera de la app' });
+  await expect(dialog).toContainText('3 líneas añadidas, 1 quitadas');
+  await expect(dialog.locator('.del')).toHaveText([/Uno\./]);
+  await dialog.getByRole('button', { name: 'Deshacer estos cambios' }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => disk(page, 'b', 'Otra.md')).toBe('# Otra\n\nUno.\n\nDos.\n');
+  await expect(page.locator('.cm-content')).not.toContainText('Tres');
+  await expect(banner).toBeHidden();
+});
+
+test('an outside change stops being offered for undo once the note is edited', async ({ page }) => {
+  await open(page, 'Otra');
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\nNuevo.\n'));
+  await expect(page.locator('.banner.info')).toBeVisible();
+  await typeInEditor(page, ' y mío');
+  await expect(page.locator('.banner.info')).toBeHidden();
+});
+
 test('an external change never overwrites unsaved edits', async ({ page }) => {
   await open(page, 'Otra');
   await typeInEditor(page, 'mío');

@@ -92,10 +92,30 @@
     }
     if ('highlights' in CSS) CSS.highlights.delete(FOUND);
     body.replaceChildren(fragment);
+    markOutside();
     rendered = true;
     reveal();
     publishPosition();
     void hydrate(id);
+  }
+
+  let markedSeen = 0;
+
+  /** Briefly marks the blocks changed outside the app, once per change. */
+  function markOutside() {
+    const change = tab.outside;
+    if (!change || change.seen === markedSeen) return;
+    markedSeen = change.seen;
+    const lines = new Set(change.lines);
+    for (const el of body.querySelectorAll<HTMLElement>(':scope > [data-lines]')) {
+      const [from, to] = el.dataset.lines!.split('-').map(Number);
+      for (let line = from; line <= to; line++) {
+        if (lines.has(line)) {
+          el.classList.add('outside-change');
+          break;
+        }
+      }
+    }
   }
 
   const headings = () => [...body.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')];
