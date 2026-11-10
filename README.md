@@ -63,7 +63,7 @@ Abre **Ajustes → Inteligencia artificial** en la app: allí tienes la configur
 | Lectura (por defecto) | Listar, leer, buscar y consultar enlaces |
 | Lectura y escritura | Además, crear, modificar, mover y enviar a la papelera |
 
-Herramientas: `list_vaults`, `list_notes`, `read_note`, `search_notes`, `get_backlinks`, `create_note`, `update_note`, `append_note`, `move_note` y `delete_note`.
+Herramientas: `list_vaults`, `list_notes`, `read_note`, `search_notes`, `get_backlinks`, `get_outline`, `read_section`, `list_tags`, `create_note`, `update_note`, `append_note`, `insert_at_heading`, `move_note` y `delete_note`. La IA puede leer y escribir una sección de una nota sin reescribirla entera.
 
 ## Exportar
 

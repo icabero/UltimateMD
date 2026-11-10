@@ -14,13 +14,14 @@ use rmcp::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
-use ultimatemd_core::{Error, McpAccess, Registry, VaultFs, WriteMode, links, paths, search};
+use ultimatemd_core::{Error, McpAccess, Registry, VaultFs, WriteMode, links, paths, search, sections, tags};
 
 const INSTRUCTIONS: &str = "UltimateMD exposes the user's vaults: folders of Markdown and HTML notes. \
 Call list_vaults first. Paths are relative to the vault and use '/'. \
 Link notes with [[wikilinks]]. For diagrams use fenced code blocks with the language 'mermaid' \
 (flowcharts, sequence, gantt...) or 'd2' (architecture and polished diagrams); the app renders both. \
-Before overwriting a note, read it and pass its version to update_note so that edits made by the user are not lost.";
+Before overwriting a note, read it and pass its version to update_note so that edits made by the user are not lost. \
+To change part of a long note, call get_outline and then read_section or insert_at_heading instead of rewriting it whole.";
 
 const DEFAULT_LIMIT: usize = 50;
 
@@ -90,6 +91,47 @@ struct MoveArg {
     to: String,
     /// Rewrite the links that would break. Defaults to true
     update_links: Option<bool>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct SectionArg {
+    /// Vault name or id, from list_vaults
+    vault: String,
+    /// Note path relative to the vault
+    path: String,
+    /// Heading text, without the #. Case and accents do not matter
+    heading: String,
+    /// Line of the heading, from get_outline, when its text appears more than once
+    heading_line: Option<usize>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+enum Where {
+    /// Right under the heading
+    Start,
+    /// At the end of the section, before the next heading of its level
+    End,
+    /// Instead of the section's text; the heading stays
+    Replace,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct InsertArg {
+    /// Vault name or id, from list_vaults
+    vault: String,
+    /// Note path relative to the vault
+    path: String,
+    /// Heading text, without the #. Case and accents do not matter
+    heading: String,
+    /// Line of the heading, from get_outline, when its text appears more than once
+    heading_line: Option<usize>,
+    /// Markdown to put in the section
+    content: String,
+    /// Where in the section: start, end (default) or replace
+    position: Option<Where>,
+    /// Version from read_note or get_outline. The edit fails if the note changed since then
+    expected_version: Option<String>,
 }
 
 /// Loads a vault, enforcing the access level the user set for it. Vaults with
@@ -202,6 +244,68 @@ impl Server {
             let path = note_path(&a.path)?;
             Ok(serde_json::to_value(links::info(&open(&a.vault, false)?, &path)?)?)
         })())
+    }
+
+    #[tool(
+        description = "Get the headings of a note with their level and the lines each section spans, plus the note's version. Use it before read_section or insert_at_heading, instead of reading a long note whole.",
+        annotations(read_only_hint = true)
+    )]
+    async fn get_outline(&self, Parameters(a): Parameters<NoteArg>) -> Result<CallToolResult, ErrorData> {
+        reply((|| {
+            let path = note_path(&a.path)?;
+            let note = open(&a.vault, false)?.read(&path)?;
+            let lines = note.content.lines().count();
+            Ok(json!({ "headings": sections::outline(&note.content), "lines": lines, "version": note.version }))
+        })())
+    }
+
+    #[tool(
+        description = "Read one section of a note: its heading and everything under it, down to the next heading of the same level.",
+        annotations(read_only_hint = true)
+    )]
+    async fn read_section(&self, Parameters(a): Parameters<SectionArg>) -> Result<CallToolResult, ErrorData> {
+        reply((|| {
+            let path = note_path(&a.path)?;
+            let note = open(&a.vault, false)?.read(&path)?;
+            let headings = sections::outline(&note.content);
+            let heading = sections::find(&headings, &a.heading, a.heading_line)?;
+            Ok(
+                json!({ "heading": heading, "content": sections::section_text(&note.content, heading), "version": note.version }),
+            )
+        })())
+    }
+
+    #[tool(
+        description = "Write into one section of a note without rewriting the rest: at its start, at its end (default), or replacing its text while keeping the heading. Needs write access.",
+        annotations(read_only_hint = false, destructive_hint = true)
+    )]
+    async fn insert_at_heading(&self, Parameters(a): Parameters<InsertArg>) -> Result<CallToolResult, ErrorData> {
+        reply((|| {
+            let path = note_path(&a.path)?;
+            let vault = open(&a.vault, true)?;
+            let note = vault.read(&path)?;
+            if a.expected_version.as_ref().is_some_and(|v| *v != note.version) {
+                return Err(Error::Conflict(path));
+            }
+            let headings = sections::outline(&note.content);
+            let heading = sections::find(&headings, &a.heading, a.heading_line)?;
+            let place = match a.position {
+                Some(Where::Start) => sections::Place::Start,
+                Some(Where::Replace) => sections::Place::Replace,
+                Some(Where::End) | None => sections::Place::End,
+            };
+            let text = sections::insert(&note.content, heading, place, &a.content);
+            let version = vault.write(&path, &text, WriteMode::Replace(Some(&note.version)))?;
+            Ok(json!({ "path": path, "version": version }))
+        })())
+    }
+
+    #[tool(
+        description = "List the tags of a vault (#tag in the text and tags: in the properties) with how many notes have each, most used first. Find the notes of a tag with search_notes and tag:name.",
+        annotations(read_only_hint = true)
+    )]
+    async fn list_tags(&self, Parameters(a): Parameters<VaultArg>) -> Result<CallToolResult, ErrorData> {
+        reply((|| Ok(json!({ "tags": tags::vault_tags(&open(&a.vault, false)?)? })))())
     }
 
     #[tool(

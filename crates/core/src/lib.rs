@@ -13,6 +13,7 @@ pub mod paths;
 pub mod registry;
 pub mod replace;
 pub mod search;
+pub mod sections;
 pub mod tags;
 pub mod templates;
 pub mod vault_themes;

@@ -107,6 +107,10 @@ fn lists_every_tool_with_a_schema() {
         "append_note",
         "move_note",
         "delete_note",
+        "get_outline",
+        "read_section",
+        "insert_at_heading",
+        "list_tags",
     ] {
         assert!(names.contains(&name), "{name} missing from {names:?}");
     }
@@ -200,4 +204,42 @@ fn html_notes_are_supported() {
     assert!(d.path().join("rw/p.html").is_file());
     let notes = c.ok("list_notes", json!({ "vault": "rw" }));
     assert!(notes["notes"].as_array().unwrap().contains(&json!("p.html")));
+}
+
+#[test]
+fn sections_are_read_and_written_without_touching_the_rest() {
+    let (d, mut c) = setup();
+    let file = d.path().join("rw/plan.md");
+    std::fs::write(&file, "# Plan\nintro #proyecto\n## Fechas\nmarzo\n## Coste\n100\n").unwrap();
+
+    let outline = c.ok("get_outline", json!({ "vault": "rw", "path": "plan.md" }));
+    let texts: Vec<&str> =
+        outline["headings"].as_array().unwrap().iter().map(|h| h["text"].as_str().unwrap()).collect();
+    assert_eq!(texts, ["Plan", "Fechas", "Coste"]);
+    assert_eq!(outline["headings"][1]["endLine"], 4);
+
+    let section = c.ok("read_section", json!({ "vault": "rw", "path": "plan.md", "heading": "fechas" }));
+    assert_eq!(section["content"], "## Fechas\nmarzo");
+
+    c.ok("insert_at_heading", json!({ "vault": "rw", "path": "plan.md", "heading": "Fechas", "content": "abril" }));
+    c.ok(
+        "insert_at_heading",
+        json!({ "vault": "rw", "path": "plan.md", "heading": "Coste", "content": "200", "position": "replace" }),
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        "# Plan\nintro #proyecto\n## Fechas\nmarzo\nabril\n## Coste\n200\n"
+    );
+
+    let (err, text) =
+        c.call("insert_at_heading", json!({ "vault": "ro", "path": "base.md", "heading": "x", "content": "y" }));
+    assert!(err, "{text}");
+    let (err, text) = c.call(
+        "insert_at_heading",
+        json!({ "vault": "rw", "path": "plan.md", "heading": "Plan", "content": "z", "expected_version": outline["version"] }),
+    );
+    assert!(err && text.contains("changed"), "{text}");
+
+    let tags = c.ok("list_tags", json!({ "vault": "rw" }));
+    assert_eq!(tags["tags"], json!([{ "tag": "proyecto", "notes": 1 }]));
 }
