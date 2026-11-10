@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { keyLabel } from '../shortcuts';
   import Icon from './Icon.svelte';
   import { api, type HomeInfo } from '../api';
   import { language, tr, type Key } from '../i18n.svelte';
@@ -52,8 +53,8 @@
     { icon: 'tasks', label: 'cmd.fromTemplate', keys: [], run: () => store.newNoteFromTemplate() },
     { icon: 'search', label: 'home.search', keys: ['Ctrl', 'Shift', 'F'], run: () => { store.searching = true; store.toggleBar('left', true); } },
     { icon: 'list', label: 'home.actions', keys: ['Ctrl', 'Shift', 'P'], run: () => (store.palette = '>') },
+    { icon: 'keyboard', label: 'cmd.shortcuts', keys: ['Ctrl', '/'], run: () => (store.shortcuts = true) },
   ];
-  const keyLabel = (k: string) => (k === 'Shift' ? tr('keys.shift') : k);
 </script>
 
 <div class="home">

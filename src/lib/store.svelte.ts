@@ -231,6 +231,8 @@ class Store {
   exporting = $state(false);
   tutorial = $state(!tutorialSeen());
   about = $state(false);
+  /** The list of every keyboard shortcut. */
+  shortcuts = $state(false);
   /** A newer published version, once known. */
   update = $state<string | null>(null);
   /** The view new tabs open in: the last one the user chose. */

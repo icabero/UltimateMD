@@ -7,6 +7,7 @@
   import { store, type ViewMode } from '../store.svelte';
   import { THEMES } from '../themes';
   import { EDIT_DIAGRAM } from '../visual';
+  import { keyLabel } from '../shortcuts';
 
   let { initial = '' }: { initial?: string } = $props();
 
@@ -109,6 +110,7 @@
       { id: 'vault.word', label: tr('cmd.wordSettings'), when: !!tab && !tab.loose, run: () => tab && (store.wordScreen = tab.vaultId) },
       { id: 'vault.themes', label: tr('cmd.vaultThemes'), when: !!tab && !tab.loose, run: () => tab && (store.themeEditor = tab.vaultId) },
       { id: 'app.settings', label: tr('cmd.settings'), run: () => (store.settings = true) },
+      { id: 'app.shortcuts', label: tr('cmd.shortcuts'), keys: ['Ctrl', '/'], run: () => (store.shortcuts = true) },
       { id: 'app.tutorial', label: tr('cmd.tutorial'), run: () => (store.tutorial = true) },
       { id: 'app.about', label: tr('cmd.about'), run: () => (store.about = true) },
     ].filter((c) => c.when !== false),
@@ -187,7 +189,6 @@
     requestAnimationFrame(focus);
   });
 
-  const keyLabel = (k: string) => (k === 'Shift' ? tr('keys.shift') : k);
   const placeholder = $derived(tr(mode === 'commands' ? 'palette.commands' : mode === 'headings' ? 'palette.headings' : 'palette.placeholder'));
 </script>
 

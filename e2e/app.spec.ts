@@ -275,6 +275,26 @@ test('favourite notes are pinned to the side bar and follow a rename', async ({ 
   await expect(favorites).toBeHidden();
 });
 
+test('Ctrl+/ lists every shortcut, and the list can be filtered', async ({ page }) => {
+  await page.keyboard.press('Control+/');
+  const list = page.getByRole('dialog', { name: 'Atajos de teclado' });
+  await expect(list.getByRole('region', { name: 'Escribir' })).toContainText('Negrita');
+  await expect(list.getByRole('region', { name: 'Pestañas y paneles' })).toContainText('Cerrar la pestaña');
+  await list.getByRole('textbox').fill('ctrl k');
+  await expect(list.locator('dt')).toHaveText(['Insertar un enlace']);
+  await list.getByRole('textbox').fill('nada de esto');
+  await expect(list).toContainText('Ningún atajo coincide.');
+  await page.keyboard.press('Escape');
+  await expect(list).toBeHidden();
+
+  // Also from the actions, and from inside the editor.
+  await open(page, 'Otra');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('Control+/');
+  await expect(list).toBeVisible();
+  expect(await disk(page, 'b', 'Otra.md')).toBe('# Otra\n');
+});
+
 test('global search covers every vault', async ({ page }) => {
   await page.keyboard.press('Control+Shift+f');
   await page.getByPlaceholder('Buscar en los vaults abiertos').fill('#');

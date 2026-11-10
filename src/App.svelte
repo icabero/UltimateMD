@@ -16,6 +16,7 @@
   import Sidebar from './lib/components/Sidebar.svelte';
   import ThemeEditor from './lib/components/ThemeEditor.svelte';
   import Tutorial from './lib/components/Tutorial.svelte';
+  import Shortcuts from './lib/components/Shortcuts.svelte';
   import WordScreen from './lib/components/WordScreen.svelte';
   import BrokenLinks from './lib/components/BrokenLinks.svelte';
   import Tabs from './lib/components/Tabs.svelte';
@@ -67,7 +68,7 @@
     const key = e.key.toLowerCase();
     if (key === 'escape') {
       if (store.tutorial) store.closeTutorial();
-      store.settings = store.exporting = store.about = false;
+      store.settings = store.exporting = store.about = store.shortcuts = false;
       store.palette = null;
       store.themeEditor = null;
       return;
@@ -89,6 +90,7 @@
       '=': () => store.setZoom(store.reading.zoom + ZOOM.step),
       '-': () => store.setZoom(store.reading.zoom - ZOOM.step),
       '0': () => store.setZoom(null),
+      '/': () => (store.shortcuts = !store.shortcuts),
     };
     const shifted: Record<string, () => void> = {
       f: () => {
@@ -201,6 +203,7 @@
 {#if store.palette !== null}<Palette initial={store.palette} />{/if}
 {#if store.settings}<Settings />{/if}
 {#if store.about}<About />{/if}
+{#if store.shortcuts}<Shortcuts />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
 {#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
 {#if store.brokenLinks}<BrokenLinks vaultId={store.brokenLinks} />{/if}
