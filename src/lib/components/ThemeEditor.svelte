@@ -81,24 +81,24 @@
       selected = theme.id;
       store.notify(tr('themes.saved'));
     } catch (e) {
-      store.notify(e);
+      store.fail(e);
     }
   }
 
   async function remove() {
     if (!draft || !(await store.confirm(tr('themes.deleteConfirm', { name: draft.name }), tr('common.delete'), true))) return;
-    await api.deleteVaultTheme(vaultId, draft.id).catch((e) => store.notify(e));
+    await api.deleteVaultTheme(vaultId, draft.id).catch((e) => store.fail(e));
     await store.loadVaultThemes(vaultId);
     draft = selected = null;
   }
 
   async function setDiagramDefault(id: string) {
-    await api.setVaultDiagramTheme(vaultId, id || null).catch((e) => store.notify(e));
+    await api.setVaultDiagramTheme(vaultId, id || null).catch((e) => store.fail(e));
     await store.loadVaultThemes(vaultId);
   }
 
   async function setDefault(id: string) {
-    await api.setVaultDefaultTheme(vaultId, id || null).catch((e) => store.notify(e));
+    await api.setVaultDefaultTheme(vaultId, id || null).catch((e) => store.fail(e));
     await store.loadVaultThemes(vaultId);
   }
 

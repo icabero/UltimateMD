@@ -65,6 +65,12 @@ impl Vault {
         if path.is_file() { Ok(path) } else { Err(Error::NotFound(rel.to_string())) }
     }
 
+    /// Resolves a file or folder that exists, for showing it in the file manager.
+    pub fn resolve_existing(&self, rel: &str) -> Result<PathBuf> {
+        let path = resolve(&self.root, rel)?;
+        if path.exists() { Ok(path) } else { Err(Error::NotFound(rel.to_string())) }
+    }
+
     pub fn tree(&self) -> Result<Vec<TreeNode>> {
         let root = self.root.canonicalize()?;
         read_tree(&root, &root)
@@ -72,8 +78,14 @@ impl Vault {
 
     /// Relative paths of every note, sorted.
     pub fn notes(&self) -> Result<Vec<String>> {
+        Ok(self.listing()?.paths)
+    }
+
+    /// Every note, listed once so that many can be read quickly.
+    pub fn listing(&self) -> Result<Listing> {
         let root = self.root.canonicalize()?;
-        let mut out: Vec<String> = WalkDir::new(&root)
+        // The walk does not follow symlinks, and a symlink is not a file to it.
+        let mut paths: Vec<String> = WalkDir::new(&root)
             .into_iter()
             .filter_entry(visible)
             .filter_map(|e| e.ok())
@@ -81,8 +93,8 @@ impl Vault {
             .filter_map(|e| to_rel(&root, e.path()))
             .filter(|p| is_note(p))
             .collect();
-        out.sort();
-        Ok(out)
+        paths.sort();
+        Ok(Listing { root, paths })
     }
 
     /// Every note with its modification time, newest first.
@@ -107,10 +119,7 @@ impl Vault {
     pub fn read(&self, rel: &str) -> Result<Note> {
         let path = resolve(&self.root, rel)?;
         let bytes = std::fs::read(&path).map_err(|e| not_found(e, rel))?;
-        let version = version_of(&bytes);
-        let text = String::from_utf8(bytes).map_err(|_| Error::NotText(rel.to_string()))?;
-        let text = text.strip_prefix(BOM).unwrap_or(&text);
-        Ok(Note { path: normalize(rel)?, content: text.replace("\r\n", "\n"), version })
+        note_from(normalize(rel)?, bytes)
     }
 
     /// Writes a note atomically and returns its new version. Line endings and
@@ -328,6 +337,43 @@ fn not_found(e: std::io::Error, rel: &str) -> Error {
     }
 }
 
+fn note_from(path: String, bytes: Vec<u8>) -> Result<Note> {
+    let version = version_of(&bytes);
+    let text = String::from_utf8(bytes).map_err(|_| Error::NotText(path.clone()))?;
+    let text = text.strip_prefix(BOM).unwrap_or(&text);
+    Ok(Note { content: text.replace("\r\n", "\n"), path, version })
+}
+
+/// The notes of a vault from one walk of it, for reading the whole vault.
+/// [`Vault::read`] checks every folder of a path for symlinks that leave the
+/// vault, which costs several times the read itself; these paths come from a
+/// walk that never follows them, so only the file is checked again.
+pub struct Listing {
+    root: PathBuf,
+    paths: Vec<String>,
+}
+
+impl Listing {
+    /// Relative paths of every note, sorted.
+    pub fn paths(&self) -> &[String] {
+        &self.paths
+    }
+
+    /// Reads one of the listed notes.
+    pub fn read(&self, rel: &str) -> Result<Note> {
+        if self.paths.binary_search_by(|p| p.as_str().cmp(rel)).is_err() {
+            return Err(Error::PathNotAllowed(rel.to_string()));
+        }
+        let path = self.root.join(rel);
+        // It may have been swapped for a symlink since the walk.
+        if std::fs::symlink_metadata(&path).map_err(|e| not_found(e, rel))?.file_type().is_symlink() {
+            return Err(Error::PathNotAllowed(rel.to_string()));
+        }
+        let bytes = std::fs::read(&path).map_err(|e| not_found(e, rel))?;
+        note_from(rel.to_string(), bytes)
+    }
+}
+
 fn visible(e: &DirEntry) -> bool {
     e.depth() == 0 || !e.file_name().to_string_lossy().starts_with('.')
 }
@@ -522,6 +568,23 @@ mod tests {
         let (_d, v) = vault();
         assert!(matches!(v.write("con.md", "", WriteMode::Create), Err(Error::InvalidName(_))));
         assert!(matches!(v.write("a?/b.md", "", WriteMode::Create), Err(Error::InvalidName(_))));
+    }
+
+    #[test]
+    fn a_listing_reads_only_what_it_listed() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("a/.oculta")).unwrap();
+        std::fs::write(d.path().join("a/n.md"), "\u{feff}uno\r\ndos").unwrap();
+        std::fs::write(d.path().join("a/.oculta/x.md"), "no").unwrap();
+        let v = Vault::new(d.path());
+        let listing = v.listing().unwrap();
+        assert_eq!(listing.paths(), ["a/n.md"]);
+        let note = listing.read("a/n.md").unwrap();
+        let slow = v.read("a/n.md").unwrap();
+        assert_eq!((note.path, note.content, note.version), (slow.path, slow.content, slow.version));
+        for other in ["a/.oculta/x.md", "../fuera.md", "a/../a/n.md", "nueva.md"] {
+            assert!(listing.read(other).is_err(), "{other}");
+        }
     }
 
     // Only runs where the trash is real and disposable, such as the CI runners.

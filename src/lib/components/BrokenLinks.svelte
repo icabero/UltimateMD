@@ -30,7 +30,7 @@
       await store.saveAll();
       links = await api.brokenLinks(vaultId);
     } catch (e) {
-      store.notify(e);
+      store.fail(e);
       links = [];
     }
   }
@@ -44,7 +44,7 @@
       await store.refreshTree(vaultId);
       links = await api.brokenLinks(vaultId);
     } catch (e) {
-      store.notify(e);
+      store.fail(e);
     } finally {
       busy = false;
     }

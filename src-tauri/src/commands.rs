@@ -18,7 +18,7 @@ use ultimatemd_core::word_settings::{self, WordSettings};
 use ultimatemd_core::{
     Error, McpAccess, Note, Registry, Result, SearchHit, TreeNode, Vault, VaultFs, WriteMode, search,
 };
-use ultimatemd_core::{docx, note_templates, templates};
+use ultimatemd_core::{docx, note_templates, replace, templates};
 
 const SEARCH_LIMIT: usize = 200;
 /// In an export plan, the template kept in the vault itself.
@@ -122,6 +122,9 @@ pub fn read_note(id: String, path: String) -> Result<Note> {
 
 #[tauri::command(async)]
 pub fn write_note(id: String, path: String, content: String, expected: Option<String>) -> Result<String> {
+    if loose::folder_for(&id, &path).is_none() {
+        crate::past::before_write(&id, &path);
+    }
     file_fs(&id, &path)?.write(&path, &content, WriteMode::Replace(expected.as_deref()))
 }
 
@@ -138,7 +141,9 @@ pub fn create_dir(id: String, path: String) -> Result<()> {
 #[tauri::command(async)]
 /// Moves or renames, rewriting the links that would otherwise break.
 pub fn rename_path(id: String, from: String, to: String) -> Result<links::LinkUpdate> {
-    links::move_path(&fs(&id)?, &from, &to)
+    let update = links::move_path(&fs(&id)?, &from, &to)?;
+    crate::past::moved(&id, &from, &to);
+    Ok(update)
 }
 
 /// The names of the vault's note templates.
@@ -196,6 +201,8 @@ pub struct VaultHit {
 /// Searches the vaults open in the sidebar.
 #[tauri::command(async)]
 pub fn search_all(query: String) -> Result<Vec<VaultHit>> {
+    // A query that cannot be read fails once, not quietly in every vault.
+    search::parse(&query)?;
     let mut out = Vec::new();
     for vault in Registry::load()?.vaults.iter().filter(|v| v.open) {
         // One unreachable vault, such as an unplugged drive, must not end the search.
@@ -492,6 +499,108 @@ pub fn reveal_exported(app: AppHandle, path: String) -> Result<()> {
     app.opener().reveal_item_in_dir(path).map_err(|e| Error::Vault(e.to_string()))
 }
 
+/// One page of an exported site, by its path inside the site.
+#[derive(serde::Deserialize)]
+pub struct SitePage {
+    path: String,
+    html: String,
+}
+
+/// Marks a folder as a site this app wrote, so exporting again may replace it.
+const SITE_MARK: &str = ".ultimatemd-sitio";
+
+/// Writes a static site in a new folder `name` inside the one the user picks,
+/// with the vault's images it uses under `assets/`. Returns its index page,
+/// or None if the dialog is cancelled.
+#[tauri::command(async)]
+pub fn export_site(
+    app: AppHandle,
+    id: String,
+    name: String,
+    pages: Vec<SitePage>,
+    assets: Vec<String>,
+) -> Result<Option<String>> {
+    let vault = fs(&id)?;
+    let Some(picked) = app.dialog().file().blocking_pick_folder() else { return Ok(None) };
+    let parent = picked.into_path().map_err(|e| Error::Vault(e.to_string()))?;
+    let index = write_site(&vault, &parent, &name, &pages, &assets)?;
+    exported().insert(index.clone());
+    Ok(Some(index.to_string_lossy().into_owned()))
+}
+
+/// The site's files in `parent/name`. An existing folder is only replaced
+/// when this app wrote it, and nothing is written outside it.
+fn write_site(vault: &VaultFs, parent: &Path, name: &str, pages: &[SitePage], assets: &[String]) -> Result<PathBuf> {
+    ultimatemd_core::paths::check_new_name(name)?;
+    let root = parent.join(name);
+    if root.exists() && !root.join(SITE_MARK).is_file() {
+        return Err(Error::Vault(format!(
+            "{} already exists and is not a site exported by UltimateMD",
+            root.display()
+        )));
+    }
+    std::fs::create_dir_all(&root)?;
+    std::fs::write(root.join(SITE_MARK), b"")?;
+    let write = |rel: &str, bytes: &[u8]| -> Result<()> {
+        let target = ultimatemd_core::paths::resolve(&root, rel)?;
+        std::fs::create_dir_all(target.parent().unwrap_or(&root))?;
+        Ok(std::fs::write(target, bytes)?)
+    };
+    for page in pages {
+        if !page.path.ends_with(".html") {
+            return Err(Error::PathNotAllowed(page.path.clone()));
+        }
+        write(&page.path, page.html.as_bytes())?;
+    }
+    for asset in assets {
+        write(&format!("assets/{asset}"), &std::fs::read(vault.resolve_existing(asset)?)?)?;
+    }
+    Ok(root.join("index.html"))
+}
+
+#[cfg(test)]
+mod site_tests {
+    use super::*;
+
+    fn page(path: &str) -> SitePage {
+        SitePage { path: path.into(), html: format!("<p>{path}</p>") }
+    }
+
+    #[test]
+    fn a_site_is_written_inside_its_own_folder() {
+        let vault_dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(vault_dir.path().join("adjuntos")).unwrap();
+        std::fs::write(vault_dir.path().join("adjuntos/foto.png"), b"png").unwrap();
+        let vault = VaultFs::new(vault_dir.path());
+        let out = tempfile::tempdir().unwrap();
+
+        let index = write_site(
+            &vault,
+            out.path(),
+            "Docs",
+            &[page("index.html"), page("a/b.html")],
+            &["adjuntos/foto.png".into()],
+        )
+        .unwrap();
+        assert_eq!(index, out.path().join("Docs/index.html"));
+        assert_eq!(std::fs::read(out.path().join("Docs/assets/adjuntos/foto.png")).unwrap(), b"png");
+        assert!(out.path().join("Docs/a/b.html").is_file());
+        // Again over its own folder.
+        write_site(&vault, out.path(), "Docs", &[page("index.html")], &[]).unwrap();
+
+        std::fs::create_dir(out.path().join("Mio")).unwrap();
+        assert!(
+            write_site(&vault, out.path(), "Mio", &[page("index.html")], &[]).is_err(),
+            "a folder it did not write"
+        );
+        for bad in ["../fuera.html", "x.js", ".oculto/a.html"] {
+            assert!(write_site(&vault, out.path(), "Otro", &[page(bad)], &[]).is_err(), "{bad}");
+        }
+        assert!(write_site(&vault, out.path(), "Otro", &[], &["../secreto.png".into()]).is_err());
+        assert!(write_site(&vault, out.path(), "a/b", &[], &[]).is_err(), "a name, not a path");
+    }
+}
+
 /// Writes a `.docx` where the user picks. Its path, or None if the dialog is cancelled.
 #[tauri::command(async)]
 pub fn export_docx(app: AppHandle, plan: ExportPlan) -> Result<Option<String>> {
@@ -535,6 +644,43 @@ pub fn word_config(id: String) -> Result<WordConfig> {
         has_template: template.is_some(),
         info: docx::template_info(template.as_deref())?,
     })
+}
+
+/// The other names notes answer to, from `aliases:`: of the whole vault, or
+/// only of `paths` after they changed.
+#[tauri::command(async)]
+pub fn vault_aliases(id: String, paths: Option<Vec<String>>) -> Result<Vec<ultimatemd_core::aliases::NoteAliases>> {
+    ultimatemd_core::aliases::of_vault(&fs(&id)?, paths.as_deref())
+}
+
+/// What changed since the last commit, when the vault is in a Git repository.
+#[tauri::command(async)]
+pub fn git_status(id: String) -> Result<Option<ultimatemd_core::git::Status>> {
+    ultimatemd_core::git::status(fs(&id)?.root())
+}
+
+/// A note as it was in the last commit.
+#[tauri::command(async)]
+pub fn git_committed(id: String, path: String) -> Result<Option<String>> {
+    ultimatemd_core::git::committed(fs(&id)?.root(), &path)
+}
+
+/// Commits the vault's changes; its short id.
+#[tauri::command(async)]
+pub fn git_commit(id: String, message: String) -> Result<String> {
+    ultimatemd_core::git::commit(fs(&id)?.root(), &message)
+}
+
+/// The vault's guide for the diagrams an AI draws, if it has one.
+#[tauri::command(async)]
+pub fn diagram_guide(id: String) -> Result<Option<String>> {
+    ultimatemd_core::diagram_guide::load(fs(&id)?.root())
+}
+
+/// Saves the guide; an empty text removes it.
+#[tauri::command(async)]
+pub fn save_diagram_guide(id: String, text: String) -> Result<()> {
+    ultimatemd_core::diagram_guide::save(fs(&id)?.root(), &text)
 }
 
 #[tauri::command(async)]
@@ -677,12 +823,22 @@ pub struct McpInfo {
 }
 
 /// The server is installed next to the app's executable.
-#[tauri::command(async)]
-pub fn mcp_info() -> Result<McpInfo> {
+fn mcp_binary() -> Result<PathBuf> {
     let exe = std::env::current_exe()?;
     let dir = exe.parent().unwrap_or(Path::new("."));
-    let binary = dir.join(format!("ultimatemd-mcp{}", std::env::consts::EXE_SUFFIX));
+    Ok(dir.join(format!("ultimatemd-mcp{}", std::env::consts::EXE_SUFFIX)))
+}
+
+#[tauri::command(async)]
+pub fn mcp_info() -> Result<McpInfo> {
+    let binary = mcp_binary()?;
     Ok(McpInfo { available: binary.is_file(), binary: binary.to_string_lossy().into_owned() })
+}
+
+/// Starts the MCP server as a client would and reports what it sees.
+#[tauri::command(async)]
+pub fn check_mcp() -> Result<crate::mcp_check::McpCheck> {
+    Ok(crate::mcp_check::check(&mcp_binary()?))
 }
 
 /// Saves a rendered diagram where the user picks. The dialog runs here so the
@@ -697,4 +853,146 @@ pub fn export_file(app: AppHandle, name: String, data: Vec<u8>) -> Result<Option
 pub fn installer_language() -> Option<String> {
     let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
     Some(std::fs::read_to_string(dir.join("language.txt")).ok()?.trim().to_string())
+}
+
+/// Turns the spell checker on with these dictionaries, or off with none.
+/// Only WebKitGTK needs telling; the Windows and macOS webviews follow the
+/// page and the system.
+#[tauri::command]
+pub fn set_spellcheck(window: tauri::WebviewWindow, languages: Vec<String>) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    window
+        .with_webview(move |webview| {
+            use webkit2gtk::{WebContextExt, WebViewExt};
+            if let Some(context) = webview.inner().context() {
+                let names: Vec<&str> = languages.iter().map(String::as_str).collect();
+                context.set_spell_checking_languages(&names);
+                context.set_spell_checking_enabled(!names.is_empty());
+            }
+        })
+        .map_err(|e| Error::Vault(e.to_string()))?;
+    #[cfg(not(target_os = "linux"))]
+    let _ = (window, languages);
+    Ok(())
+}
+
+/// The vaults whose changes on disk are not being followed, and why.
+#[tauri::command]
+pub fn watch_problems(app: AppHandle) -> Vec<watcher::WatchProblem> {
+    watcher::problems(&app)
+}
+
+/// Most lines a replace preview lists, so a careless search cannot flood the window.
+const REPLACE_PREVIEW_LINES: usize = 2000;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplacePlan {
+    vault_id: String,
+    path: String,
+    version: String,
+    changes: Vec<replace::LineChange>,
+}
+
+/// What would change in the notes of the open vaults.
+#[tauri::command(async)]
+pub fn replace_preview(replace: replace::Replace) -> Result<Vec<ReplacePlan>> {
+    replace.changes("")?;
+    let mut out = Vec::new();
+    let mut lines = 0;
+    for vault in Registry::load()?.vaults.iter().filter(|v| v.open) {
+        let fs = VaultFs::new(&vault.path);
+        let Ok(notes) = fs.notes() else { continue };
+        for path in notes {
+            let Ok(note) = fs.read(&path) else { continue };
+            let changes = replace.changes(&note.content)?;
+            if changes.is_empty() {
+                continue;
+            }
+            lines += changes.len();
+            out.push(ReplacePlan { vault_id: vault.id.clone(), path, version: note.version, changes });
+            if lines >= REPLACE_PREVIEW_LINES {
+                return Ok(out);
+            }
+        }
+    }
+    Ok(out)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceIn {
+    vault_id: String,
+    path: String,
+    /// As previewed. A note that changed since is left alone.
+    version: String,
+    lines: Vec<usize>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Replaced {
+    vault_id: String,
+    path: String,
+    /// The text before, to undo.
+    before: String,
+    /// The version written, so undoing can tell if it changed again.
+    version: String,
+    lines: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceResult {
+    replaced: Vec<Replaced>,
+    /// Notes that changed after the preview, or could not be written.
+    skipped: Vec<String>,
+}
+
+/// Replaces the chosen lines, note by note.
+#[tauri::command(async)]
+pub fn replace_apply(replace: replace::Replace, notes: Vec<ReplaceIn>) -> Result<ReplaceResult> {
+    replace.changes("")?;
+    let mut result = ReplaceResult { replaced: Vec::new(), skipped: Vec::new() };
+    for target in notes {
+        let done = (|| {
+            let fs = fs(&target.vault_id)?;
+            let note = fs.read(&target.path)?;
+            if note.version != target.version {
+                return Err(Error::Conflict(target.path.clone()));
+            }
+            let (text, lines) = replace.apply(&note.content, Some(&target.lines))?;
+            if lines == 0 {
+                return Ok(None);
+            }
+            let version = fs.write(&target.path, &text, WriteMode::Replace(Some(&note.version)))?;
+            Ok(Some(Replaced {
+                vault_id: target.vault_id.clone(),
+                path: target.path.clone(),
+                before: note.content,
+                version,
+                lines,
+            }))
+        })();
+        match done {
+            Ok(Some(replaced)) => result.replaced.push(replaced),
+            Ok(None) => {}
+            Err(_) => result.skipped.push(target.path),
+        }
+    }
+    Ok(result)
+}
+
+/// The tags of a vault with how many notes have each.
+#[tauri::command(async)]
+pub fn vault_tags(id: String) -> Result<Vec<ultimatemd_core::tags::TagCount>> {
+    ultimatemd_core::tags::vault_tags(&fs(&id)?)
+}
+
+/// Shows a file or folder of a vault in the system's file manager.
+#[tauri::command(async)]
+pub fn reveal_path(app: AppHandle, id: String, path: String) -> Result<()> {
+    let vault = file_fs(&id, &path)?;
+    let target = if path.is_empty() { vault.root().to_path_buf() } else { vault.resolve_existing(&path)? };
+    app.opener().reveal_item_in_dir(target).map_err(|e| Error::Vault(e.to_string()))
 }

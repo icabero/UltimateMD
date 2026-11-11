@@ -7,6 +7,7 @@
   import { store, type ViewMode } from '../store.svelte';
   import { THEMES } from '../themes';
   import { EDIT_DIAGRAM } from '../visual';
+  import { keyLabel } from '../shortcuts';
 
   let { initial = '' }: { initial?: string } = $props();
 
@@ -49,7 +50,18 @@
   }
 
   // Notes.
-  const files = $derived(store.openVaults.flatMap((v) => store.files(v.id).map((path) => ({ vault: v, path }))));
+  const files = $derived(store.openVaults.flatMap((v) => store.files(v.id).map((path) => ({ vault: v, path, recent: false }))));
+  /** With nothing typed, the notes opened last come first, leaving out the one on screen. */
+  const recentFiles = $derived.by(() => {
+    const rank = new Map(store.recent.map((r, i) => [`${r.vaultId}:${r.path}`, i]));
+    const at = (f: { vault: { id: string }; path: string }) => rank.get(`${f.vault.id}:${f.path}`);
+    const recent = files
+      .filter((f) => at(f) !== undefined && `${f.vault.id}:${f.path}` !== store.activeKey)
+      .sort((a, b) => at(a)! - at(b)!)
+      .map((f) => ({ ...f, recent: true }));
+    const rest = files.filter((f) => at(f) === undefined);
+    return [...recent, ...rest];
+  });
 
   // Actions. `when` hides the ones that make no sense right now.
   interface Command {
@@ -83,6 +95,7 @@
       view('preview', 'tabs.preview'),
       { id: 'panel.outline', label: tr('cmd.outline'), when: md, run: () => store.openPanel('outline') },
       { id: 'panel.properties', label: tr('cmd.properties'), when: md, run: () => store.openPanel('properties') },
+      { id: 'panel.history', label: tr('cmd.history'), when: md && !tab?.loose, run: () => store.openPanel('history') },
       { id: 'panel.links', label: tr('cmd.links'), when: md && !tab?.loose, run: () => store.openPanel('links') },
       { id: 'bar.left', label: tr('cmd.toggleSidebar'), keys: ['Ctrl', 'Shift', 'E'], run: () => store.toggleBar('left') },
       { id: 'bar.right', label: tr('cmd.togglePanel'), keys: ['Ctrl', 'Shift', 'O'], when: md, run: () => store.toggleBar('right') },
@@ -95,9 +108,14 @@
       { id: 'theme.system', label: tr('cmd.themeSystem'), run: () => store.setThemeChoice({ fixed: null }) },
       ...THEMES.map((t) => ({ id: `theme.${t.id}`, label: tr('cmd.theme', { name: themeName(t) }), run: () => store.setThemeChoice({ fixed: t.id }) })),
       { id: 'vault.broken', label: tr('broken.open'), when: !!tab && !tab.loose, run: () => tab && (store.brokenLinks = tab.vaultId) },
+      { id: 'vault.aiLog', label: tr('aiLog.open'), when: !!tab && !tab.loose, run: () => tab && (store.aiLog = tab.vaultId) },
+      { id: 'vault.read', label: tr('cmd.readVault'), when: !!tab && !tab.loose, run: () => tab && (store.reader = { vaultId: tab.vaultId, folder: '' }) },
       { id: 'vault.word', label: tr('cmd.wordSettings'), when: !!tab && !tab.loose, run: () => tab && (store.wordScreen = tab.vaultId) },
       { id: 'vault.themes', label: tr('cmd.vaultThemes'), when: !!tab && !tab.loose, run: () => tab && (store.themeEditor = tab.vaultId) },
       { id: 'app.settings', label: tr('cmd.settings'), run: () => (store.settings = true) },
+      { id: 'app.shortcuts', label: tr('cmd.shortcuts'), keys: ['Ctrl', '/'], run: () => (store.shortcuts = true) },
+      { id: 'app.news', label: tr('news.open'), run: () => void store.showNews() },
+      { id: 'app.sample', label: tr('sample.create'), run: () => void store.createSampleVault() },
       { id: 'app.tutorial', label: tr('cmd.tutorial'), run: () => (store.tutorial = true) },
       { id: 'app.about', label: tr('cmd.about'), run: () => (store.about = true) },
     ].filter((c) => c.when !== false),
@@ -130,7 +148,7 @@
   const results = $derived.by(() => {
     if (mode === 'commands') return ranked(words ? commands : byRecent(commands), (c) => c.label).map((c) => ({ kind: 'command' as const, c }));
     if (mode === 'headings') return ranked(headings, (h) => h.text).map((h) => ({ kind: 'heading' as const, h }));
-    return ranked(files, (f) => f.path, (f) => f.path.lastIndexOf('/') + 1).map((f) => ({ kind: 'note' as const, f }));
+    return ranked(words ? files : recentFiles, (f) => f.path, (f) => f.path.lastIndexOf('/') + 1).map((f) => ({ kind: 'note' as const, f }));
   });
 
   function switchTo(prefix: string) {
@@ -176,7 +194,6 @@
     requestAnimationFrame(focus);
   });
 
-  const keyLabel = (k: string) => (k === 'Shift' ? tr('keys.shift') : k);
   const placeholder = $derived(tr(mode === 'commands' ? 'palette.commands' : mode === 'headings' ? 'palette.headings' : 'palette.placeholder'));
 </script>
 
@@ -193,7 +210,8 @@
           <span class="label" style:padding-left="calc({r.h.level - top} * var(--space-3))">{r.h.text || '…'}</span>
           <span class="meta">H{r.h.level}</span>
         {:else}
-          <span class="label">{r.f.path}</span><span class="meta">{r.f.vault.name}</span>
+          <span class="label">{r.f.path}</span>
+          <span class="meta">{#if r.f.recent}<span class="tag">{tr('palette.recent')}</span>{/if}{r.f.vault.name}</span>
         {/if}
       </button>
     {:else}
@@ -213,6 +231,7 @@
   .list button.on { background: var(--accent-soft); }
   .label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .meta { flex: none; color: var(--text-3); font-size: var(--font-sm); }
+  .tag { margin-right: var(--space-2); color: var(--accent-text); }
   .keys { display: flex; flex: none; gap: var(--space-1); }
   kbd { padding: 0 var(--space-1-5); border: 1px solid var(--line); border-radius: var(--radius-xs); background: var(--bg); color: var(--text-2); font: var(--font-xs)/1.7 var(--sans); }
   p { margin: 0; padding: var(--space-2); color: var(--text-3); font-size: var(--font-md); }

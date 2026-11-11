@@ -38,7 +38,7 @@
 
   async function remove(name: string) {
     if (!(await store.confirm(tr('templates.deleteConfirm', { name }), tr('common.delete'), true))) return;
-    await api.deleteNoteTemplate(vaultId, name).catch((e) => store.notify(e));
+    await api.deleteNoteTemplate(vaultId, name).catch((e) => store.fail(e));
     await load();
   }
 

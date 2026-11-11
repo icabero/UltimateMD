@@ -46,6 +46,13 @@ export function noteCompletions(context: CompletionContext): CompletionResult | 
       detail: dirName(path) || undefined,
       apply: (view, _completion, from, to) => complete(view, targetOf(path, tab, files), from, to),
     }));
+  // A note's other names lead to it too, as in Obsidian.
+  for (const [path, names] of Object.entries(store.aliases[tab.vaultId] ?? {})) {
+    if (path === tab.path) continue;
+    for (const name of names) {
+      options.push({ label: name, detail: tr('editor.aliasOf', { name: stem(path) }), apply: (view, _completion, from, to) => complete(view, name, from, to) });
+    }
+  }
   return { from: typed.from + 2, options, validFor: VALID };
 }
 
@@ -57,7 +64,7 @@ export async function headingCompletions(context: CompletionContext): Promise<Co
   const tab = store.active;
   if (!typed || !tab) return null;
   const name = TYPING_HEADING.exec(typed.text)?.[1].trim() ?? '';
-  const path = name ? resolveLink(name, tab.path, store.files(tab.vaultId)) : tab.path;
+  const path = name ? store.resolve(tab.vaultId, name, tab.path) : tab.path;
   if (!path) return null;
   const open = store.tabs.find((t) => t.vaultId === tab.vaultId && t.path === path);
   const content = open?.content ?? (await api.read(tab.vaultId, path).catch(() => null))?.content;
@@ -97,7 +104,7 @@ export function linkAt(state: EditorState, pos: number) {
 
 function exists(target: string) {
   const tab = store.active;
-  return !tab || !target || resolveLink(target, tab.path, store.files(tab.vaultId)) !== null;
+  return !tab || !target || store.resolve(tab.vaultId, target, tab.path) !== null;
 }
 
 const matcher = new MatchDecorator({

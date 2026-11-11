@@ -107,6 +107,12 @@ fn lists_every_tool_with_a_schema() {
         "append_note",
         "move_note",
         "delete_note",
+        "get_outline",
+        "read_section",
+        "insert_at_heading",
+        "list_tags",
+        "get_diagram_guide",
+        "add_diagram_image",
     ] {
         assert!(names.contains(&name), "{name} missing from {names:?}");
     }
@@ -200,4 +206,119 @@ fn html_notes_are_supported() {
     assert!(d.path().join("rw/p.html").is_file());
     let notes = c.ok("list_notes", json!({ "vault": "rw" }));
     assert!(notes["notes"].as_array().unwrap().contains(&json!("p.html")));
+}
+
+#[test]
+fn sections_are_read_and_written_without_touching_the_rest() {
+    let (d, mut c) = setup();
+    let file = d.path().join("rw/plan.md");
+    std::fs::write(&file, "# Plan\nintro #proyecto\n## Fechas\nmarzo\n## Coste\n100\n").unwrap();
+
+    let outline = c.ok("get_outline", json!({ "vault": "rw", "path": "plan.md" }));
+    let texts: Vec<&str> =
+        outline["headings"].as_array().unwrap().iter().map(|h| h["text"].as_str().unwrap()).collect();
+    assert_eq!(texts, ["Plan", "Fechas", "Coste"]);
+    assert_eq!(outline["headings"][1]["endLine"], 4);
+
+    let section = c.ok("read_section", json!({ "vault": "rw", "path": "plan.md", "heading": "fechas" }));
+    assert_eq!(section["content"], "## Fechas\nmarzo");
+
+    c.ok("insert_at_heading", json!({ "vault": "rw", "path": "plan.md", "heading": "Fechas", "content": "abril" }));
+    c.ok(
+        "insert_at_heading",
+        json!({ "vault": "rw", "path": "plan.md", "heading": "Coste", "content": "200", "position": "replace" }),
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        "# Plan\nintro #proyecto\n## Fechas\nmarzo\nabril\n## Coste\n200\n"
+    );
+
+    let (err, text) =
+        c.call("insert_at_heading", json!({ "vault": "ro", "path": "base.md", "heading": "x", "content": "y" }));
+    assert!(err, "{text}");
+    let (err, text) = c.call(
+        "insert_at_heading",
+        json!({ "vault": "rw", "path": "plan.md", "heading": "Plan", "content": "z", "expected_version": outline["version"] }),
+    );
+    assert!(err && text.contains("changed"), "{text}");
+
+    let tags = c.ok("list_tags", json!({ "vault": "rw" }));
+    assert_eq!(tags["tags"], json!([{ "tag": "proyecto", "notes": 1 }]));
+}
+
+#[test]
+fn what_it_writes_is_logged_for_the_user_to_see_and_undo() {
+    let (d, mut c) = setup();
+    c.ok("append_note", json!({ "vault": "rw", "path": "base.md", "content": "añadido" }));
+    c.ok("create_note", json!({ "vault": "rw", "path": "nueva", "content": "x" }));
+    c.ok("read_note", json!({ "vault": "rw", "path": "base.md" }));
+
+    let registry = Registry::load_from(&d.path().join("cfg/vaults.json")).unwrap();
+    let id = registry.find("rw").unwrap().id.clone();
+    let history = ultimatemd_core::history::History::at(&d.path().join("cfg"));
+    let log = history.ai_log(&id).unwrap();
+    let tools: Vec<&str> = log.iter().map(|e| e.tool.as_str()).collect();
+    assert_eq!(tools, ["create_note", "append_note"], "reading is not logged");
+
+    let vault = ultimatemd_core::VaultFs::new(d.path().join("rw"));
+    history.undo_ai(&vault, &id, &log[1].id).unwrap();
+    assert_eq!(std::fs::read_to_string(d.path().join("rw/base.md")).unwrap(), "hola [[otra]]\n");
+}
+
+#[test]
+fn diagrams_follow_the_vault_guide_and_arrive_as_clean_images() {
+    let (d, mut c) = setup();
+    let empty = c.ok("get_diagram_guide", json!({ "vault": "ro" }));
+    assert_eq!(empty["vault"], Value::Null);
+    ultimatemd_core::diagram_guide::save(&d.path().join("rw"), "Paleta azul, cajas redondeadas.").unwrap();
+    std::fs::write(
+        d.path().join("rw/plan.md"),
+        "---
+diagramas: Sin sombras
+---
+# Plan
+
+## Flujo
+
+Texto.
+
+## Fin
+",
+    )
+    .unwrap();
+    let guide = c.ok("get_diagram_guide", json!({ "vault": "rw", "path": "plan.md" }));
+    assert_eq!(guide["vault"], "Paleta azul, cajas redondeadas.");
+    assert_eq!(guide["note"], "Sin sombras");
+
+    let svg = r#"<svg viewBox="0 0 2 2" onload="x()"><script>x()</script><rect width="2" height="2"/></svg>"#;
+    let added = c.ok(
+        "add_diagram_image",
+        json!({ "vault": "rw", "path": "plan.md", "name": "flujo", "svg": svg, "alt": "El flujo", "heading": "Flujo" }),
+    );
+    assert_eq!(added["image"], "adjuntos/flujo.svg");
+    let saved = std::fs::read_to_string(d.path().join("rw/adjuntos/flujo.svg")).unwrap();
+    assert!(saved.contains("<rect") && !saved.contains("script") && !saved.contains("onload"));
+    let note = std::fs::read_to_string(d.path().join("rw/plan.md")).unwrap();
+    let image = note.find("![El flujo](adjuntos/flujo.svg)").expect("the image is in the note");
+    assert!(image > note.find("## Flujo").unwrap() && image < note.find("## Fin").unwrap(), "{note}");
+    assert!(note.contains("%%diagrama de IA: El flujo%%"));
+
+    // Base64 of a PNG signature and a byte.
+    let png = c.ok(
+        "add_diagram_image",
+        json!({ "vault": "rw", "path": "plan.md", "name": "foto", "png_base64": "iVBORw0KGgoA", "alt": "x" }),
+    );
+    assert_eq!(png["image"], "adjuntos/foto.png");
+
+    let (err, _) =
+        c.call("add_diagram_image", json!({ "vault": "ro", "path": "base.md", "name": "n", "svg": svg, "alt": "x" }));
+    assert!(err, "needs write access");
+    let (err, _) = c.call(
+        "add_diagram_image",
+        json!({ "vault": "rw", "path": "plan.md", "name": "n", "svg": svg, "alt": "x", "heading": "No existe" }),
+    );
+    assert!(err);
+    assert!(!d.path().join("rw/adjuntos/n.svg").exists(), "nothing is saved when the note cannot take it");
+    let (err, _) = c.call("add_diagram_image", json!({ "vault": "rw", "path": "plan.md", "name": "n", "alt": "x" }));
+    assert!(err, "an image is needed");
 }

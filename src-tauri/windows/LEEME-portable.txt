@@ -1,0 +1,32 @@
+UltimateMD portable
+===================
+
+Abre UltimateMD.exe. No hace falta instalar nada.
+
+- Tus vaults siguen donde estén. La lista de vaults, los ajustes, el historial
+  de las notas y el registro de errores se guardan en la carpeta "datos", que
+  aparece junto a este archivo la primera vez que abres la app.
+- El archivo "portable" es lo que hace que la app use esa carpeta. Si lo
+  borras, usará la de tu usuario, como la versión instalada.
+- Para actualizar, descarga el zip nuevo y sustituye UltimateMD.exe y
+  ultimatemd-mcp.exe. La carpeta "datos" se conserva.
+- Para conectar una IA por MCP, copia la configuración de Ajustes > MCP. Si
+  mueves esta carpeta, vuelve a copiarla, porque lleva la ruta del programa.
+- Necesita Microsoft Edge WebView2, que ya viene con Windows 10 y 11. Si
+  falta, la app te dice cómo instalarlo.
+
+---
+
+Open UltimateMD.exe. Nothing needs installing.
+
+- Your vaults stay where they are. The list of vaults, settings, note history
+  and error log are kept in the "datos" folder, which appears next to this
+  file the first time you open the app.
+- The "portable" file is what makes the app use that folder. Without it, the
+  app uses your user folder, like the installed version.
+- To update, download the new zip and replace UltimateMD.exe and
+  ultimatemd-mcp.exe. The "datos" folder is kept.
+- To connect an AI over MCP, copy the configuration from Settings > MCP. If you
+  move this folder, copy it again, since it holds the program's path.
+- It needs Microsoft Edge WebView2, which comes with Windows 10 and 11. If it is
+  missing, the app tells you how to install it.

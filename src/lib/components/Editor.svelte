@@ -20,9 +20,12 @@
   import { fenceAt, insertBlock, insertLink, wrap } from '../formatting';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
+  import { baseName } from '../paths';
   import { frontmatterChange, frontmatterValue } from '../themes';
   import { EDIT_DIAGRAM, visualMode } from '../visual';
   import { headingCompletions, linkAt, noteCompletions, wikilinks } from '../wikilinks';
+  import { spellLanguage } from '../spellcheck';
+  import { tagCompletions, tagMarks } from '../tags';
 
   let { tab, onscroll }: { tab: Tab; onscroll?: (ratio: number) => void } = $props();
 
@@ -46,7 +49,7 @@
   const baseTheme = EditorView.theme({
     '&': { height: '100%', background: 'var(--bg)', color: 'var(--text)' },
     '&.cm-focused': { outline: 'none' },
-    '.cm-scroller': { fontFamily: 'var(--mono)', fontSize: 'calc(13.5px * var(--text-scale, 1))', lineHeight: '1.65', overflow: 'auto' },
+    '.cm-scroller': { fontFamily: 'var(--mono)', fontSize: 'calc(13.5px * var(--text-scale, 1))', lineHeight: 'calc(1.65 + var(--leading, 0))', overflow: 'auto' },
     '.cm-content': { padding: '20px 0 40vh', caretColor: 'var(--accent)' },
     '.cm-line': { padding: '0 22px' },
     '.cm-gutters': { background: 'var(--bg)', color: 'var(--text-3)', border: 'none', fontSize: 'var(--font-xs)' },
@@ -55,8 +58,28 @@
     '.cm-selectionBackground, &.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { background: 'var(--selection) !important' },
     '.cm-panels': { background: 'var(--panel)', color: 'var(--text)', borderColor: 'var(--line)' },
     '.cm-searchMatch': { background: 'var(--accent-soft)' },
+    '.cm-outside': { animation: 'cm-outside 6s ease-out' },
+    '@keyframes cm-outside': { '0%, 40%': { background: 'var(--found)' }, '100%': { background: 'transparent' } },
     '.cm-found': { background: 'var(--found)', borderRadius: 'var(--radius-2xs)' },
   });
+
+  // Lines just changed outside the app, marked for a moment.
+  const setOutside = StateEffect.define<number[]>();
+  const outsideMark = Decoration.line({ class: 'cm-outside' });
+  const outside = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update(marks, tr) {
+      for (const e of tr.effects) {
+        if (e.is(setOutside)) {
+          const doc = tr.state.doc;
+          return Decoration.set(e.value.filter((l) => l <= doc.lines).map((l) => outsideMark.range(doc.line(l).from)));
+        }
+      }
+      return tr.docChanged && !tr.annotation(external) ? Decoration.none : marks.map(tr.changes);
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  });
+  let outsideSeen = 0;
 
   // The words of a search, marked until the next edit.
   const setFound = StateEffect.define<[number, number][]>();
@@ -79,6 +102,10 @@
   const states = new Map<string, EditorState>();
   const language = new Compartment();
   const mode = new Compartment();
+  const spelling = new Compartment();
+  /** The language the shown note is checked in, and which note that was. */
+  let spelledAs: string | null | undefined;
+  let spelledKey = '';
   const PLAIN: Extension = [];
   let builder = $state<{ initial: BuilderStart | null; replace: { from: number; to: number } | null } | null>(null);
   let styling = $state(false);
@@ -161,12 +188,16 @@
       extensions: [
         lineNumbers(), history(), drawSelection(), highlightActiveLine(), indentOnInput(), bracketMatching(),
         highlightSelectionMatches(), search({ top: true }),
+        // Screen readers announce the text box by the note it holds.
+        EditorView.contentAttributes.of({ 'aria-label': tr('editor.label', { name: baseName(current.path) }) }),
         keymap.of([...shortcuts, indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
         syntaxHighlighting(highlight), baseTheme, EditorView.lineWrapping,
         language.of(languageFor(current.kind)),
         mode.of(PLAIN),
+        spelling.of(spellAttributes(null)),
         found,
-        ...(current.kind === 'md' ? [wikilinks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions], icons: false })] : []),
+        outside,
+        ...(current.kind === 'md' ? [wikilinks, tagMarks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions, tagCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
           if (u.docChanged || u.selectionSet) publishPosition(u.state);
@@ -203,6 +234,24 @@
     }
     const wanted = current.kind === 'md' && current.view === 'visual' ? visualMode : PLAIN;
     if (mode.get(view.state) !== wanted) view.dispatch({ effects: mode.reconfigure(wanted) });
+    const change = current.outside;
+    if (change && change.seen !== outsideSeen) {
+      outsideSeen = change.seen;
+      view.dispatch({ effects: setOutside.of(change.lines) });
+    }
+    const lang = current.kind === 'md' ? spellLanguage(store.spellcheck, current.content) : null;
+    if (lang !== spelledAs || shownKey !== spelledKey) {
+      spelledAs = lang;
+      spelledKey = shownKey;
+      view.dispatch({ effects: spelling.reconfigure(spellAttributes(lang)) });
+    }
+  }
+
+  /** Marks misspelt words in a note's language; code and HTML files are left alone. */
+  function spellAttributes(lang: string | null) {
+    return EditorView.contentAttributes.of(
+      lang ? { spellcheck: 'true', lang, autocorrect: 'off', autocapitalize: 'off' } : { spellcheck: 'false' },
+    );
   }
 
   /** Opens the diagram under the cursor when the builder can read it. */
@@ -324,6 +373,8 @@
     tab.content;
     tab.revision;
     tab.view;
+    tab.outside;
+    store.spellcheck;
     show(tab);
   });
 

@@ -1,0 +1,21 @@
+name: Una idea o mejora
+description: Algo que te gustaría que la app hiciera, o que hiciera mejor.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qué quieres conseguir
+      description: La situación en la que lo echas de menos, más que la solución concreta.
+    validations:
+      required: true
+  - type: textarea
+    id: propuesta
+    attributes:
+      label: Cómo te lo imaginas
+      description: Si tienes una idea de cómo debería verse o usarse. Otras apps que lo hagan bien también sirven de ejemplo.
+  - type: textarea
+    id: ahora
+    attributes:
+      label: Cómo lo haces hoy
+      description: Si hay algún rodeo que ya uses.

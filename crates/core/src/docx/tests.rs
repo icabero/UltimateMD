@@ -306,6 +306,10 @@ fn marker_paragraph_keeps_its_breaks() {
 }
 
 fn folder_document() -> Package {
+    folder_document_with("# Martes\n\nDos[^n].\n\n[^n]: pie dos\n")
+}
+
+fn folder_document_with(martes: &str) -> Package {
     let sections = vec![
         Section::Heading { text: "Reuniones".into(), style: None, level: 1, page_break: true },
         Section::Note {
@@ -315,12 +319,7 @@ fn folder_document() -> Package {
             page_break: false,
         },
         Section::Heading { text: "Anexo".into(), style: Some("Destacado".into()), level: 2, page_break: false },
-        Section::Note {
-            path: "r/b.md".into(),
-            markdown: "# Martes\n\nDos[^n].\n\n[^n]: pie dos\n".into(),
-            shift: 2,
-            page_break: true,
-        },
+        Section::Note { path: "r/b.md".into(), markdown: martes.into(), shift: 2, page_break: true },
     ];
     let image = |_: &str, _: &str| None;
     let source = template();
@@ -475,4 +474,18 @@ fn callouts_are_coloured_boxes_with_a_title() {
     assert_eq!(doc.matches(r#"w:fill="F0FDF4""#).count(), 2);
     assert!(doc.contains(r#"w:color="D97706""#));
     assert_eq!(doc.matches("w:fill=").count(), 4, "a plain quote stays a quote");
+}
+
+#[test]
+fn links_to_notes_in_the_document_jump_to_them() {
+    let parts = folder_document_with("# Martes\n\nVer [[a]] y [[a#Lunes]].\n");
+    let document = text(&parts, DOCUMENT);
+    assert_well_formed(&parts);
+    for name in ["umd1", "umd1_0", "umd3", "umd3_0"] {
+        assert!(document.contains(&format!(r#"w:name="{name}""#)), "bookmark {name}");
+    }
+    assert!(document.contains(r#"<w:hyperlink w:anchor="umd1_0">"#));
+    // The note's title, not its file name.
+    let linked = document.split(r#"<w:hyperlink w:anchor="umd1">"#).nth(1).expect("link to the note");
+    assert!(linked[..linked.find("</w:hyperlink>").unwrap()].contains(">Lunes<"));
 }

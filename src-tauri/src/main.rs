@@ -1,9 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod logbook;
 mod loose;
+mod mcp_check;
+mod past;
 mod protocol;
 mod startup;
+mod update;
 mod watcher;
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
@@ -23,6 +27,22 @@ fn allowed_navigation(url: &tauri::Url) -> bool {
     }
 }
 
+/// The installer brings WebView2 along; a portable copy on an old Windows may
+/// find it missing, and without it no window can open to say so.
+#[cfg(windows)]
+fn missing_webview() {
+    let text = "UltimateMD necesita Microsoft Edge WebView2, que no está instalado en este equipo. \
+Descárgalo gratis desde https://developer.microsoft.com/microsoft-edge/webview2/ o usa el instalador de UltimateMD, que lo instala solo.\n\n\
+UltimateMD needs Microsoft Edge WebView2, which is not installed on this computer. \
+Get it free from the address above, or use the UltimateMD installer, which installs it for you.";
+    rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Error)
+        .set_title("UltimateMD")
+        .set_description(text)
+        .set_buttons(rfd::MessageButtons::Ok)
+        .show();
+}
+
 fn main() {
     // WebKitGTK shows a blank window on NVIDIA drivers with its DMA-BUF renderer.
     #[cfg(target_os = "linux")]
@@ -33,6 +53,13 @@ fn main() {
         unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") };
     }
 
+    #[cfg(windows)]
+    if tauri::webview_version().is_err() {
+        missing_webview();
+        return;
+    }
+
+    logbook::start();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             if let Some(window) = app.get_webview_window("main") {
@@ -43,6 +70,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(commands::RegistryLock::default())
         .manage(startup::Pending::from_args())
         .manage(watcher::Watchers::default())
@@ -68,6 +96,12 @@ fn main() {
             let window = window.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
             #[cfg(not(target_os = "macos"))]
             let window = window.decorations(false);
+            // The webview keeps the app's own settings; a portable copy keeps
+            // them beside it too, not in the user's folder.
+            let window = match ultimatemd_core::registry::portable_dir() {
+                Some(dir) => window.data_directory(dir.join("webview")),
+                None => window,
+            };
             let window = window.build()?;
             // A frontend that fails to start must not leave an invisible app.
             std::thread::spawn(move || {
@@ -86,6 +120,7 @@ fn main() {
                     }
                 });
             }
+            past::tidy();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -122,6 +157,32 @@ fn main() {
             commands::open_exported,
             commands::reveal_exported,
             commands::installer_language,
+            commands::set_spellcheck,
+            commands::watch_problems,
+            commands::check_mcp,
+            commands::replace_preview,
+            commands::replace_apply,
+            commands::vault_tags,
+            commands::reveal_path,
+            update::update_supported,
+            update::portable_data,
+            commands::diagram_guide,
+            commands::vault_aliases,
+            commands::export_site,
+            commands::git_status,
+            commands::git_committed,
+            commands::git_commit,
+            commands::save_diagram_guide,
+            update::update_install,
+            logbook::log_error,
+            logbook::read_log,
+            logbook::reveal_log,
+            past::history_list,
+            past::history_read,
+            past::history_keep,
+            past::ai_log,
+            past::ai_undo,
+            past::ai_wrote,
             commands::open_path,
             commands::close_loose,
             commands::take_pending_files,

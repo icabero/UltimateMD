@@ -47,6 +47,7 @@
     <button onclick={() => store.closeTutorial()}>{tr('tutorial.skip')}</button>
     <span class="spacer"></span>
     {#if index > 0}<button onclick={() => index--}>{tr('tutorial.back')}</button>{/if}
+    {#if last}<button onclick={() => store.createSampleVault()}>{tr('sample.create')}</button>{/if}
     <button class="main" use:focus onclick={next}>{tr(last ? 'tutorial.finish' : 'tutorial.next')}</button>
   </footer>
 </div>
