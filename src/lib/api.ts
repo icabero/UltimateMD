@@ -278,6 +278,10 @@ export const api = {
   saveTemplateCopy: (name: string) => invoke<boolean>('save_template_copy', { name }),
   wordConfig: (id: string) => invoke<WordConfig>('word_config', { id }),
   saveWordSettings: (id: string, settings: WordSettings) => invoke<void>('save_word_settings', { id, settings }),
+  /** The vault's guide for the diagrams an AI draws, or null. */
+  diagramGuide: (id: string) => invoke<string | null>('diagram_guide', { id }),
+  /** Saves the guide; an empty text removes it. */
+  saveDiagramGuide: (id: string, text: string) => invoke<void>('save_diagram_guide', { id, text }),
   chooseVaultTemplate: (id: string) => invoke<boolean>('choose_vault_template', { id }),
   removeVaultTemplate: (id: string) => invoke<void>('remove_vault_template', { id }),
   wordSample: (id: string, settings: WordSettings, markdown: string, picture: number[]) => invoke<number[]>('word_sample', { id, settings, markdown, picture }),

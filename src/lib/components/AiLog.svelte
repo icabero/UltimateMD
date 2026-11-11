@@ -22,6 +22,7 @@
     update_note: 'aiLog.updated',
     append_note: 'aiLog.appended',
     insert_at_heading: 'aiLog.inserted',
+    add_diagram_image: 'aiLog.diagram',
     move_note: 'aiLog.moved',
     delete_note: 'aiLog.deleted',
   };

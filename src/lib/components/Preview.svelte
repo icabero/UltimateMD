@@ -4,6 +4,7 @@
   import { api, fileUrl } from '../api';
   import { parseStyle } from '../diagramStyle';
   import { diagramErrorBox, explainDiagramError } from '../diagramErrors';
+  import { aiImages, redrawPrompt } from '../diagramGuide';
   import { renderDiagram, toPng, toSvgBytes } from '../diagrams';
   import { findTerms } from '../fold';
   import { tr } from '../i18n.svelte';
@@ -13,6 +14,17 @@
   import previewCss from '../preview.css?inline';
 
   let { tab }: { tab: Tab } = $props();
+
+  /** An image an AI drew can be asked for again, following the vault's guide. */
+  function imageMenu(e: MouseEvent) {
+    const image = e.composedPath().find((n): n is HTMLImageElement => n instanceof HTMLImageElement);
+    const path = image?.dataset.path;
+    const shows = path ? aiImages(tab.path, tab.content).get(path) : undefined;
+    if (!path || shows === undefined) return;
+    store.openMenu(e, [
+      { label: tr('guide.copyRedraw'), icon: 'copy', run: () => void store.copyText(redrawPrompt(tab.path, path, shows), tr('guide.copied')) },
+    ]);
+  }
 
   const DELAY = 150;
   let host = $state<HTMLDivElement>();
@@ -233,6 +245,7 @@
     body.className = 'prose';
     root.append(style, body);
     body.addEventListener('click', onClick);
+    body.addEventListener('contextmenu', imageMenu);
   });
 
   $effect(() => {

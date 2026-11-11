@@ -544,6 +544,18 @@ pub fn word_config(id: String) -> Result<WordConfig> {
     })
 }
 
+/// The vault's guide for the diagrams an AI draws, if it has one.
+#[tauri::command(async)]
+pub fn diagram_guide(id: String) -> Result<Option<String>> {
+    ultimatemd_core::diagram_guide::load(fs(&id)?.root())
+}
+
+/// Saves the guide; an empty text removes it.
+#[tauri::command(async)]
+pub fn save_diagram_guide(id: String, text: String) -> Result<()> {
+    ultimatemd_core::diagram_guide::save(fs(&id)?.root(), &text)
+}
+
 #[tauri::command(async)]
 pub fn save_word_settings(id: String, settings: WordSettings) -> Result<()> {
     word_settings::save(fs(&id)?.root(), &settings)

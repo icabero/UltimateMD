@@ -6474,6 +6474,7 @@ dependencies = [
 name = "ultimatemd-mcp"
 version = "0.6.0"
 dependencies = [
+ "base64 0.23.1",
  "rmcp",
  "schemars 1.2.3",
  "serde",

@@ -166,6 +166,8 @@ fn main() {
             commands::reveal_path,
             update::update_supported,
             update::portable_data,
+            commands::diagram_guide,
+            commands::save_diagram_guide,
             update::update_install,
             logbook::log_error,
             logbook::read_log,

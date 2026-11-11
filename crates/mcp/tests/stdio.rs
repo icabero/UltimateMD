@@ -111,6 +111,8 @@ fn lists_every_tool_with_a_schema() {
         "read_section",
         "insert_at_heading",
         "list_tags",
+        "get_diagram_guide",
+        "add_diagram_image",
     ] {
         assert!(names.contains(&name), "{name} missing from {names:?}");
     }
@@ -261,4 +263,62 @@ fn what_it_writes_is_logged_for_the_user_to_see_and_undo() {
     let vault = ultimatemd_core::VaultFs::new(d.path().join("rw"));
     history.undo_ai(&vault, &id, &log[1].id).unwrap();
     assert_eq!(std::fs::read_to_string(d.path().join("rw/base.md")).unwrap(), "hola [[otra]]\n");
+}
+
+#[test]
+fn diagrams_follow_the_vault_guide_and_arrive_as_clean_images() {
+    let (d, mut c) = setup();
+    let empty = c.ok("get_diagram_guide", json!({ "vault": "ro" }));
+    assert_eq!(empty["vault"], Value::Null);
+    ultimatemd_core::diagram_guide::save(&d.path().join("rw"), "Paleta azul, cajas redondeadas.").unwrap();
+    std::fs::write(
+        d.path().join("rw/plan.md"),
+        "---
+diagramas: Sin sombras
+---
+# Plan
+
+## Flujo
+
+Texto.
+
+## Fin
+",
+    )
+    .unwrap();
+    let guide = c.ok("get_diagram_guide", json!({ "vault": "rw", "path": "plan.md" }));
+    assert_eq!(guide["vault"], "Paleta azul, cajas redondeadas.");
+    assert_eq!(guide["note"], "Sin sombras");
+
+    let svg = r#"<svg viewBox="0 0 2 2" onload="x()"><script>x()</script><rect width="2" height="2"/></svg>"#;
+    let added = c.ok(
+        "add_diagram_image",
+        json!({ "vault": "rw", "path": "plan.md", "name": "flujo", "svg": svg, "alt": "El flujo", "heading": "Flujo" }),
+    );
+    assert_eq!(added["image"], "adjuntos/flujo.svg");
+    let saved = std::fs::read_to_string(d.path().join("rw/adjuntos/flujo.svg")).unwrap();
+    assert!(saved.contains("<rect") && !saved.contains("script") && !saved.contains("onload"));
+    let note = std::fs::read_to_string(d.path().join("rw/plan.md")).unwrap();
+    let image = note.find("![El flujo](adjuntos/flujo.svg)").expect("the image is in the note");
+    assert!(image > note.find("## Flujo").unwrap() && image < note.find("## Fin").unwrap(), "{note}");
+    assert!(note.contains("%%diagrama de IA: El flujo%%"));
+
+    // Base64 of a PNG signature and a byte.
+    let png = c.ok(
+        "add_diagram_image",
+        json!({ "vault": "rw", "path": "plan.md", "name": "foto", "png_base64": "iVBORw0KGgoA", "alt": "x" }),
+    );
+    assert_eq!(png["image"], "adjuntos/foto.png");
+
+    let (err, _) =
+        c.call("add_diagram_image", json!({ "vault": "ro", "path": "base.md", "name": "n", "svg": svg, "alt": "x" }));
+    assert!(err, "needs write access");
+    let (err, _) = c.call(
+        "add_diagram_image",
+        json!({ "vault": "rw", "path": "plan.md", "name": "n", "svg": svg, "alt": "x", "heading": "No existe" }),
+    );
+    assert!(err);
+    assert!(!d.path().join("rw/adjuntos/n.svg").exists(), "nothing is saved when the note cannot take it");
+    let (err, _) = c.call("add_diagram_image", json!({ "vault": "rw", "path": "plan.md", "name": "n", "alt": "x" }));
+    assert!(err, "an image is needed");
 }

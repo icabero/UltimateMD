@@ -297,6 +297,8 @@ class Store {
   aiLog = $state<string | null>(null);
   /** The vault whose Word settings are open. */
   wordScreen = $state<string | null>(null);
+  /** The vault whose diagram guide for the AI is being edited. */
+  guideScreen = $state<string | null>(null);
   /** Where a note from a template goes, while choosing the template. */
   templatePicker = $state<{ vaultId: string; dir: string } | null>(null);
   /** Taken by the editor, or the preview when it shows alone. */
@@ -355,6 +357,16 @@ class Store {
     const value = style.theme ?? frontmatterValue(note, 'tema-diagramas') ?? this.vaultThemes[tab.vaultId]?.defaultDiagramTheme ?? null;
     const theme = (value !== 'boceto' && this.lookUpTheme(tab.vaultId, value)) || fallback || this.noteTheme(tab);
     return { theme: withColors(theme, style), sketch: !!style.sketch || value === 'boceto' };
+  }
+
+  /** How the app draws a vault's diagrams when a note says nothing else. */
+  vaultDiagramLook(vaultId: string) {
+    const value = this.vaultThemes[vaultId]?.defaultDiagramTheme ?? null;
+    const theme =
+      (value !== 'boceto' && this.lookUpTheme(vaultId, value)) ||
+      this.lookUpTheme(vaultId, this.vaultThemes[vaultId]?.defaultTheme) ||
+      this.theme;
+    return { theme, sketch: value === 'boceto' };
   }
 
   /** Follows a `[[link]]` written in a note, offering to create it if it is missing. */

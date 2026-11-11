@@ -2587,6 +2587,46 @@ test('a vault with its own template offers it first when exporting', async ({ pa
   await expect(page.getByLabel('Plantilla')).toHaveValue(':vault');
 });
 
+const guides = (page: Page) => page.evaluate(() => (window as any).__test.guides);
+
+test('a vault keeps a guide for the diagrams an AI draws, starting from its style', async ({ page }) => {
+  await page.locator('aside').getByRole('button', { name: 'Trabajo', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Estilo de diagramas para la IA' }).click();
+  const screen = page.getByRole('dialog', { name: 'Estilo de diagramas de Trabajo' });
+  await expect(screen.getByRole('region', { name: 'Así dibuja la app los diagramas de este vault' }).locator('svg')).toBeVisible();
+
+  await screen.getByRole('button', { name: 'Partir del estilo actual' }).click();
+  const text = screen.getByRole('textbox', { name: 'Estilo de diagramas de Trabajo' });
+  await expect(text).toHaveValue(/# Estilo de los diagramas de Trabajo/);
+  await expect.poll(async () => (await guides(page)).a).toContain('## Colores');
+
+  await text.fill('Solo azules.');
+  await expect.poll(async () => (await guides(page)).a).toBe('Solo azules.');
+  // Starting over asks first, since it replaces what is written.
+  await screen.getByRole('button', { name: 'Partir del estilo actual' }).click();
+  await page.getByRole('form', { name: /Sustituir lo escrito/ }).getByRole('button', { name: 'Cancelar' }).click();
+  await expect(text).toHaveValue('Solo azules.');
+
+  await screen.getByRole('button', { name: 'Quitar' }).click();
+  await expect.poll(async () => (await guides(page)).a).toBeUndefined();
+  await page.keyboard.press('Escape');
+  await expect(screen).toHaveCount(0);
+});
+
+test('an image an AI drew can be asked for again from the preview', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.evaluate(() => (window as any).__test.externalWrite('a', 'dir/Destino.md', '# Destino\n\n![El flujo](../vacia/imagen.png)\n%%diagrama de IA: El flujo de pago%%\n'));
+  await open(page, 'dir');
+  await open(page, 'Destino');
+  await page.getByTitle('Vista previa', { exact: true }).click();
+  await expect(prose(page)).not.toContainText('diagrama de IA');
+  await prose(page).locator('img').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Copiar petición para volver a dibujarlo' }).click();
+  const prompt = await page.evaluate(() => navigator.clipboard.readText());
+  expect(prompt).toContain('«El flujo de pago»');
+  expect(prompt).toContain('get_diagram_guide');
+});
+
 // Numbers for #80; the limits are loose so that only a real slowdown fails.
 // Rows are found by their path: role queries over thousands of buttons time
 // the test tool rather than the app.

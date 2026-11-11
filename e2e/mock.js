@@ -50,6 +50,7 @@
   const listeners = {};
   const staged = {};
   const noteTemplates = { a: {}, b: {} };
+  const guides = {};
 
   function tree(id) {
     const root = [];
@@ -420,6 +421,12 @@
     reveal_path: ({ id, path }) => void (window.__revealed = `${id}:${path}`),
     update_supported: () => window.__selfUpdate ?? true,
     portable_data: () => window.__portable ?? null,
+    // Kept apart, as .ultimatemd is hidden from the tree.
+    diagram_guide: ({ id }) => guides[id] ?? null,
+    save_diagram_guide: ({ id, text }) => {
+      if (text.trim()) guides[id] = text;
+      else delete guides[id];
+    },
     update_install: async () => {
       if (window.__updateFails) throw 'signature does not match';
       window[`_${listeners['update-progress']}`]?.({ payload: { done: 40, total: 100 } });
@@ -460,6 +467,7 @@
     files,
     vaults,
     vaultThemes,
+    guides,
     /** Simulates another program, such as the MCP server, changing a file. */
     externalWrite(id, path, content) {
       files[id][path] = content;

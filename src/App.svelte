@@ -26,6 +26,7 @@
   import News from './lib/components/News.svelte';
   import ConflictMerge from './lib/components/ConflictMerge.svelte';
   import WordScreen from './lib/components/WordScreen.svelte';
+  import DiagramGuide from './lib/components/DiagramGuide.svelte';
   import BrokenLinks from './lib/components/BrokenLinks.svelte';
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
@@ -247,6 +248,7 @@
 {#if store.outsideDiff && tab?.outside}<OutsideChanges {tab} />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
 {#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
+{#if store.guideScreen}<DiagramGuide vaultId={store.guideScreen} />{/if}
 {#if store.merging && tab?.conflict}<ConflictMerge {tab} />{/if}
 {#if store.news}<News version={store.news} />{/if}
 {#if store.aiLog}<AiLog vaultId={store.aiLog} />{/if}

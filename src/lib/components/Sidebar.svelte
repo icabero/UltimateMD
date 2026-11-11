@@ -51,6 +51,7 @@
       { label: tr('sidebar.newFolder'), icon: 'folderPlus', run: () => void newFolder(vault.id, '') },
       { label: tr('broken.open'), icon: 'link', separator: true, run: () => (store.brokenLinks = vault.id) },
       { label: tr('word.openSettings'), icon: 'word', run: () => (store.wordScreen = vault.id) },
+      { label: tr('guide.open'), icon: 'diagram', run: () => (store.guideScreen = vault.id) },
       { label: tr('aiLog.open'), icon: 'list', run: () => (store.aiLog = vault.id) },
       { label: tr('menu.reveal'), icon: 'folder', separator: true, run: () => store.revealInFolder(vault.id, '') },
       { label: tr('sidebar.closeVault'), icon: 'close', run: () => void store.setVaultOpen(vault.id, false) },

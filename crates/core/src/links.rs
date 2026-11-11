@@ -223,7 +223,7 @@ fn join_rel(dir: &str, rel: &str) -> Option<String> {
 }
 
 /// The path to `target` from the folder `dir`, both from the vault root.
-fn relative(dir: &str, target: &str) -> String {
+pub fn relative(dir: &str, target: &str) -> String {
     let dir: Vec<&str> = dir.split('/').filter(|p| !p.is_empty()).collect();
     let target: Vec<&str> = target.split('/').collect();
     let common = dir.iter().zip(&target).take_while(|(a, b)| a == b).count();

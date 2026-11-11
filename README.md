@@ -65,7 +65,16 @@ Abre **Ajustes → Inteligencia artificial** en la app: allí tienes la configur
 | Lectura (por defecto) | Listar, leer, buscar y consultar enlaces |
 | Lectura y escritura | Además, crear, modificar, mover y enviar a la papelera |
 
-Herramientas: `list_vaults`, `list_notes`, `read_note`, `search_notes`, `get_backlinks`, `get_outline`, `read_section`, `list_tags`, `create_note`, `update_note`, `append_note`, `insert_at_heading`, `move_note` y `delete_note`. La IA puede leer y escribir una sección de una nota sin reescribirla entera.
+Herramientas: `list_vaults`, `list_notes`, `read_note`, `search_notes`, `get_backlinks`, `get_outline`, `read_section`, `list_tags`, `get_diagram_guide`, `create_note`, `update_note`, `append_note`, `insert_at_heading`, `add_diagram_image`, `move_note` y `delete_note`. La IA puede leer y escribir una sección de una nota sin reescribirla entera.
+
+### Diagramas de la IA con el estilo del vault
+
+Para que todos los diagramas de un vault se parezcan, los dibuje quien los dibuje, el vault puede llevar una **guía de estilo**, como un `CLAUDE.md` para diagramas. Ábrela con clic derecho en el vault → **Estilo de diagramas para la IA**. Puedes escribirla a mano o pulsar **Partir del estilo actual** para empezar con los colores y la forma con que la app dibuja ya los diagramas del vault. Se guarda en `.ultimatemd/diagramas.md` y viaja con el vault.
+
+- Antes de dibujar, la IA lee la guía con `get_diagram_guide`. La usa tanto si dibuja en Mermaid o D2 como si hace una imagen.
+- Cuando Mermaid o D2 no bastan, la IA guarda el diagrama como imagen con `add_diagram_image`. Puede ser un SVG, que se limpia antes de guardarlo (sin scripts ni nada que se cargue de fuera), o un PNG. La imagen va a `adjuntos/` y se inserta en la nota o en una sección.
+- Una nota puede añadir algo propio con `diagramas:` en sus propiedades: un texto corto o un `[[enlace]]` a otra nota que haga de guía.
+- Clic derecho sobre una imagen que dibujó la IA → **Copiar petición para volver a dibujarlo**, para pegarla en tu asistente.
 
 ## Exportar
 

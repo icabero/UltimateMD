@@ -4,6 +4,7 @@
 //! they share one set of rules about what can be read or written.
 
 pub mod callouts;
+pub mod diagram_guide;
 pub mod docx;
 pub mod error;
 pub mod export_links;
@@ -17,6 +18,7 @@ pub mod registry;
 pub mod replace;
 pub mod search;
 pub mod sections;
+pub mod svg;
 pub mod tags;
 pub mod templates;
 pub mod vault_themes;
