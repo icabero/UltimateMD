@@ -988,9 +988,19 @@ test('with reduced motion nothing animates', async ({ page }) => {
 });
 
 test('dialogs grow into place when motion is allowed', async ({ page }) => {
+  // Noted as each animation starts: on a slow machine it may be over before the test looks.
+  await page.evaluate(() => {
+    const started: number[] = ((window as any).__animations = []);
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = function (this: Element, ...args: Parameters<Element['animate']>) {
+      const animation = animate.apply(this, args);
+      if (this.closest('[role=dialog]')) started.push(Number(animation.effect?.getComputedTiming().duration));
+      return animation;
+    };
+  });
   await page.keyboard.press('Control+Shift+p');
-  const box = page.getByRole('dialog', { name: 'Abrir nota' });
-  const timing = await box.evaluate((el) => el.getAnimations().map((a) => Number(a.effect?.getComputedTiming().duration)));
+  await expect(page.getByRole('dialog', { name: 'Abrir nota' })).toBeVisible();
+  const timing: number[] = await page.evaluate(() => (window as any).__animations);
   expect(timing.some((d) => d >= 120 && d <= 200)).toBe(true);
 });
 
