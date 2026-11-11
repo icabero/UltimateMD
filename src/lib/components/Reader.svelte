@@ -35,6 +35,8 @@
   let root: ShadowRoot;
   let article: HTMLElement;
   let loader: IntersectionObserver | null = null;
+  /** Until when the scroll a jump causes is not taken as reading on. */
+  let jumped = 0;
   let watcher: IntersectionObserver | null = null;
   // Plain caches: nothing on screen depends on them.
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -122,7 +124,7 @@
   }
 
   function markCurrent() {
-    if (!scroller) return;
+    if (!scroller || Date.now() < jumped) return;
     const top = scroller.getBoundingClientRect().top + 8;
     let found: string | null = notes[0]?.path ?? null;
     for (const section of article.querySelectorAll<HTMLElement>('section')) {
@@ -144,6 +146,7 @@
     const heading = wanted?.kind === 'heading'
       ? [...section.querySelectorAll<HTMLElement>('.body h1, .body h2, .body h3, .body h4, .body h5, .body h6')].find((h) => fold(h.textContent ?? '').trim() === fold(wanted.text).trim())
       : null;
+    jumped = Date.now() + 600;
     (heading ?? section).scrollIntoView({ block: 'start' });
     current = path;
     savePlace(vaultId, folder, path);

@@ -42,7 +42,9 @@
   const versionOf = (id, path) => (versions[`${id}:${path}`] ??= 'v0');
   // When each note last changed: invented hours ago at first, now on every write.
   const modified = {};
-  const changedAt = (id, path) => (modified[`${id}:${path}`] ??= Date.now() - (Object.keys(modified).length + 1) * 3_600_000);
+  // Counted as they come, so a large vault is not counted again on every call.
+  let invented = 0;
+  const changedAt = (id, path) => (modified[`${id}:${path}`] ??= Date.now() - ++invented * 3_600_000);
   const bump = (id, path) => {
     modified[`${id}:${path}`] = Date.now();
     return (versions[`${id}:${path}`] = `v${Date.now()}${Math.random()}`);

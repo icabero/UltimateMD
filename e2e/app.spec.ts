@@ -15,6 +15,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 const open = (page: Page, name: string) => page.locator('aside').getByRole('button', { name, exact: true }).click();
+// Keys as the app names them on the machine running the tests, like keyLabel.
+const MAC = process.platform === 'darwin';
+const CTRL = MAC ? '⌘' : 'Ctrl';
+const SHIFT = MAC ? '⇧' : 'Mayús';
+// Shared CI runners are several times slower than a desktop.
+const SLOW = process.env.CI ? 4 : 1;
 const prose = (page: Page) => page.locator('.scroll article');
 const disk = (page: Page, vault: string, path: string) =>
   page.evaluate(([v, p]) => (window as any).__test.files[v][p], [vault, path]);
@@ -319,7 +325,7 @@ test('the command palette runs actions and shows their shortcuts', async ({ page
   await page.keyboard.type('exportar');
   const first = palette(page).getByRole('option').first();
   await expect(first).toContainText('Exportar la nota');
-  await expect(first.locator('kbd')).toHaveText(['Ctrl', 'E']);
+  await expect(first.locator('kbd')).toHaveText([CTRL, 'E']);
   await page.keyboard.press('Enter');
   await expect(page.getByRole('dialog', { name: 'Exportar' })).toBeVisible();
 });
@@ -333,7 +339,7 @@ test('actions are found without accents and the last used come first', async ({ 
   await expect(palette(page).getByRole('option').first()).toHaveText('Tema: Medianoche');
   // Shortcuts name the Shift key in the interface language.
   await page.keyboard.type('barra lateral');
-  await expect(palette(page).getByRole('option').first().locator('kbd')).toHaveText(['Ctrl', 'Mayús', 'E']);
+  await expect(palette(page).getByRole('option').first().locator('kbd')).toHaveText([CTRL, SHIFT, 'E']);
 });
 
 test('the quick switcher turns into actions with > and headings with #', async ({ page }) => {
@@ -464,7 +470,7 @@ test('a tab has a menu to close the others, pin it and reach its file', async ({
   await expect(tab('Inicio').getByTitle('Cerrar (Ctrl+W)')).toHaveCount(0);
 
   await tab('Otra').click({ button: 'right' });
-  await expect(page.getByRole('menuitem').first().locator('kbd')).toHaveText(['Ctrl', 'W']);
+  await expect(page.getByRole('menuitem').first().locator('kbd')).toHaveText([CTRL, 'W']);
   await page.getByRole('menuitem', { name: 'Cerrar las demás' }).click();
   // The pinned one stays, at the left.
   await expect(tabNames(page)).toHaveText(['Inicio', 'Otra']);
@@ -896,7 +902,7 @@ test('a vault card picks up the note edited last', async ({ page }) => {
 
 test('the start screen offers its actions and another tip', async ({ page }) => {
   const home = page.locator('.home');
-  await expect(home.getByRole('button', { name: /Abrir nota/ }).locator('kbd')).toHaveText(['Ctrl', 'P']);
+  await expect(home.getByRole('button', { name: /Abrir nota/ }).locator('kbd')).toHaveText([CTRL, 'P']);
   await home.getByRole('button', { name: /Acciones/ }).click();
   await expect(page.getByRole('dialog', { name: 'Abrir nota' }).getByRole('combobox')).toHaveValue('>');
   await page.keyboard.press('Escape');
@@ -2753,9 +2759,9 @@ test('a vault with 10 000 notes opens and its tree stays quick', async ({ page }
   const note = Date.now() - start;
 
   console.log(`[bench] abrir ${opened} ms · carpeta de 2000 ${flat} ms · nota ${note} ms`);
-  expect(opened).toBeLessThan(10_000);
-  expect(flat).toBeLessThan(5_000);
-  expect(note).toBeLessThan(3_000);
+  expect(opened).toBeLessThan(10_000 * SLOW);
+  expect(flat).toBeLessThan(5_000 * SLOW);
+  expect(note).toBeLessThan(3_000 * SLOW);
 });
 
 // What axe can find on its own (#92). A note's own content is left out: it
