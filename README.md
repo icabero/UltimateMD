@@ -216,7 +216,7 @@ Las capturas de `site/img` salen de la interfaz real, con un vault de ejemplo in
 
 ## Contribuir
 
-El código es abierto y puedes usarlo, estudiarlo o adaptarlo con su licencia. El desarrollo es privado por ahora: no se aceptan pull requests sin acuerdo previo. Si encuentras un fallo o tienes una idea, abre una [issue](https://github.com/icabero/UltimateMD/issues). Para avisar de un problema de seguridad, sigue la [política de seguridad](SECURITY.md).
+El código es abierto y puedes usarlo, estudiarlo o adaptarlo con su licencia. El desarrollo es privado por ahora: no se aceptan pull requests sin acuerdo previo. Si encuentras un fallo o tienes una idea, abre una [issue](https://github.com/icabero/UltimateMD/issues). Cómo hacerlo, y qué comprobar si se acuerda un cambio, está en la [guía para contribuir](CONTRIBUTING.md). Para avisar de un problema de seguridad, sigue la [política de seguridad](SECURITY.md). Quien participa acepta el [código de conducta](CODE_OF_CONDUCT.md).
 
 ## Licencia
 
