@@ -99,6 +99,39 @@ md.renderer.rules.tag = (tokens: any, idx: number) => {
   return `<a class="tag" data-tag="${name}" href="#">#${name}</a>`;
 };
 
+// Two things Obsidian notes carry: ==highlighted text== and %%comments%%,
+// which are for whoever writes and never show.
+md.inline.ruler.before('emphasis', 'obsidian_marks', (state: any, silent: boolean) => {
+  const { src, pos } = state;
+  const mark = src.startsWith('==', pos) ? '==' : src.startsWith('%%', pos) ? '%%' : null;
+  if (!mark) return false;
+  const end = src.indexOf(mark, pos + 2);
+  const inner = end < 0 ? '' : src.slice(pos + 2, end);
+  if (!inner.trim() || inner.includes('\n') || (mark === '==' && /^\s|\s$/.test(inner))) return false;
+  if (!silent && mark === '==') {
+    state.push('mark_open', 'mark', 1);
+    state.md.inline.parse(inner, state.md, state.env, state.tokens);
+    state.push('mark_close', 'mark', -1);
+  }
+  state.pos = end + 2;
+  return true;
+});
+
+// A comment alone on its lines, or spanning several.
+md.block.ruler.before('paragraph', 'obsidian_comment', (state: any, start: number, end: number, silent: boolean) => {
+  const line = (n: number) => state.src.slice(state.bMarks[n] + state.tShift[n], state.eMarks[n]);
+  const first = line(start);
+  if (!first.startsWith('%%')) return false;
+  let last = start;
+  if (!(first.length > 4 && first.trimEnd().endsWith('%%'))) {
+    last = start + 1;
+    while (last < end && !line(last).trimEnd().endsWith('%%')) last++;
+    if (last >= end) return false;
+  }
+  if (!silent) state.line = last + 1;
+  return true;
+});
+
 function splitFrontmatter(text: string): { meta: string | null; body: string } {
   const m = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(text);
   return m ? { meta: m[1], body: text.slice(m[0].length) } : { meta: null, body: text };

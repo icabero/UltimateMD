@@ -75,3 +75,24 @@ describe('outline', () => {
     expect(diagramFences('texto\n\n```d2 animado\na -> b\n```\n\n```js\nx\n```\n')).toEqual([{ lang: 'd2', src: 'a -> b\n', style: 'animado', line: 3 }]);
   });
 });
+
+describe('Obsidian marks', () => {
+  it('highlights ==text== and hides %%comments%% on a line', () => {
+    const html = render('Un ==texto **fuerte**== y %%oculto%% fin. 2 == 2 y ==  no ==');
+    expect(html.querySelector('mark')?.innerHTML).toBe('texto <strong>fuerte</strong>');
+    expect(html.querySelectorAll('mark')).toHaveLength(1);
+    expect(html.textContent).not.toContain('oculto');
+    expect(html.textContent).toContain('2 == 2');
+  });
+
+  it('hides comments that span several lines', () => {
+    const html = render('Antes\n\n%%\nsecreto\nmás\n%%\n\nDespués\n\n%% una sola %%');
+    expect(html.textContent).not.toContain('secreto');
+    expect(html.textContent).not.toContain('una sola');
+    expect([...html.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['Antes', 'Después']);
+  });
+
+  it('leaves an unclosed comment as text', () => {
+    expect(render('%%\nsin cerrar').textContent).toContain('sin cerrar');
+  });
+});

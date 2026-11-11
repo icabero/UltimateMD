@@ -383,7 +383,8 @@ pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
                 writer.note = path.clone();
                 writer.shift = *shift;
                 writer.notes.clear();
-                let body = callouts::normalize(split_frontmatter(markdown).1, input.language);
+                let body =
+                    callouts::normalize(&ultimatemd_core::marks::strip(split_frontmatter(markdown).1), input.language);
                 let body = normalize_wikilinks(&body);
                 for event in Parser::new_ext(&body, options) {
                     writer.event(event);

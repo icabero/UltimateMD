@@ -1189,7 +1189,7 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
                 writer.note_index = index;
                 writer.shift = *shift;
                 writer.page_break = *page_break;
-                let body = crate::callouts::normalize(body, input.language);
+                let body = crate::callouts::normalize(&crate::marks::strip(body), input.language);
                 for event in Parser::new_ext(&normalize_wikilinks(&body), options) {
                     writer.event(event, &mut saved);
                 }

@@ -9,6 +9,7 @@ pub mod error;
 pub mod files;
 pub mod history;
 pub mod links;
+pub mod marks;
 pub mod note_templates;
 pub mod paths;
 pub mod registry;

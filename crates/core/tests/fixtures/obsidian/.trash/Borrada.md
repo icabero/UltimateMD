@@ -1,0 +1,1 @@
+# Nota borrada en Obsidian

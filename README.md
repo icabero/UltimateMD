@@ -92,6 +92,26 @@ Marcadores para tu plantilla:
 
 Si el documento tiene índice, pulsa sobre él y luego `F9` en Word para que muestre los números de página.
 
+## Vaults de Obsidian
+
+Abre la carpeta del vault como cualquier otra. UltimateMD no toca `.obsidian` ni `.trash`, que no salen en el árbol, así que puedes seguir usando los dos programas con el mismo vault.
+
+| Funciona | Cómo |
+|---|---|
+| `[[enlaces]]`, `[[nota\|texto]]`, `[[carpeta/nota]]` | Se abren con un clic y se actualizan al renombrar o mover |
+| `[[nota#Título]]` y `[[nota#^bloque]]` | Abren la nota; el título, además, salta a su sitio |
+| `![[imagen.png]]` | Se muestra, la busque donde la busque Obsidian |
+| Etiquetas `#etiqueta`, `#anidada/etiqueta` y `tags:` del frontmatter | Se cuentan, se sugieren y se buscan |
+| Callouts `> [!tipo]`, también plegables con `-` y `+` | Con su color e icono |
+| `==resaltado==` y `%%comentarios%%` | El comentario no se ve ni sale al exportar. En Word y PDF el resaltado queda como texto normal |
+| Tareas `- [ ]` y `- [x]` | Se marcan con un clic en el modo visual |
+
+| Aún no | Qué pasa |
+|---|---|
+| `aliases:` del frontmatter | Un enlace escrito con el alias sale como roto |
+| `![[otra nota]]` y `![[nota#Título]]` | Se muestra como enlace, no con el texto de la otra nota |
+| Bloques `dataview` y archivos `.canvas` | El bloque se ve como código y el lienzo no se abre |
+
 ## Diagramas
 
 ![Creador de diagramas con el formulario a la izquierda y el dibujo a la derecha](site/img/diagramas.png)
