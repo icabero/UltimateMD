@@ -1,3 +1,20 @@
+; An AI client keeps the MCP server running, and Windows does not let a file
+; in use be replaced, so installing, updating or removing the app would fail.
+; Only the copy in this folder is closed: a portable one elsewhere stays.
+; The client starts it again on its next call, or when it is restarted.
+!macro CLOSE_MCP_SERVER
+  nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "Get-Process ultimatemd-mcp -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '$INSTDIR\*' } | Stop-Process -Force; Start-Sleep -Milliseconds 300"`
+  Pop $0
+!macroend
+
+!macro NSIS_HOOK_PREINSTALL
+  !insertmacro CLOSE_MCP_SERVER
+!macroend
+
+!macro NSIS_HOOK_PREUNINSTALL
+  !insertmacro CLOSE_MCP_SERVER
+!macroend
+
 ; Leaves the language picked in the installer next to the program, where the app
 ; reads it on start until the user chooses another one in Settings.
 !macro NSIS_HOOK_POSTINSTALL
