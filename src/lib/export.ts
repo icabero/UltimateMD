@@ -40,11 +40,11 @@ export interface ExportOptions {
   template: string | null;
 }
 
-const byName = (a: TreeNode, b: TreeNode) => a.name.localeCompare(b.name, language(), { numeric: true });
-const isNote = (n: TreeNode) => !n.isDir && kindOf(n.path) === 'md';
-const hasNotes = (n: TreeNode): boolean => (n.isDir ? n.children.some(hasNotes) : isNote(n));
+export const byName = (a: TreeNode, b: TreeNode) => a.name.localeCompare(b.name, language(), { numeric: true });
+export const isNote = (n: TreeNode) => !n.isDir && kindOf(n.path) === 'md';
+export const hasNotes = (n: TreeNode): boolean => (n.isDir ? n.children.some(hasNotes) : isNote(n));
 
-function findFolder(nodes: TreeNode[], path: string): TreeNode | null {
+export function findFolder(nodes: TreeNode[], path: string): TreeNode | null {
   for (const node of nodes.filter((n) => n.isDir)) {
     if (node.path === path) return node;
     const found = findFolder(node.children, path);

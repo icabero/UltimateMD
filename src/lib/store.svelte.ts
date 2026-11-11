@@ -299,6 +299,8 @@ class Store {
   wordScreen = $state<string | null>(null);
   /** The vault whose diagram guide for the AI is being edited. */
   guideScreen = $state<string | null>(null);
+  /** A vault or folder being read top to bottom, in place of the editor. */
+  reader = $state<{ vaultId: string; folder: string } | null>(null);
   /** Where a note from a template goes, while choosing the template. */
   templatePicker = $state<{ vaultId: string; dir: string } | null>(null);
   /** Taken by the editor, or the preview when it shows alone. */

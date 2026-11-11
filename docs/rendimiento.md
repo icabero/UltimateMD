@@ -37,7 +37,9 @@ tres pasadas.
 
 En la interfaz (prueba e2e): el vault se abre en unos 250 ms, una carpeta de
 2000 notas se despliega en unos 200 ms y una nota se abre en unos 140 ms con
-esa carpeta abierta.
+esa carpeta abierta. Leer de arriba abajo una carpeta de 10 000 notas se abre
+en unos 800 ms y salta a la última en unos 600 ms, porque cada nota se carga al
+acercarse.
 
 ## Qué se cambió
 

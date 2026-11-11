@@ -29,6 +29,7 @@
       { label: tr('cmd.fromTemplate'), icon: 'tasks', run: () => store.newNoteFromTemplate(id, dir) },
       { label: tr('sidebar.newFolder'), icon: 'folderPlus', run: () => void newFolder(id, dir) },
     ];
+    if (node.isDir) items.push({ label: tr('reader.readFolder'), icon: 'eye', separator: true, run: () => (store.reader = { vaultId: id, folder: node.path }) });
     if (!node.isDir) {
       const favorite = store.isFavorite(id, node.path);
       if (kindOf(node.path) !== 'other') items.push({ label: tr('menu.openBeside'), icon: 'split', separator: true, run: () => void store.openBeside(id, node.path) });
@@ -49,7 +50,8 @@
       { label: tr('sidebar.newNote'), icon: 'plus', run: () => void newNote(vault.id, '') },
       { label: tr('cmd.fromTemplate'), icon: 'tasks', run: () => store.newNoteFromTemplate(vault.id, '') },
       { label: tr('sidebar.newFolder'), icon: 'folderPlus', run: () => void newFolder(vault.id, '') },
-      { label: tr('broken.open'), icon: 'link', separator: true, run: () => (store.brokenLinks = vault.id) },
+      { label: tr('reader.readVault'), icon: 'eye', separator: true, run: () => (store.reader = { vaultId: vault.id, folder: '' }) },
+      { label: tr('broken.open'), icon: 'link', run: () => (store.brokenLinks = vault.id) },
       { label: tr('word.openSettings'), icon: 'word', run: () => (store.wordScreen = vault.id) },
       { label: tr('guide.open'), icon: 'diagram', run: () => (store.guideScreen = vault.id) },
       { label: tr('aiLog.open'), icon: 'list', run: () => (store.aiLog = vault.id) },

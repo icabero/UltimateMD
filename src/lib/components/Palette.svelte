@@ -109,6 +109,7 @@
       ...THEMES.map((t) => ({ id: `theme.${t.id}`, label: tr('cmd.theme', { name: themeName(t) }), run: () => store.setThemeChoice({ fixed: t.id }) })),
       { id: 'vault.broken', label: tr('broken.open'), when: !!tab && !tab.loose, run: () => tab && (store.brokenLinks = tab.vaultId) },
       { id: 'vault.aiLog', label: tr('aiLog.open'), when: !!tab && !tab.loose, run: () => tab && (store.aiLog = tab.vaultId) },
+      { id: 'vault.read', label: tr('cmd.readVault'), when: !!tab && !tab.loose, run: () => tab && (store.reader = { vaultId: tab.vaultId, folder: '' }) },
       { id: 'vault.word', label: tr('cmd.wordSettings'), when: !!tab && !tab.loose, run: () => tab && (store.wordScreen = tab.vaultId) },
       { id: 'vault.themes', label: tr('cmd.vaultThemes'), when: !!tab && !tab.loose, run: () => tab && (store.themeEditor = tab.vaultId) },
       { id: 'app.settings', label: tr('cmd.settings'), run: () => (store.settings = true) },

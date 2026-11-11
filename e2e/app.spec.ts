@@ -2627,6 +2627,44 @@ test('an image an AI drew can be asked for again from the preview', async ({ pag
   expect(prompt).toContain('get_diagram_guide');
 });
 
+test('a vault can be read top to bottom as one document', async ({ page }) => {
+  const readVault = async () => {
+    await page.locator('aside').getByRole('button', { name: 'Trabajo', exact: true }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Leer el vault de arriba abajo' }).click();
+  };
+  await readVault();
+  await expect(page.getByRole('heading', { name: 'Leyendo Trabajo' })).toBeVisible();
+  await expect(page.locator('main')).toContainText('4 notas');
+  const index = page.getByRole('navigation', { name: 'Índice de la lectura' });
+  await expect(index.getByRole('button')).toHaveText(['D2', 'Inicio', 'Destino', 'Hondo']);
+
+  // A link to a note being read jumps within the reading, without opening it.
+  const inicio = page.locator('section[data-path="Inicio.md"]');
+  await inicio.getByRole('link', { name: 'Destino' }).click();
+  await expect(index.getByRole('button', { name: 'Destino' })).toHaveAttribute('aria-current', 'location');
+  await expect(page.locator('main [role=tab]')).toHaveCount(0);
+
+  await index.getByRole('button', { name: 'Hondo' }).click();
+  await expect(index.getByRole('button', { name: 'Hondo' })).toHaveAttribute('aria-current', 'location');
+  await page.locator('section[data-path="dir/sub/Hondo.md"]').getByRole('button', { name: 'Editar' }).click();
+  await expect(page.getByRole('heading', { name: 'Leyendo Trabajo' })).toHaveCount(0);
+  await expect(page.locator('main footer')).toContainText('dir/sub/Hondo.md');
+
+  // It goes back to where it was left, and Esc leaves it.
+  await readVault();
+  await expect(index.getByRole('button', { name: 'Hondo' })).toHaveAttribute('aria-current', 'location');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading', { name: 'Leyendo Trabajo' })).toHaveCount(0);
+});
+
+test('a folder can be read on its own', async ({ page }) => {
+  await page.locator('aside').getByRole('button', { name: 'dir', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Leer esta carpeta de arriba abajo' }).click();
+  await expect(page.getByRole('heading', { name: 'Leyendo dir' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Índice de la lectura' }).getByRole('button')).toHaveText(['Destino', 'Hondo']);
+  await expect(page.locator('section[data-path="dir/Destino.md"] .body')).not.toContainText('Cargando');
+});
+
 // Numbers for #80; the limits are loose so that only a real slowdown fails.
 // Rows are found by their path: role queries over thousands of buttons time
 // the test tool rather than the app.
@@ -2695,4 +2733,10 @@ test('the main screens pass an accessibility check', async ({ page }) => {
   await expect(page.getByRole('menu')).toBeVisible();
   // A popup menu floats over the page, outside its landmarks, as ARIA expects.
   await check('menu', ['region']);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('leer el vault');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('navigation', { name: 'Índice de la lectura' })).toBeVisible();
+  await check('reader');
 });

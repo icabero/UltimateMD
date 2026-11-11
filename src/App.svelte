@@ -27,6 +27,7 @@
   import ConflictMerge from './lib/components/ConflictMerge.svelte';
   import WordScreen from './lib/components/WordScreen.svelte';
   import DiagramGuide from './lib/components/DiagramGuide.svelte';
+  import Reader from './lib/components/Reader.svelte';
   import BrokenLinks from './lib/components/BrokenLinks.svelte';
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
@@ -195,7 +196,9 @@
       </div>
     {/if}
     <div class="content" style:--text-scale={store.reading.textScale} style:--prose-width={LINE_WIDTHS[store.reading.lineWidth]} style:--leading={LEADINGS[store.reading.leading] ?? 0}>
-      {#if !tab}
+      {#if store.reader}
+        {#key `${store.reader?.vaultId}:${store.reader?.folder}`}<Reader vaultId={store.reader?.vaultId ?? ""} folder={store.reader?.folder ?? ""} />{/key}
+      {:else if !tab}
         <Welcome />
       {:else if tab.kind === 'image'}
         {#key tab.key}<Preview {tab} />{/key}
