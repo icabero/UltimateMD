@@ -430,6 +430,10 @@
           return { path, aliases: list.split(',').map((a) => a.trim()).filter(Boolean) };
         })
         .filter((n) => n.aliases.length),
+    export_site: ({ name, pages, assets }) => {
+      window.__site = { name, pages, assets };
+      return `/exportado/${name}/index.html`;
+    },
     // Kept apart, as .ultimatemd is hidden from the tree.
     diagram_guide: ({ id }) => guides[id] ?? null,
     save_diagram_guide: ({ id, text }) => {

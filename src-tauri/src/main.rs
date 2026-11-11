@@ -168,6 +168,7 @@ fn main() {
             update::portable_data,
             commands::diagram_guide,
             commands::vault_aliases,
+            commands::export_site,
             commands::save_diagram_guide,
             update::update_install,
             logbook::log_error,

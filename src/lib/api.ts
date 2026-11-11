@@ -293,6 +293,9 @@ export const api = {
   setSpellcheck: (languages: string[]) => invoke<void>('set_spellcheck', { languages }),
   installerLanguage: () => invoke<string | null>('installer_language'),
   exportFile: (name: string, data: Uint8Array) => invoke<string | null>('export_file', { name, data: Array.from(data) }),
+  /** Writes a static site in a new folder where the user picks, and returns its index page. */
+  exportSite: (id: string, name: string, pages: { path: string; html: string }[], assets: string[]) =>
+    invoke<string | null>('export_site', { id, name, pages, assets }),
 };
 
 /** URL of a vault file, served by the app's `umd` protocol. */

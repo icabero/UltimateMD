@@ -59,7 +59,7 @@ export function foldersOf(nodes: TreeNode[]): string[] {
   return nodes.filter((n) => n.isDir && hasNotes(n)).flatMap((n) => [n.path, ...foldersOf(n.children)]);
 }
 
-function rootOf(tab: Tab, options: ExportOptions) {
+export function rootOf(tab: Tab, options: ExportOptions) {
   const tree = store.trees[tab.vaultId] ?? [];
   if (options.scope === 'vault') return { name: store.vault(tab.vaultId)?.name ?? '', children: tree };
   const folder = findFolder(tree, options.folder);
@@ -121,7 +121,7 @@ export function planSections(tab: Tab, options: ExportOptions): PlanSection[] {
 
 const noteSections = (sections: PlanSection[]) => sections.filter((s) => s.kind === 'note');
 
-async function readNotes(tab: Tab, sections: PlanSection[]) {
+export async function readNotes(tab: Tab, sections: PlanSection[]) {
   const notes = new Map<string, string>();
   const read = store.noteReader(tab.vaultId);
   const resolve = (target: string, from: string) => store.resolve(tab.vaultId, target, from);
@@ -151,7 +151,7 @@ interface Look {
  * Dark themes draw light text meant for a dark page, so on paper only their
  * shapes and the diagram's own colours carry over.
  */
-function printLook(tab: Tab, note: string, words: string): Look {
+export function printLook(tab: Tab, note: string, words: string): Look {
   const style = parseStyle(words);
   const chosen = hasStyle(style) || frontmatterValue(note, 'tema-diagramas') || store.vaultThemes[tab.vaultId]?.defaultDiagramTheme;
   if (!chosen) return { theme: PRINT_THEME, sketch: false };
@@ -275,7 +275,7 @@ export async function buildPlan(tab: Tab, options: ExportOptions, onProgress?: P
   };
 }
 
-function toBase64(bytes: number[]) {
+export function toBase64(bytes: number[]) {
   let text = '';
   for (let i = 0; i < bytes.length; i += CHUNK) text += String.fromCharCode(...bytes.slice(i, i + CHUNK));
   return btoa(text);

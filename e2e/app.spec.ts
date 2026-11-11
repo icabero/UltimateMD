@@ -2688,6 +2688,27 @@ test('notes answer to their Obsidian aliases and can be shown inside others', as
   await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('Meta final');
 });
 
+test('a vault exports as a website, a page per note with working links', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'Sitio web');
+  await step(page, 'Contenido');
+  await page.getByRole('group', { name: 'Alcance' }).getByRole('button', { name: 'Vault' }).click();
+  await expect(page.getByText('Carpetas en el documento')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Documento exportado' })).toBeVisible();
+  const site = await page.evaluate(() => (window as any).__site);
+  expect(site.name).toBe('Trabajo');
+  const paths = site.pages.map((p: { path: string }) => p.path);
+  expect(paths).toEqual(expect.arrayContaining(['Inicio.html', 'D2.html', 'dir/Destino.html', 'dir/sub/Hondo.html', 'index.html']));
+  const inicio = site.pages.find((p: { path: string }) => p.path === 'Inicio.html').html;
+  expect(inicio).toContain('href="dir/Destino.html"');
+  expect(inicio).not.toContain('Falta</a>');
+  expect(inicio).not.toContain('<script>');
+  const hondo = site.pages.find((p: { path: string }) => p.path === 'dir/sub/Hondo.html').html;
+  expect(hondo).toContain('href="../../index.html"');
+  expect(hondo).toMatch(/<a href="Hondo.html" aria-current="page">Hondo<\/a>/);
+});
+
 // Numbers for #80; the limits are loose so that only a real slowdown fails.
 // Rows are found by their path: role queries over thousands of buttons time
 // the test tool rather than the app.

@@ -26,7 +26,7 @@ UltimateMD es un editor libre para Windows, macOS y Linux. Tus notas siguen sien
 - **Leer un vault o una carpeta de arriba abajo**, como un solo documento, con un índice que marca por dónde vas, enlaces que saltan dentro de la lectura y el sitio guardado para volver. Desde el menú del vault o de la carpeta.
 - **Moverte rápido** con autoguardado, selector rápido y búsqueda global que no distingue acentos y abre la nota en la línea encontrada.
 - **Dibujar diagramas** Mermaid y D2 dentro de la nota, sin conexión: con un creador visual para los más habituales, plantillas para todos los demás y conexiones animadas. Si uno falla, te dice en qué línea y por qué.
-- **Exportar** una nota, una carpeta o un vault a PDF, Word o HTML en tres pasos, con vista previa y una revisión que avisa de lo que saldría mal.
+- **Exportar** una nota, una carpeta o un vault a PDF, Word, HTML o un sitio web en tres pasos, con vista previa y una revisión que avisa de lo que saldría mal.
 - **Usar tus plantillas de Word**, conservando portada, cabeceras, estilos e índice.
 - **Conectar tu IA** por MCP, con permisos por vault.
 - **Personalizarla** con ocho temas y temas propios por vault, nota o diagrama, y ajustar el tamaño del texto y el ancho de línea.
@@ -91,6 +91,7 @@ Lo exportado usa un aspecto de documento, sea cual sea el tema activo. Los diagr
 - **Carpetas:** cada nivel puede ser un título, un estilo de tu plantilla o no aparecer, con salto de página opcional. Los títulos de las notas bajan de nivel para encajar.
 - **Enlaces entre notas:** en Word y PDF, un `[[enlace]]` a una nota o a un título que va en el mismo documento salta a ese punto y muestra su título, no el nombre del archivo. Las notas no cambian.
 - **PDF:** se compone directamente con un motor tipográfico integrado, sin diálogo de impresión, con portada e índice opcionales. Lleva el título y el `autor` del frontmatter en sus propiedades, y puede generarse como PDF/A para archivar.
+- **Sitio web:** una página por nota, con las mismas carpetas, un menú con todas y una portada. Los enlaces entre notas llevan a su página y las imágenes se copian en `assets/`. Se crea una carpeta nueva dentro de la que elijas, lista para abrir en el navegador o publicar en GitHub Pages.
 - **Word:** la nota se escribe dentro de una copia de tu plantilla. Incluye una plantilla de ejemplo que puedes guardar y adaptar.
 - **Word por vault:** cada vault puede llevar su propia plantilla y ajustar títulos, texto, tablas, imágenes y código, con una muestra en directo. Se abre desde el icono de Word junto al nombre del vault. Los estilos de títulos numerados de la plantilla se detectan solos.
 

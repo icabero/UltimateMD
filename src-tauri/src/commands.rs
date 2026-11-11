@@ -499,6 +499,108 @@ pub fn reveal_exported(app: AppHandle, path: String) -> Result<()> {
     app.opener().reveal_item_in_dir(path).map_err(|e| Error::Vault(e.to_string()))
 }
 
+/// One page of an exported site, by its path inside the site.
+#[derive(serde::Deserialize)]
+pub struct SitePage {
+    path: String,
+    html: String,
+}
+
+/// Marks a folder as a site this app wrote, so exporting again may replace it.
+const SITE_MARK: &str = ".ultimatemd-sitio";
+
+/// Writes a static site in a new folder `name` inside the one the user picks,
+/// with the vault's images it uses under `assets/`. Returns its index page,
+/// or None if the dialog is cancelled.
+#[tauri::command(async)]
+pub fn export_site(
+    app: AppHandle,
+    id: String,
+    name: String,
+    pages: Vec<SitePage>,
+    assets: Vec<String>,
+) -> Result<Option<String>> {
+    let vault = fs(&id)?;
+    let Some(picked) = app.dialog().file().blocking_pick_folder() else { return Ok(None) };
+    let parent = picked.into_path().map_err(|e| Error::Vault(e.to_string()))?;
+    let index = write_site(&vault, &parent, &name, &pages, &assets)?;
+    exported().insert(index.clone());
+    Ok(Some(index.to_string_lossy().into_owned()))
+}
+
+/// The site's files in `parent/name`. An existing folder is only replaced
+/// when this app wrote it, and nothing is written outside it.
+fn write_site(vault: &VaultFs, parent: &Path, name: &str, pages: &[SitePage], assets: &[String]) -> Result<PathBuf> {
+    ultimatemd_core::paths::check_new_name(name)?;
+    let root = parent.join(name);
+    if root.exists() && !root.join(SITE_MARK).is_file() {
+        return Err(Error::Vault(format!(
+            "{} already exists and is not a site exported by UltimateMD",
+            root.display()
+        )));
+    }
+    std::fs::create_dir_all(&root)?;
+    std::fs::write(root.join(SITE_MARK), b"")?;
+    let write = |rel: &str, bytes: &[u8]| -> Result<()> {
+        let target = ultimatemd_core::paths::resolve(&root, rel)?;
+        std::fs::create_dir_all(target.parent().unwrap_or(&root))?;
+        Ok(std::fs::write(target, bytes)?)
+    };
+    for page in pages {
+        if !page.path.ends_with(".html") {
+            return Err(Error::PathNotAllowed(page.path.clone()));
+        }
+        write(&page.path, page.html.as_bytes())?;
+    }
+    for asset in assets {
+        write(&format!("assets/{asset}"), &std::fs::read(vault.resolve_existing(asset)?)?)?;
+    }
+    Ok(root.join("index.html"))
+}
+
+#[cfg(test)]
+mod site_tests {
+    use super::*;
+
+    fn page(path: &str) -> SitePage {
+        SitePage { path: path.into(), html: format!("<p>{path}</p>") }
+    }
+
+    #[test]
+    fn a_site_is_written_inside_its_own_folder() {
+        let vault_dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(vault_dir.path().join("adjuntos")).unwrap();
+        std::fs::write(vault_dir.path().join("adjuntos/foto.png"), b"png").unwrap();
+        let vault = VaultFs::new(vault_dir.path());
+        let out = tempfile::tempdir().unwrap();
+
+        let index = write_site(
+            &vault,
+            out.path(),
+            "Docs",
+            &[page("index.html"), page("a/b.html")],
+            &["adjuntos/foto.png".into()],
+        )
+        .unwrap();
+        assert_eq!(index, out.path().join("Docs/index.html"));
+        assert_eq!(std::fs::read(out.path().join("Docs/assets/adjuntos/foto.png")).unwrap(), b"png");
+        assert!(out.path().join("Docs/a/b.html").is_file());
+        // Again over its own folder.
+        write_site(&vault, out.path(), "Docs", &[page("index.html")], &[]).unwrap();
+
+        std::fs::create_dir(out.path().join("Mio")).unwrap();
+        assert!(
+            write_site(&vault, out.path(), "Mio", &[page("index.html")], &[]).is_err(),
+            "a folder it did not write"
+        );
+        for bad in ["../fuera.html", "x.js", ".oculto/a.html"] {
+            assert!(write_site(&vault, out.path(), "Otro", &[page(bad)], &[]).is_err(), "{bad}");
+        }
+        assert!(write_site(&vault, out.path(), "Otro", &[], &["../secreto.png".into()]).is_err());
+        assert!(write_site(&vault, out.path(), "a/b", &[], &[]).is_err(), "a name, not a path");
+    }
+}
+
 /// Writes a `.docx` where the user picks. Its path, or None if the dialog is cancelled.
 #[tauri::command(async)]
 pub fn export_docx(app: AppHandle, plan: ExportPlan) -> Result<Option<String>> {
