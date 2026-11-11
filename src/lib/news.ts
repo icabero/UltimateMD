@@ -9,6 +9,10 @@ export const NEWS: Record<string, { title: Key; text: Key }[]> = {
     { title: 'news.07.tags', text: 'news.07.tagsText' },
     { title: 'news.07.find', text: 'news.07.findText' },
     { title: 'news.07.writing', text: 'news.07.writingText' },
+    { title: 'news.07.reading', text: 'news.07.readingText' },
+    { title: 'news.07.diagrams', text: 'news.07.diagramsText' },
+    { title: 'news.07.export', text: 'news.07.exportText' },
+    { title: 'news.07.vaults', text: 'news.07.vaultsText' },
   ],
 };
 
