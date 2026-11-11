@@ -240,7 +240,8 @@ impl History {
         };
         let time = now();
         let entry = AiEntry {
-            id: format!("{time:x}-{:x}", std::process::id()),
+            // Two actions can fall in the same millisecond, so the id cannot come from the time.
+            id: uuid::Uuid::new_v4().simple().to_string(),
             time,
             tool: tool.to_string(),
             path: path.to_string(),
@@ -425,6 +426,8 @@ mod tests {
             log.iter().map(|e| e.tool.as_str()).collect::<Vec<_>>(),
             ["move_note", "create_note", "update_note"]
         );
+        let ids: std::collections::HashSet<&str> = log.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids.len(), 3, "each action has its own id, even in the same millisecond");
         assert!(h.written_by_ai("v1", "a.md", &v1));
         assert!(!h.written_by_ai("v1", "a.md", &v0));
         // The text before is also a version of the note.
