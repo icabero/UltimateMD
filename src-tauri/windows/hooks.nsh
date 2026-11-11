@@ -3,7 +3,9 @@
 ; Only the copy in this folder is closed: a portable one elsewhere stays.
 ; The client starts it again on its next call, or when it is restarted.
 !macro CLOSE_MCP_SERVER
-  nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "Get-Process ultimatemd-mcp -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '$INSTDIR\*' } | Stop-Process -Force; Start-Sleep -Milliseconds 300"`
+  ; The installer is 32-bit, and so is the PowerShell it starts: that one does
+  ; not see where a 64-bit process runs from, but WMI does.
+  nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { $$_.Name -eq 'ultimatemd-mcp.exe' -and $$_.ExecutablePath -like '$INSTDIR\*' } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force }; Start-Sleep -Milliseconds 300"`
   Pop $0
 !macroend
 
