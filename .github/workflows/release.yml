@@ -82,3 +82,16 @@ jobs:
           $zip = "UltimateMD_${version}_x64_portable.zip"
           Compress-Archive -Path portable/UltimateMD -DestinationPath $zip
           gh release upload $tag $zip --clobber
+      # Installs what was just built and checks that it starts. The files are
+      # already on the draft release; a failure here says not to publish it.
+      - name: Try the Windows installers and the portable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          ./scripts/smoke/windows.ps1 -Bundles target/${{ matrix.target }}/release/bundle -Version $version -Portable (Get-Item "UltimateMD_${version}_x64_portable.zip").FullName
+      - name: Try the installers
+        if: runner.os != 'Windows'
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then sudo apt-get install -y xvfb; fi
+          bash scripts/smoke/unix.sh target/${{ matrix.target }}/release/bundle "$(node -p "require('./src-tauri/tauri.conf.json').version")" ${{ matrix.target }}
