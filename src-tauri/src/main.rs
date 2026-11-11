@@ -27,6 +27,22 @@ fn allowed_navigation(url: &tauri::Url) -> bool {
     }
 }
 
+/// The installer brings WebView2 along; a portable copy on an old Windows may
+/// find it missing, and without it no window can open to say so.
+#[cfg(windows)]
+fn missing_webview() {
+    let text = "UltimateMD necesita Microsoft Edge WebView2, que no está instalado en este equipo. \
+Descárgalo gratis desde https://developer.microsoft.com/microsoft-edge/webview2/ o usa el instalador de UltimateMD, que lo instala solo.\n\n\
+UltimateMD needs Microsoft Edge WebView2, which is not installed on this computer. \
+Get it free from the address above, or use the UltimateMD installer, which installs it for you.";
+    rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Error)
+        .set_title("UltimateMD")
+        .set_description(text)
+        .set_buttons(rfd::MessageButtons::Ok)
+        .show();
+}
+
 fn main() {
     // WebKitGTK shows a blank window on NVIDIA drivers with its DMA-BUF renderer.
     #[cfg(target_os = "linux")]
@@ -35,6 +51,12 @@ fn main() {
     {
         // SAFETY: no other thread exists yet.
         unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") };
+    }
+
+    #[cfg(windows)]
+    if tauri::webview_version().is_err() {
+        missing_webview();
+        return;
     }
 
     logbook::start();
@@ -74,6 +96,12 @@ fn main() {
             let window = window.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
             #[cfg(not(target_os = "macos"))]
             let window = window.decorations(false);
+            // The webview keeps the app's own settings; a portable copy keeps
+            // them beside it too, not in the user's folder.
+            let window = match ultimatemd_core::registry::portable_dir() {
+                Some(dir) => window.data_directory(dir.join("webview")),
+                None => window,
+            };
             let window = window.build()?;
             // A frontend that fails to start must not leave an invisible app.
             std::thread::spawn(move || {
@@ -137,6 +165,7 @@ fn main() {
             commands::vault_tags,
             commands::reveal_path,
             update::update_supported,
+            update::portable_data,
             update::update_install,
             logbook::log_error,
             logbook::read_log,

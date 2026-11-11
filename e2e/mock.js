@@ -419,6 +419,7 @@
     },
     reveal_path: ({ id, path }) => void (window.__revealed = `${id}:${path}`),
     update_supported: () => window.__selfUpdate ?? true,
+    portable_data: () => window.__portable ?? null,
     update_install: async () => {
       if (window.__updateFails) throw 'signature does not match';
       window[`_${listeners['update-progress']}`]?.({ payload: { done: 40, total: 100 } });

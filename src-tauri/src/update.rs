@@ -16,9 +16,16 @@ struct Progress {
 
 /// Whether this copy can update itself. A package installed by the system
 /// (deb or rpm) is updated by the system; only an AppImage replaces itself.
+/// A portable copy is a folder the updater does not know how to replace.
 #[tauri::command]
 pub fn update_supported() -> bool {
-    !cfg!(target_os = "linux") || std::env::var_os("APPIMAGE").is_some()
+    portable_data().is_none() && (!cfg!(target_os = "linux") || std::env::var_os("APPIMAGE").is_some())
+}
+
+/// The folder a portable copy keeps its data in, or nothing when installed.
+#[tauri::command]
+pub fn portable_data() -> Option<String> {
+    ultimatemd_core::registry::portable_dir().map(|d| d.to_string_lossy().into_owned())
 }
 
 /// Downloads the newest version, installs it and starts it. Says how far the

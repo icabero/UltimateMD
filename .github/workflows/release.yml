@@ -60,3 +60,25 @@ jobs:
           releaseDraft: true
           # Update packages and latest.json, which running apps read to update themselves.
           args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+      # A folder to unzip and run, for example from a USB drive. The `portable`
+      # file makes the app keep its data in `datos` beside it.
+      - name: Pack the Windows portable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $tag = if ($env:TAG) { $env:TAG } else { "v$version" }
+          $out = "target/${{ matrix.target }}/release"
+          $app = @("$out/UltimateMD.exe", "$out/ultimatemd.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $app) { throw "No app executable in $out" }
+          $dir = New-Item -ItemType Directory -Force portable/UltimateMD
+          Copy-Item $app "$dir/UltimateMD.exe"
+          Copy-Item "$out/ultimatemd-mcp.exe" "$dir/ultimatemd-mcp.exe"
+          New-Item -ItemType File "$dir/portable" | Out-Null
+          Copy-Item src-tauri/windows/LEEME-portable.txt "$dir/LEEME.txt"
+          $zip = "UltimateMD_${version}_x64_portable.zip"
+          Compress-Archive -Path portable/UltimateMD -DestinationPath $zip
+          gh release upload $tag $zip --clobber

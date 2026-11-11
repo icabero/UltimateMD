@@ -34,6 +34,7 @@
   ]);
 
   let mcp = $state<{ binary: string; available: boolean } | null>(null);
+  let portable = $state(false);
   let client = $state<Client>('claude-code');
   let copied = $state(false);
 
@@ -69,6 +70,7 @@
 
   onMount(async () => {
     mcp = await api.mcpInfo().catch(() => null);
+    portable = Boolean(await api.portableData().catch(() => null));
     defaultApp = await api.defaultAppInfo().catch(() => null);
   });
 
@@ -308,6 +310,7 @@
     {#if mcp?.available === false}
       <p class="warn">{tr('settings.mcpMissing')}</p>
     {/if}
+    {#if portable}<p class="muted">{tr('settings.mcpPortable')}</p>{/if}
     <div class="code">
       <pre>{snippet}</pre>
       <button onclick={copy}>{tr(copied ? 'common.copied' : 'common.copy')}</button>

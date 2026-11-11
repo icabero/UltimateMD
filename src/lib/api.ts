@@ -243,6 +243,8 @@ export const api = {
   revealLog: () => invoke<void>('reveal_log'),
   /** Whether this copy can update itself, rather than through the system's packages. */
   updateSupported: () => invoke<boolean>('update_supported'),
+  /** Where a portable copy keeps its data, or null when installed. */
+  portableData: () => invoke<string | null>('portable_data'),
   /** Downloads and installs the newest version, then restarts. Progress comes as `update-progress` events. */
   updateInstall: () => invoke<void>('update_install'),
   /** Shows a file or folder in the system's file manager. */

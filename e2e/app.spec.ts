@@ -2142,6 +2142,22 @@ test('a copy installed by the system is told to update through it', async ({ pag
   await expect(dialog.getByRole('button', { name: 'Actualizar ahora' })).toHaveCount(0);
 });
 
+test('a portable copy says where its data is and how to update it', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__selfUpdate = false;
+    (window as any).__portable = 'E:/UltimateMD/datos';
+  });
+  await page.reload();
+  await release(page, 'v0.2.0');
+  await about(page);
+  const dialog = page.getByRole('dialog', { name: 'Acerca de' });
+  await expect(dialog).toContainText('se guardan en E:/UltimateMD/datos');
+  await dialog.getByRole('button', { name: 'Buscar actualizaciones' }).click();
+  await expect(dialog).toContainText('descarga el zip nuevo');
+  await expect(dialog).not.toContainText('Esta copia la instaló el sistema');
+  await expect(dialog.getByRole('button', { name: 'Ir a descargas' })).toBeVisible();
+});
+
 test('a new version is announced at startup unless turned off', async ({ page }) => {
   await release(page, 'v0.2.0');
   await page.reload();

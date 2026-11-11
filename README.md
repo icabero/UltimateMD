@@ -38,9 +38,11 @@ Descarga el instalador de tu sistema desde [Releases](https://github.com/icabero
 
 | Sistema | Archivo |
 |---|---|
-| Windows | `.exe`, que deja elegir idioma, o `.msi` |
+| Windows | `.exe`, que deja elegir idioma, `.msi` o el `.zip` portable |
 | macOS | `.dmg`, para Apple Silicon o Intel |
 | Linux | AppImage, `.deb` o `.rpm` |
+
+La **versión portable** no se instala: descomprime el `.zip` donde quieras, por ejemplo en un USB, y abre `UltimateMD.exe`. Guarda la lista de vaults, los ajustes y el historial en la carpeta `datos` que crea a su lado, y no deja nada en el equipo. Para actualizarla, sustituye los archivos del programa por los del zip nuevo.
 
 Los instaladores aún no están firmados:
 

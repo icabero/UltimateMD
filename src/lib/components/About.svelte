@@ -21,10 +21,13 @@
   let selfUpdate = $state(false);
   let installing = $state<{ percent: number | null } | null>(null);
   let installFailed = $state(false);
+  /** A portable copy's data folder. */
+  let portable = $state<string | null>(null);
 
   onMount(() => {
     void getVersion().then((v) => (version = v), () => {});
     void api.updateSupported().then((ok) => (selfUpdate = ok), () => {});
+    void api.portableData().then((dir) => (portable = dir), () => {});
     const stop = listen<{ done: number; total: number | null }>('update-progress', ({ payload }) => {
       if (installing) installing = { percent: payload.total ? Math.min(100, Math.round((payload.done / payload.total) * 100)) : null };
     });
@@ -69,6 +72,7 @@
     <button class="icon" title={tr('common.close')} onclick={() => (store.about = false)}><Icon name="close" /></button>
   </header>
   {#if version}<p class="version">{tr('about.version', { version })}</p>{/if}
+  {#if portable}<p class="note">{tr('about.portable', { path: portable })}</p>{/if}
   <p>{tr('about.description')}</p>
 
   <div class="links">
@@ -95,7 +99,7 @@
         <button class="plain" onclick={() => open(RELEASES_URL)}>{tr('about.download')}</button>
       {/if}
       {#if installFailed}<p class="bad" role="alert">{tr('about.installFailed')}</p>{/if}
-      {#if !selfUpdate}<p class="note">{tr('about.systemPackage')}</p>{/if}
+      {#if !selfUpdate}<p class="note">{tr(portable ? 'about.portableUpdate' : 'about.systemPackage')}</p>{/if}
     {/if}
   </div>
   <label><input type="checkbox" bind:checked={auto} onchange={() => setChecksAtStart(auto)} /> {tr('about.auto')}</label>
