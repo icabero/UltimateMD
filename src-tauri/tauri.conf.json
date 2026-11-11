@@ -48,9 +48,15 @@
         "type": "downloadBootstrapper"
       },
       "nsis": {
-        "languages": ["English", "Spanish", "Basque"],
+        "languages": [
+          "English",
+          "Spanish",
+          "Basque"
+        ],
         "displayLanguageSelector": true,
-        "customLanguageFiles": { "Basque": "windows/Basque.nsh" },
+        "customLanguageFiles": {
+          "Basque": "windows/Basque.nsh"
+        },
         "installerHooks": "windows/hooks.nsh"
       }
     },
@@ -73,6 +79,14 @@
       "rpm": {
         "desktopTemplate": "ultimatemd.desktop"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY2QjQ0RkY0MjlDOTE0QzQKUldURUZNa3A5RSswWnBXd0padE1zT0NVSGthSDkvc1FaSWVKVHo1R1NBM3E1eFRFeFRYK2tRVWIK",
+      "endpoints": [
+        "https://github.com/icabero/UltimateMD/releases/latest/download/latest.json"
+      ]
     }
   }
 }

@@ -16,13 +16,27 @@
   import Sidebar from './lib/components/Sidebar.svelte';
   import ThemeEditor from './lib/components/ThemeEditor.svelte';
   import Tutorial from './lib/components/Tutorial.svelte';
+  import Shortcuts from './lib/components/Shortcuts.svelte';
+  import OutsideChanges from './lib/components/OutsideChanges.svelte';
+  import AiLog from './lib/components/AiLog.svelte';
+  import ContextMenu from './lib/components/ContextMenu.svelte';
+  import Icon from './lib/components/Icon.svelte';
+  import { baseName } from './lib/paths';
+  import { manageDialogFocus } from './lib/dialogFocus';
+  import News from './lib/components/News.svelte';
+  import ConflictMerge from './lib/components/ConflictMerge.svelte';
   import WordScreen from './lib/components/WordScreen.svelte';
+  import DiagramGuide from './lib/components/DiagramGuide.svelte';
+  import Reader from './lib/components/Reader.svelte';
+  import GitScreen from './lib/components/GitScreen.svelte';
   import BrokenLinks from './lib/components/BrokenLinks.svelte';
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
   import { applyInstallerLanguage, tr } from './lib/i18n.svelte';
-  import { LINE_WIDTHS, ZOOM, store, type ViewMode } from './lib/store.svelte';
+  import { LEADINGS, LINE_WIDTHS, ZOOM, store, type ViewMode } from './lib/store.svelte';
   import { applyTheme } from './lib/themes';
+  import { api } from './lib/api';
+  import { dictionaryOf, spellLanguage } from './lib/spellcheck';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
   const VIEWS: ViewMode[] = ['visual', 'edit', 'split', 'preview'];
@@ -31,6 +45,7 @@
   let preview = $state<Preview>();
   let sidebarWidth = $state(260);
   const tab = $derived(store.active);
+  const side = $derived(store.sideTab);
   const panel = $derived(store.showRight && tab?.kind === 'md');
   const columns = $derived(`${store.showLeft ? `${sidebarWidth}px ` : ''}minmax(0, 1fr)${panel ? ` ${store.layout.rightWidth}px` : ''}`);
   const words = $derived(tab?.content.trim() ? tab.content.trim().split(/\s+/).length : 0);
@@ -42,6 +57,12 @@
     applyTheme(store.theme);
   });
 
+  // Linux's spell checker needs telling which dictionary to use; elsewhere this does nothing.
+  const spelling = $derived(tab?.kind === 'md' ? spellLanguage(store.spellcheck, tab.content) : null);
+  $effect(() => {
+    void api.setSpellcheck(spelling ? [dictionaryOf(spelling)] : []).catch(() => {});
+  });
+
   onMount(() => {
     try {
       const saved = Number(localStorage.getItem(SIDEBAR_KEY));
@@ -49,7 +70,11 @@
     } catch {
       // Keeps the default width.
     }
-    store.init().catch((e) => store.notify(e));
+    // Failures nobody caught still reach the log.
+    addEventListener('error', (e) => void api.logError('window', e.error?.stack ?? e.message).catch(() => {}));
+    addEventListener('unhandledrejection', (e) => void api.logError('promise', e.reason?.stack ?? String(e.reason)).catch(() => {}));
+    const stopDialogFocus = manageDialogFocus();
+    store.init().catch((e) => store.fail(e));
     void frame.watch();
     void store.applyZoom();
     // The window starts hidden so it first appears with the right theme, language and frame.
@@ -60,6 +85,7 @@
         // Outside the app, in the interface tests.
       }
     });
+    return stopDialogFocus;
   });
 
 
@@ -67,7 +93,7 @@
     const key = e.key.toLowerCase();
     if (key === 'escape') {
       if (store.tutorial) store.closeTutorial();
-      store.settings = store.exporting = store.about = false;
+      store.settings = store.exporting = store.about = store.shortcuts = false;
       store.palette = null;
       store.themeEditor = null;
       return;
@@ -89,6 +115,7 @@
       '=': () => store.setZoom(store.reading.zoom + ZOOM.step),
       '-': () => store.setZoom(store.reading.zoom - ZOOM.step),
       '0': () => store.setZoom(null),
+      '/': () => (store.shortcuts = !store.shortcuts),
     };
     const shifted: Record<string, () => void> = {
       f: () => {
@@ -155,14 +182,24 @@
     {#if tab?.conflict}
       <div class="banner" role="alert">
         <span>{tr('app.conflictBanner')}</span>
+        <button onclick={() => (store.merging = true)}>{tr('merge.compare')}</button>
         <button onclick={() => store.acceptDisk(tab)}>{tr('app.useDisk')}</button>
         <button onclick={() => store.keepMine(tab)}>{tr('app.keepMine')}</button>
       </div>
     {:else if tab?.missing}
       <div class="banner" role="alert"><span>{tr('app.missingBanner')}</span></div>
+    {:else if tab?.outside}
+      <div class="banner info" aria-live="polite">
+        <span>{tr(tab.outside.ai ? 'outside.aiBanner' : 'outside.banner', { n: tab.outside.lines.length })}</span>
+        <button onclick={() => (store.outsideDiff = true)}>{tr('outside.show')}</button>
+        <button onclick={() => store.undoOutside(tab)}>{tr('common.undo')}</button>
+        <button class="dismiss" title={tr('common.close')} aria-label={tr('common.close')} onclick={() => (tab.outside = null)}>×</button>
+      </div>
     {/if}
-    <div class="content" style:--text-scale={store.reading.textScale} style:--prose-width={LINE_WIDTHS[store.reading.lineWidth]}>
-      {#if !tab}
+    <div class="content" style:--text-scale={store.reading.textScale} style:--prose-width={LINE_WIDTHS[store.reading.lineWidth]} style:--leading={LEADINGS[store.reading.leading] ?? 0}>
+      {#if store.reader}
+        {#key `${store.reader?.vaultId}:${store.reader?.folder}`}<Reader vaultId={store.reader?.vaultId ?? ""} folder={store.reader?.folder ?? ""} />{/key}
+      {:else if !tab}
         <Welcome />
       {:else if tab.kind === 'image'}
         {#key tab.key}<Preview {tab} />{/key}
@@ -175,6 +212,16 @@
             {#key tab.key}<Preview bind:this={preview} {tab} />{/key}
           </div>
         {/if}
+      {/if}
+      {#if tab && side}
+        <section class="pane beside" aria-label={tr('side.title', { name: baseName(side.path) })}>
+          <header>
+            <span class="name" title={side.path}>{baseName(side.path).replace(/\.(md|markdown)$/i, '')}</span>
+            <button class="icon small" title={tr('side.edit')} onclick={() => store.swapSide()}><Icon name="edit" size={14} /></button>
+            <button class="icon small" title={tr('side.close')} onclick={() => (store.sideKey = null)}><Icon name="close" size={14} /></button>
+          </header>
+          <div class="body">{#key side.key}<Preview tab={side} />{/key}</div>
+        </section>
       {/if}
     </div>
     <footer>
@@ -201,11 +248,19 @@
 {#if store.palette !== null}<Palette initial={store.palette} />{/if}
 {#if store.settings}<Settings />{/if}
 {#if store.about}<About />{/if}
+{#if store.shortcuts}<Shortcuts />{/if}
+{#if store.outsideDiff && tab?.outside}<OutsideChanges {tab} />{/if}
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
 {#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
+{#if store.guideScreen}<DiagramGuide vaultId={store.guideScreen} />{/if}
+{#if store.gitScreen}<GitScreen vaultId={store.gitScreen} />{/if}
+{#if store.merging && tab?.conflict}<ConflictMerge {tab} />{/if}
+{#if store.news}<News version={store.news} />{/if}
+{#if store.aiLog}<AiLog vaultId={store.aiLog} />{/if}
 {#if store.brokenLinks}<BrokenLinks vaultId={store.brokenLinks} />{/if}
 {#if store.templatePicker}<TemplatePicker {...store.templatePicker} />{/if}
 {#if store.exporting && tab}<Export {tab} />{/if}
+{#if store.menu}{#key store.menu}<ContextMenu {...store.menu} />{/key}{/if}
 {#if store.dialog}
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}
 {/if}
@@ -221,8 +276,14 @@
   .pane { flex: 1 1 0; min-width: 0; min-height: 0; }
   .pane.hidden { display: none; }
   .pane.preview:not(:first-child) { border-left: 1px solid var(--line); }
+  .beside { display: flex; flex-direction: column; border-left: 1px solid var(--line); }
+  .beside header { display: flex; align-items: center; gap: var(--space-1); height: 28px; flex: none; padding: 0 var(--space-1-5) 0 var(--space-3); border-bottom: 1px solid var(--line); background: var(--panel); color: var(--text-2); font-size: var(--font-sm); }
+  .beside .name { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .beside .body { flex: 1; min-height: 0; }
   .banner { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); flex: none; background: var(--warn); color: var(--text); font-size: var(--font-md); }
   .banner span { flex: 1; }
+  .banner.info { background: var(--accent-soft); }
+  .banner .dismiss { padding: 0 var(--space-2); border: 0; background: none; font-size: var(--font-lg); line-height: 1; }
   .banner button { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--raised); color: var(--text); font-size: var(--font-sm); }
   footer { display: flex; gap: var(--space-4); align-items: center; height: 24px; flex: none; padding: 0 var(--space-3); background: var(--panel); border-top: 1px solid var(--line); color: var(--text-3); font-size: var(--font-xs); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
   .spacer { flex: 1; }

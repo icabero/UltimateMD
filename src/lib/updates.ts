@@ -1,5 +1,5 @@
-// Compares this build with the latest release published on GitHub. It only tells
-// the user; installing stays their decision, on the releases page.
+// Compares this build with the latest release published on GitHub and tells
+// the user. Installing it is one click in About, or the releases page.
 
 const REPOSITORY = 'icabero/UltimateMD';
 const LATEST = `https://api.github.com/repos/${REPOSITORY}/releases/latest`;

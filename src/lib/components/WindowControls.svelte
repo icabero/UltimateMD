@@ -11,11 +11,11 @@
   }
 </script>
 
-<div class="controls" role="group" aria-label={tr('frame.controls')}>
+<section class="controls" aria-label={tr('frame.controls')}>
   <button title={tr('frame.minimize')} onclick={() => frame.minimize()}><Icon name="minimize" /></button>
   <button title={tr(frame.maximized ? 'frame.restore' : 'frame.maximize')} onclick={() => frame.toggleMaximize()}><Icon name={frame.maximized ? 'restore' : 'maximize'} size={14} /></button>
   <button class="close" title={tr('frame.close')} onclick={close}><Icon name="close" /></button>
-</div>
+</section>
 
 <style>
   .controls { position: absolute; top: 0; right: 0; z-index: var(--z-raised); display: flex; height: 38px; }

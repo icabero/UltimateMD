@@ -57,6 +57,8 @@
           <li>Varios vaults abiertos a la vez, con pestañas de cualquiera de ellos.</li>
           <li>Búsqueda global sin distinguir acentos, que abre la nota en la línea encontrada, y selector rápido.</li>
           <li>Renombra o mueve notas sin romper enlaces: se actualizan solos. Los rotos se reúnen en una lista para corregirlos.</li>
+          <li>Lee un vault o una carpeta de arriba abajo, como un solo documento, con un índice al lado.</li>
+          <li>Alias y notas incrustadas de Obsidian, y, si el vault está en Git, qué cambió y commit sin salir de la app.</li>
           <li>Abre también archivos <code>.md</code> sueltos, sin vault.</li>
         </ul>
       </div>
@@ -72,6 +74,8 @@
           <li><strong>Carpetas a tu medida:</strong> cada nivel puede ser un título, un estilo de la plantilla o desaparecer.</li>
           <li><strong>En tres pasos,</strong> con vista previa página a página y una revisión que avisa de imágenes que faltan, enlaces rotos, diagramas con error y títulos que saltan niveles.</li>
           <li><strong>PDF/A</strong> para archivar, con autor y título en las propiedades.</li>
+          <li><strong>Enlaces que funcionan:</strong> en Word y PDF, un enlace a otra nota del documento salta a ella y muestra su título.</li>
+          <li><strong>Sitio web:</strong> una página por nota, con menú, lista para GitHub Pages.</li>
         </ul>
       </div>
       <img class="shot" loading="lazy" src="img/export.png" width="1280" height="820" alt="Diálogo de exportación en pasos, con las opciones y la revisión a la izquierda y la vista previa del documento a la derecha.">
@@ -97,6 +101,7 @@
         <p>UltimateMD incluye un servidor <a href="https://modelcontextprotocol.io">MCP</a>. Claude, Cursor y otros clientes pueden buscar, leer y escribir en tus vaults, aunque la app esté cerrada. Si está abierta, ves los cambios al momento.</p>
         <pre><code>claude mcp add --scope user ultimatemd -- "/ruta/a/ultimatemd-mcp"</code></pre>
         <p class="hint">La app te da este comando con la ruta correcta, en Ajustes.</p>
+        <p>Cada vault puede llevar una guía de estilo para los diagramas, como un <code>CLAUDE.md</code>: la IA la lee antes de dibujar, en Mermaid, en D2 o como imagen, y así todos se parecen.</p>
         <div class="levels">
           <div><h3>Desactivado</h3><p>La IA ni siquiera ve que el vault existe.</p></div>
           <div><h3>Lectura</h3><p>Listar, leer y buscar. Es el nivel por defecto.</p></div>
@@ -124,6 +129,7 @@
         <div class="platform">
           <strong>Windows</strong>
           <a data-asset="x64-setup\.exe$" href="https://github.com/icabero/UltimateMD/releases/latest">Instalador .exe</a>
+          <a data-asset="_portable\.zip$" href="https://github.com/icabero/UltimateMD/releases/latest">Portable .zip</a>
         </div>
         <div class="platform">
           <strong>macOS</strong>

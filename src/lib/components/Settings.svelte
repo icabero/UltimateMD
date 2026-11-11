@@ -1,13 +1,14 @@
 <script lang="ts">
   import { frame } from '../frame.svelte';
-  import { IMAGE_FOLDER, LINE_WIDTHS, TEXT_SCALES, type ImagePlace, type LineWidth } from '../store.svelte';
+  import { IMAGE_FOLDER, LEADINGS, LINE_WIDTHS, TEXT_SCALES, type ImagePlace, type Leading, type LineWidth } from '../store.svelte';
   import { dim, pop } from '../motion';
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
-  import { api, type DefaultAppInfo, type McpAccess, type Vault } from '../api';
+  import { api, type DefaultAppInfo, type McpAccess, type McpCheck, type Vault } from '../api';
   import { LANGUAGES, language, setLanguage, themeName, tr, type Key, type Language } from '../i18n.svelte';
   import { store } from '../store.svelte';
   import { THEMES, type Theme } from '../themes';
+  import { SPELL_LANGUAGES, type SpellSetting } from '../spellcheck';
 
   type Client = 'claude-code' | 'claude-desktop' | 'cursor' | 'other';
   type Section = 'general' | 'appearance' | 'vaults' | 'ai';
@@ -33,13 +34,43 @@
   ]);
 
   let mcp = $state<{ binary: string; available: boolean } | null>(null);
+  let portable = $state(false);
   let client = $state<Client>('claude-code');
   let copied = $state(false);
 
   let defaultApp = $state<DefaultAppInfo | null>(null);
+  let log = $state<string | null>(null);
+  let logCopied = $state(false);
+
+  async function showLog() {
+    log = await api.readLog().catch(() => '');
+  }
+
+  async function copyLog() {
+    await navigator.clipboard.writeText(await api.readLog().catch(() => ''));
+    logCopied = true;
+    setTimeout(() => (logCopied = false), 1500);
+  }
+
+  let checking = $state(false);
+  let checked = $state<McpCheck | null>(null);
+  /** Vaults the AI cannot reach because their access is off. */
+  const hidden = $derived(store.vaults.filter((v) => v.mcp === 'off'));
+
+  async function checkMcp() {
+    checking = true;
+    try {
+      checked = await api.checkMcp();
+    } catch (e) {
+      checked = { ok: false, version: null, vaults: [], failed: 'start', error: String(e) };
+    } finally {
+      checking = false;
+    }
+  }
 
   onMount(async () => {
     mcp = await api.mcpInfo().catch(() => null);
+    portable = Boolean(await api.portableData().catch(() => null));
     defaultApp = await api.defaultAppInfo().catch(() => null);
   });
 
@@ -48,7 +79,7 @@
       await api.setDefaultApp();
       defaultApp = await api.defaultAppInfo();
     } catch (e) {
-      store.notify(e);
+      store.fail(e);
     }
   }
 
@@ -70,19 +101,19 @@
   const following = $derived(store.themeChoice.fixed === null);
 
   async function setAccess(vault: Vault, value: McpAccess) {
-    await api.setVaultAccess(vault.id, value).catch((e) => store.notify(e));
+    await api.setVaultAccess(vault.id, value).catch((e) => store.fail(e));
     await store.loadVaults();
   }
 
   async function setScripts(vault: Vault, allow: boolean) {
-    await api.setVaultScripts(vault.id, allow).catch((e) => store.notify(e));
+    await api.setVaultScripts(vault.id, allow).catch((e) => store.fail(e));
     await store.loadVaults();
   }
 
   async function rename(vault: Vault) {
     const name = await store.prompt(tr('sidebar.vaultName'), vault.name, tr('common.rename'));
     if (name?.trim() && name.trim() !== vault.name) {
-      await api.renameVault(vault.id, name.trim()).catch((e) => store.notify(e));
+      await api.renameVault(vault.id, name.trim()).catch((e) => store.fail(e));
       await store.loadVaults();
     }
   }
@@ -128,12 +159,33 @@
     </select>
   </section>
   <section>
+    <h3>{tr('spell.title')}</h3>
+    <select aria-label={tr('spell.title')} value={store.spellcheck} onchange={(e) => store.setSpellcheck(e.currentTarget.value as SpellSetting)}>
+      <option value="app">{tr('spell.app')}</option>
+      {#each SPELL_LANGUAGES as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
+      <option value="off">{tr('spell.off')}</option>
+    </select>
+    <p class="hint">{tr('spell.hint')}</p>
+  </section>
+  <section>
     <h3>{tr('images.title')}</h3>
     <select aria-label={tr('images.title')} value={store.imagePlace} onchange={(e) => store.setImagePlace(e.currentTarget.value as ImagePlace)}>
       <option value="vault">{tr('images.vault', { folder: IMAGE_FOLDER })}</option>
       <option value="note">{tr('images.note')}</option>
     </select>
     <p class="hint">{tr('images.hint')}</p>
+  </section>
+  <section aria-label={tr('log.title')}>
+    <h3>{tr('log.title')}</h3>
+    <p class="muted">{tr('log.intro')}</p>
+    <div class="logbar">
+      <button class="plain" onclick={showLog}>{tr(log === null ? 'log.show' : 'log.refresh')}</button>
+      <button class="plain" onclick={copyLog}>{tr(logCopied ? 'common.copied' : 'common.copy')}</button>
+      <button class="plain" onclick={() => api.revealLog().catch((e) => store.fail(e))}>{tr('log.reveal')}</button>
+    </div>
+    {#if log !== null}
+      <pre class="log" aria-label={tr('log.title')}>{log || tr('log.empty')}</pre>
+    {/if}
   </section>
   <section>
     <h3>{tr('tutorial.label')}</h3>
@@ -197,6 +249,11 @@
           {#each Object.keys(LINE_WIDTHS) as w}<option value={w}>{tr(`reading.width.${w}` as Key)}</option>{/each}
         </select>
       </label>
+      <label>{tr('reading.leading')}
+        <select value={store.reading.leading} onchange={(e) => store.setReading({ leading: e.currentTarget.value as Leading })}>
+          {#each Object.keys(LEADINGS) as l}<option value={l}>{tr(`reading.leading.${l}` as Key)}</option>{/each}
+        </select>
+      </label>
       <div class="zoom">
         <span>{tr('reading.zoom', { n: Math.round(store.reading.zoom * 100) })}</span>
         <button class="plain" disabled={store.reading.zoom === 1} onclick={() => store.setZoom(null, false)}>{tr('reading.zoomReset')}</button>
@@ -253,11 +310,42 @@
     {#if mcp?.available === false}
       <p class="warn">{tr('settings.mcpMissing')}</p>
     {/if}
+    {#if portable}<p class="muted">{tr('settings.mcpPortable')}</p>{/if}
     <div class="code">
       <pre>{snippet}</pre>
       <button onclick={copy}>{tr(copied ? 'common.copied' : 'common.copy')}</button>
     </div>
     <p class="muted">{hint}</p>
+  </section>
+  <section aria-label={tr('mcpCheck.title')}>
+    <h3>{tr('mcpCheck.title')}</h3>
+    <p class="muted">{tr('mcpCheck.intro')}</p>
+    <button class="plain" disabled={checking} onclick={checkMcp}>{tr(checking ? 'mcpCheck.running' : 'mcpCheck.run')}</button>
+    {#if checked && !checking}
+      <div class="result" class:bad={!checked.ok} role="status">
+        {#if checked.ok}
+          <p><b>{tr('mcpCheck.works', { version: checked.version ?? '?' })}</b></p>
+          {#if checked.vaults.length}
+            <p>{tr('mcpCheck.sees')}</p>
+            <ul>
+              {#each checked.vaults as v (v.name)}
+                <li>{v.name} <span class="access">{tr(v.access === 'write' ? 'settings.accessWrite' : 'settings.accessRead')}</span></li>
+              {/each}
+            </ul>
+          {:else}
+            <p>{tr('mcpCheck.none')}</p>
+          {/if}
+          {#if hidden.length}
+            <p class="muted">{tr('mcpCheck.hidden', { list: hidden.map((v) => v.name).join(', ') })}</p>
+            <button class="plain" onclick={() => (section = 'vaults')}>{tr('mcpCheck.giveAccess')}</button>
+          {/if}
+          <p class="muted">{tr('mcpCheck.stillNot')}</p>
+        {:else}
+          <p><b>{tr(`mcpCheck.failed.${checked.failed ?? 'start'}` as Key)}</b></p>
+          {#if checked.error}<pre>{checked.error}</pre>{/if}
+        {/if}
+      </div>
+    {/if}
   </section>
   {/if}
   </div>
@@ -308,6 +396,14 @@
   .code button { position: absolute; top: 8px; right: 8px; background: var(--raised); }
   .plain { margin-top: var(--space-1); padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: none; color: var(--text); font-size: var(--font-sm); }
   .plain:hover { background: var(--hover); }
+  .result { margin-top: var(--space-3); padding: var(--space-2-5) var(--space-3); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); background: var(--bg); font-size: var(--font-sm); }
+  .result.bad { border-left-color: var(--danger); }
+  .result p { margin: 0 0 var(--space-1); }
+  .result ul { margin: 0 0 var(--space-2); padding-left: var(--space-5); }
+  .result .access { color: var(--text-3); }
+  .result pre { max-height: 140px; margin: var(--space-1) 0 0; overflow: auto; color: var(--text-2); font: var(--font-xs)/1.5 var(--mono); white-space: pre-wrap; }
+  .logbar { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .log { max-height: 200px; margin: var(--space-2) 0 0; padding: var(--space-2); overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text-2); font: var(--font-xs)/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
   .muted :global(code) { font: var(--font-sm) var(--mono); }
   .muted { margin: var(--space-1) 0; color: var(--text-2); font-size: var(--font-sm); }
   .warn { color: var(--danger); font-size: var(--font-sm); }

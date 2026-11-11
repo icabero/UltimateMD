@@ -18,6 +18,14 @@
       'Rara.md': '---\ntema: no-existe\n---\n# Rara\n',
     },
   };
+  // The performance test asks for a large vault: folders of 100 notes, and
+  // one flat folder with 2000, the worst case for the tree.
+  const big = Number(sessionStorage.getItem('bigVault') || 0);
+  for (let i = 0; i < big; i++) {
+    const n = String(i).padStart(5, '0');
+    files.a[`Grande/Area ${String(Math.floor(i / 100)).padStart(3, '0')}/Nota ${n}.md`] = `# Nota ${i}\n\nVer [[Nota ${String((i * 7) % big).padStart(5, '0')}]].\n`;
+    if (i < 2000) files.a[`Plano/Nota ${n}.md`] = `# Nota ${i}\n`;
+  }
   const vaults = [
     { id: 'a', name: 'Trabajo', path: '/v/Trabajo', open: true, mcp: 'read', allowScripts: false },
     { id: 'b', name: 'Personal', path: '/v/Personal', open: true, mcp: 'off', allowScripts: false },
@@ -34,7 +42,9 @@
   const versionOf = (id, path) => (versions[`${id}:${path}`] ??= 'v0');
   // When each note last changed: invented hours ago at first, now on every write.
   const modified = {};
-  const changedAt = (id, path) => (modified[`${id}:${path}`] ??= Date.now() - (Object.keys(modified).length + 1) * 3_600_000);
+  // Counted as they come, so a large vault is not counted again on every call.
+  let invented = 0;
+  const changedAt = (id, path) => (modified[`${id}:${path}`] ??= Date.now() - ++invented * 3_600_000);
   const bump = (id, path) => {
     modified[`${id}:${path}`] = Date.now();
     return (versions[`${id}:${path}`] = `v${Date.now()}${Math.random()}`);
@@ -42,6 +52,7 @@
   const listeners = {};
   const staged = {};
   const noteTemplates = { a: {}, b: {} };
+  const guides = {};
 
   function tree(id) {
     const root = [];
@@ -64,6 +75,25 @@
       });
     }
     return root;
+  }
+
+  const past = { log: [], blobs: {}, versions: {} };
+  function keepVersion(id, path, content, source, time = Date.now()) {
+    const blob = `b${Object.keys(past.blobs).length}`;
+    past.blobs[blob] = content;
+    (past.versions[`${id}:${path}`] ??= []).push({ time, blob, source });
+    return blob;
+  }
+
+  function replacePattern({ find, matchCase, wholeWord, regex }) {
+    if (!find) throw 'nothing to find';
+    let source = regex ? find : find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (wholeWord) source = `\\b(?:${source})\\b`;
+    try {
+      return new RegExp(source, matchCase ? 'g' : 'gi');
+    } catch (e) {
+      throw `invalid regular expression: ${e}`;
+    }
   }
 
   const commands = {
@@ -205,7 +235,10 @@
     note_links: ({ id, path }) => {
       const stem = (p) => p.split('/').pop().replace(/\.md$/, '');
       const targets = (text) => [...text.matchAll(/\[\[([^\]|#]+)/g)].map((m) => m[1].trim());
-      const find = (name) => Object.keys(files[id]).find((p) => stem(p).toLowerCase() === name.toLowerCase());
+      // An index by name, as the backend keeps, so large vaults stay quick.
+      const byName = new Map();
+      for (const p of Object.keys(files[id])) if (!byName.has(stem(p).toLowerCase())) byName.set(stem(p).toLowerCase(), p);
+      const find = (name) => byName.get(name.toLowerCase());
       const mine = targets(files[id][path] ?? '');
       return {
         outgoing: [...new Set(mine.map(find).filter(Boolean))],
@@ -216,7 +249,12 @@
     // Like the backend: every word, ignoring case and accents, one hit per line.
     search_all: ({ query }) => {
       const fold = (t) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-      const words = fold(query).split(/\s+/).filter(Boolean);
+      if (query.includes('/(')) throw 'invalid regular expression: unclosed group';
+      // Words and "phrases"; the rest of the syntax is the backend's, tested there.
+      const words = (query.match(/"[^"]*"?|\S+/g) ?? [])
+        .filter((w) => !w.startsWith('-') && !/^\w+:/.test(w))
+        .map((w) => fold(w.replace(/^"|"$/g, '')))
+        .filter(Boolean);
       const matches = (t) => words.every((w) => fold(t).includes(w));
       return Object.entries(files).flatMap(([vaultId, notes]) =>
         Object.entries(notes).flatMap(([path, text]) =>
@@ -281,7 +319,7 @@
     // A real file, because the viewer opens it.
     preview_docx: () => Array.from(atob('UEsDBAoAAAAIAIKIZV26d6ScywAAAFMBAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbJWQvVLDQAyEX+XmWiYnQ0HB2E4BtEDBC2jOsn3D/c1JCeHtkRNIQUcp7Wq/HfX7U4rmSI1DyYO9dZ3dj/37VyU2qmQe7CpSHwDYr5SQXamUVZlLSyg6tgUq+g9cCO667h58yUJZdrJl2LF/ohkPUczzSdcXSqPI1jxejBtrsFhrDB5FdTjm6Q9l90Nwenn28Boq36jBwti/av0WJjJv2OQFk8bBZ2kTTMUfkiLcZvwXr8xz8HS939JqK56YQ15SdFclYci/PeD8tvEbUEsDBAoAAAAAAIKIZV0AAAAAAAAAAAAAAAAGAAAAX3JlbHMvUEsDBAoAAAAIAIKIZV3+xpu/lAAAAAUBAAALAAAAX3JlbHMvLnJlbHONzzsOwjAMBuCrRD5A3DIwoKRdWFgrLhClblrRPOSE1+3JwEARA6N///osq/7hV3EjzksMGlrZQN+pgVZTapDnJWVRGyFrmEtJB8RsZ/Imy5go1M0U2ZtSR3aYjL0YR7hrmj3ypwFbU5xGDdyCOD8T/SPHaVosHaO9egrlx4GvRpUNOyoa7pFHHN+xrCxgp3DzYPcCUEsDBAoAAAAAAIKIZV0AAAAAAAAAAAAAAAAFAAAAd29yZC9QSwMECgAAAAgAgohlXVtze8aIAAAAugAAABEAAAB3b3JkL2RvY3VtZW50LnhtbEWOQQ6DMAwEvxLlAZj20EMU4NKPBOICEokjJ5T2941ppV5mZY28th1eYVNP5LxS7PSlafXQ28N4mvaAsaiqYzZHp5dSkgHI04LB5YYSxuoexMGVOvIMB7FPTBPmvMY5bHBt2xsEt0YtlSP5t2QSsKD0998ZUh5V4h1HZ0GEkE+mk99l+D/WfwBQSwECFAAKAAAACACCiGVduneknMsAAABTAQAAEwAAAAAAAAAAAAAAAAAAAAAAW0NvbnRlbnRfVHlwZXNdLnhtbFBLAQIUAAoAAAAAAIKIZV0AAAAAAAAAAAAAAAAGAAAAAAAAAAAAEAAAAPwAAABfcmVscy9QSwECFAAKAAAACACCiGVd/sabv5QAAAAFAQAACwAAAAAAAAAAAAAAAAAgAQAAX3JlbHMvLnJlbHNQSwECFAAKAAAAAACCiGVdAAAAAAAAAAAAAAAABQAAAAAAAAAAABAAAADdAQAAd29yZC9QSwECFAAKAAAACACCiGVdW3N7xogAAAC6AAAAEQAAAAAAAAAAAAAAAAAAAgAAd29yZC9kb2N1bWVudC54bWxQSwUGAAAAAAUABQAgAQAAtwIAAAAA'), (c) => c.charCodeAt(0)),
     template_styles: () => [{ id: 'Destacado', name: 'Destacado' }, { id: 'Heading1', name: 'heading 1' }],
-    'plugin:app|version': () => '0.1.0',
+    'plugin:app|version': () => window.__appVersion ?? '0.1.0',
     'plugin:opener|open_url': ({ url }) => {
       window.__opened = url;
     },
@@ -307,6 +345,118 @@
     },
     take_pending_files: () => window.__pending ?? [],
     installer_language: () => window.__installerLanguage ?? null,
+    check_mcp: () =>
+      window.__mcpCheck ?? { ok: true, version: '9.9.9', vaults: vaults.filter((v) => v.mcp !== 'off').map((v) => ({ name: v.name, access: v.mcp })), failed: null, error: null },
+    // The same rules as crates/core/src/replace.rs, which has its own tests.
+    replace_preview: ({ replace }) => {
+      const pattern = replacePattern(replace);
+      return Object.entries(files).flatMap(([vaultId, notes]) =>
+        Object.entries(notes).flatMap(([path, text]) => {
+          if (!/\.(md|html?)$/i.test(path)) return [];
+          const changes = text.split('\n').flatMap((line, i) => {
+            const after = line.replace(pattern, replace.regex ? replace.with : () => replace.with);
+            return after !== line ? [{ line: i + 1, before: line, after }] : [];
+          });
+          return changes.length ? [{ vaultId, path, version: versionOf(vaultId, path), changes }] : [];
+        }),
+      );
+    },
+    replace_apply: ({ replace, notes }) => {
+      const pattern = replacePattern(replace);
+      const replaced = [];
+      const skipped = [];
+      for (const { vaultId, path, version, lines } of notes) {
+        if (versionOf(vaultId, path) !== version) {
+          skipped.push(path);
+          continue;
+        }
+        const before = files[vaultId][path];
+        let count = 0;
+        files[vaultId][path] = before
+          .split('\n')
+          .map((line, i) => {
+            if (!lines.includes(i + 1)) return line;
+            const after = line.replace(pattern, replace.regex ? replace.with : () => replace.with);
+            if (after !== line) count++;
+            return after;
+          })
+          .join('\n');
+        replaced.push({ vaultId, path, before, version: bump(vaultId, path), lines: count });
+      }
+      return { replaced, skipped };
+    },
+    // Only #tags in the text; the backend's rules have their own tests.
+    vault_tags: ({ id }) => {
+      const counts = new Map();
+      for (const text of Object.values(files[id] ?? {})) {
+        const found = new Set([...text.matchAll(/(?<![\p{L}\p{N}_&/#-])#([\p{L}_][\p{L}\p{N}_/-]*)/gu)].map((m) => m[1]));
+        for (const tag of found) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+      return [...counts].map(([tag, notes]) => ({ tag, notes })).sort((a, b) => b.notes - a.notes || a.tag.localeCompare(b.tag));
+    },
+    // Versions of notes and the AI's log: the real ones are in crates/core/src/history.rs.
+    ai_log: ({ id }) => past.log.filter((e) => e.vault === id),
+    ai_wrote: ({ id, path, version }) => past.log.some((e) => e.vault === id && e.path === path && e.after === version),
+    ai_undo: ({ id, entry }) => {
+      const found = past.log.find((e) => e.id === entry);
+      if (found.after !== versionOf(id, found.path)) throw 'the file changed since it was read: ' + found.path;
+      files[id][found.path] = past.blobs[found.before];
+      bump(id, found.path);
+      found.undone = true;
+    },
+    history_list: ({ id, path }) => [...(past.versions[`${id}:${path}`] ?? [])].reverse(),
+    history_read: ({ blob }) => past.blobs[blob],
+    history_keep: ({ id, path, beforeRestore }) => {
+      keepVersion(id, path, files[id][path], beforeRestore ? 'before-restore' : 'edit');
+      return true;
+    },
+    log_error: ({ source, message }) => void (window.__log = [...(window.__log ?? []), `[error] ${source}: ${message}`]),
+    read_log: () => (window.__log ?? []).join('\n'),
+    reveal_log: () => {},
+    'plugin:dialog|open': () => window.__picked ?? null,
+    create_vault: ({ parent, name }) => {
+      const vault = { id: `n${vaults.length}`, name, path: `${parent}/${name}`, open: true, mcp: 'off', allowScripts: false };
+      vaults.push(vault);
+      files[vault.id] = {};
+      return vault;
+    },
+    reveal_path: ({ id, path }) => void (window.__revealed = `${id}:${path}`),
+    update_supported: () => window.__selfUpdate ?? true,
+    portable_data: () => window.__portable ?? null,
+    vault_aliases: ({ id, paths }) =>
+      Object.keys(files[id])
+        .filter((p) => p.endsWith('.md') && (!paths || paths.includes(p)))
+        .map((path) => {
+          const meta = /^---\n([\s\S]*?)\n---/.exec(files[id][path])?.[1] ?? '';
+          const list = /^aliases:\s*\[(.*)\]/m.exec(meta)?.[1] ?? '';
+          return { path, aliases: list.split(',').map((a) => a.trim()).filter(Boolean) };
+        })
+        .filter((n) => n.aliases.length),
+    export_site: ({ name, pages, assets }) => {
+      window.__site = { name, pages, assets };
+      return `/exportado/${name}/index.html`;
+    },
+    git_status: ({ id }) => (window.__git?.[id] ? { branch: 'main', changes: window.__git[id] } : null),
+    git_committed: ({ path }) => (path === 'Inicio.md' ? '# Inicio\n\nAntes.\n' : null),
+    git_commit: ({ id, message }) => {
+      window.__commits = [...(window.__commits ?? []), { id, message }];
+      window.__git[id] = [];
+      return 'abc1234';
+    },
+    // Kept apart, as .ultimatemd is hidden from the tree.
+    diagram_guide: ({ id }) => guides[id] ?? null,
+    save_diagram_guide: ({ id, text }) => {
+      if (text.trim()) guides[id] = text;
+      else delete guides[id];
+    },
+    update_install: async () => {
+      if (window.__updateFails) throw 'signature does not match';
+      window[`_${listeners['update-progress']}`]?.({ payload: { done: 40, total: 100 } });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      window.__updated = true;
+    },
+    watch_problems: () => window.__watchProblems ?? [],
+    set_spellcheck: ({ languages }) => void (window.__spellcheck = languages),
     default_app_info: () => ({ platform: 'windows', appimage: false, isDefault: false }),
   };
 
@@ -339,11 +489,30 @@
     files,
     vaults,
     vaultThemes,
+    guides,
     /** Simulates another program, such as the MCP server, changing a file. */
     externalWrite(id, path, content) {
       files[id][path] = content;
       bump(id, path);
       window[`_${listeners['vault-changed']}`]?.({ payload: { vaultId: id, paths: [path] } });
+    },
+    keepVersion,
+    /** Simulates the AI rewriting a note through the MCP server, which logs it. */
+    aiWrite(id, path, content, tool = 'update_note') {
+      const before = keepVersion(id, path, files[id][path], 'before-ai');
+      files[id][path] = content;
+      const after = bump(id, path);
+      past.log.unshift({ id: `e${past.log.length}`, vault: id, time: Date.now(), tool, path, from: null, before, after, undone: false });
+      window[`_${listeners['vault-changed']}`]?.({ payload: { vaultId: id, paths: [path] } });
+    },
+    /** Changes a file on disk without the app hearing of it. */
+    silentWrite(id, path, content) {
+      files[id][path] = content;
+      bump(id, path);
+    },
+    /** Simulates a vault that the system does not let the app watch. */
+    watchFailed(id, error) {
+      window[`_${listeners['watch-failed']}`]?.({ payload: { vaultId: id, error } });
     },
     /** Simulates the operating system opening files in the running app. */
     openFiles(paths) {

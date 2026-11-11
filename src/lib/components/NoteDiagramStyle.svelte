@@ -15,7 +15,7 @@
   const vaultName = $derived(store.vault(tab.vaultId)?.name ?? '');
 
   async function setVault(id: string) {
-    await api.setVaultDiagramTheme(tab.vaultId, id || null).catch((e) => store.notify(e));
+    await api.setVaultDiagramTheme(tab.vaultId, id || null).catch((e) => store.fail(e));
     await store.loadVaultThemes(tab.vaultId);
   }
 

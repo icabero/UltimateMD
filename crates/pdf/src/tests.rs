@@ -177,3 +177,28 @@ fn callouts_are_coloured_boxes_with_a_title() {
     assert!(source.contains("#quote(block: true)"), "a plain quote stays a quote");
     assert!(render(&input).unwrap().starts_with(b"%PDF-"));
 }
+
+#[test]
+fn links_to_notes_in_the_document_jump_to_them() {
+    let sections = vec![
+        Section::Heading { text: "Carpeta".into(), style: None, level: 1, page_break: false },
+        Section::Note {
+            path: "a.md".into(),
+            markdown: "Sin título. Ver [[b#Riesgos]] y [[b]].\n".into(),
+            shift: 1,
+            page_break: false,
+        },
+        Section::Note {
+            path: "b.md".into(),
+            markdown: "# Plan\n\n## Riesgos\n\nVolver a [[a]] o a [la nota](a.md).\n".into(),
+            shift: 1,
+            page_break: true,
+        },
+    ];
+    let image = |_: &str, _: &str| None;
+    let (source, _) = crate::markup::build(&input(&sections, false, &[], &image));
+    for wanted in ["#link(<umd2_1>)[#\"Riesgos\"]", "#link(<umd2>)[#\"Plan\"]", "#link(<umd1>)[#\"a\"]", "<umd2_1>\n"] {
+        assert!(source.contains(wanted), "{wanted} in {source}");
+    }
+    assert!(render(&input(&sections, false, &[], &image)).unwrap().starts_with(b"%PDF-"));
+}

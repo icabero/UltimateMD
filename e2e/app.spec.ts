@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { parseSource, toSource, type Diagram, type Engine } from '../src/lib/diagramBuilder';
 import { fenceLine, parseStyle } from '../src/lib/diagramStyle';
@@ -14,6 +15,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 const open = (page: Page, name: string) => page.locator('aside').getByRole('button', { name, exact: true }).click();
+// Keys as the app names them on the machine running the tests, like keyLabel.
+const MAC = process.platform === 'darwin';
+const CTRL = MAC ? '⌘' : 'Ctrl';
+const SHIFT = MAC ? '⇧' : 'Mayús';
+// Shared CI runners are several times slower than a desktop.
+const SLOW = process.env.CI ? 4 : 1;
 const prose = (page: Page) => page.locator('.scroll article');
 const disk = (page: Page, vault: string, path: string) =>
   page.evaluate(([v, p]) => (window as any).__test.files[v][p], [vault, path]);
@@ -48,6 +55,72 @@ test('an external change refreshes a note without unsaved edits', async ({ page 
   await expect(page.locator('.cm-content')).toContainText('Escrito por la IA');
 });
 
+test('what changed outside the app is marked, can be seen and undone', async ({ page }) => {
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\nUno.\n\nDos.\n'));
+  await open(page, 'Otra');
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\nUno cambiado.\n\nDos.\n\nTres.\n'));
+  const banner = page.locator('.banner.info');
+  await expect(banner).toContainText('Esta nota ha cambiado fuera de la app (2 líneas resaltadas).');
+  await expect(page.locator('.cm-outside')).toHaveText(['Uno cambiado.', 'Tres.']);
+  await expect(prose(page).locator('.outside-change')).toHaveText(['Uno cambiado.', 'Tres.']);
+
+  await banner.getByRole('button', { name: 'Ver cambios' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Cambios en «Otra» hechos fuera de la app' });
+  await expect(dialog).toContainText('3 líneas añadidas, 1 quitadas');
+  await expect(dialog.locator('.del')).toHaveText([/Uno\./]);
+  await dialog.getByRole('button', { name: 'Deshacer estos cambios' }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => disk(page, 'b', 'Otra.md')).toBe('# Otra\n\nUno.\n\nDos.\n');
+  await expect(page.locator('.cm-content')).not.toContainText('Tres');
+  await expect(banner).toBeHidden();
+});
+
+test('what the AI did is listed per vault, shown and undone', async ({ page }) => {
+  await open(page, 'Otra');
+  await page.evaluate(() => (window as any).__test.aiWrite('b', 'Otra.md', '# Otra\n\nEscrito por la IA.\n'));
+  // The note on screen says who changed it.
+  await expect(page.locator('.banner.info')).toContainText('La IA ha editado esta nota');
+  await page.locator('.banner.info').getByRole('button', { name: 'Cerrar' }).click();
+
+  await page.locator('aside').getByRole('button', { name: 'Personal', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Actividad de la IA' }).click();
+  const log = page.getByRole('dialog', { name: 'Actividad de la IA · Personal' });
+  await expect(log.getByRole('listitem')).toHaveCount(1);
+  await expect(log.getByRole('listitem')).toContainText('Reescribió «Otra»');
+  await log.getByRole('button', { name: 'Ver cambios' }).click();
+  await expect(log.locator('.add')).toContainText(['Escrito por la IA.']);
+  await log.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(log.getByRole('listitem')).toContainText('Deshecho');
+  expect(await disk(page, 'b', 'Otra.md')).toBe('# Otra\n');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.cm-content')).not.toContainText('Escrito por la IA');
+});
+
+test('older versions of a note are listed, compared and restored', async ({ page }) => {
+  await page.evaluate(() => (window as any).__test.keepVersion('b', 'Otra.md', '# Otra\n\nComo era antes.\n', 'before-ai', Date.now() - 3_600_000));
+  await open(page, 'Otra');
+  await page.keyboard.press('Control+Shift+o');
+  await page.getByRole('tab', { name: 'Historial' }).click();
+  const versions = page.getByRole('list', { name: 'Historial' });
+  await expect(versions.getByRole('listitem')).toContainText(['Antes de un cambio de la IA']);
+  await versions.getByRole('button').first().click();
+  const dialog = page.getByRole('dialog', { name: /^Versión de / });
+  await expect(dialog.locator('.add')).toContainText(['Como era antes.']);
+  await dialog.getByRole('button', { name: 'Restaurar esta versión' }).click();
+  await expect(page.locator('.cm-content')).toContainText('Como era antes.');
+  await expect.poll(() => disk(page, 'b', 'Otra.md')).toBe('# Otra\n\nComo era antes.\n');
+  // What it replaced is now a version too.
+  await expect(versions.getByRole('listitem')).toContainText(['Antes de restaurar otra versión', 'Antes de un cambio de la IA']);
+});
+
+test('an outside change stops being offered for undo once the note is edited', async ({ page }) => {
+  await open(page, 'Otra');
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\nNuevo.\n'));
+  await expect(page.locator('.banner.info')).toBeVisible();
+  await typeInEditor(page, ' y mío');
+  await expect(page.locator('.banner.info')).toBeHidden();
+});
+
 test('an external change never overwrites unsaved edits', async ({ page }) => {
   await open(page, 'Otra');
   await typeInEditor(page, 'mío');
@@ -61,6 +134,23 @@ test('an external change never overwrites unsaved edits', async ({ page }) => {
   await expect.poll(() => disk(page, 'b', 'Otra.md')).toContain('mío');
 });
 
+test('a conflict can be merged place by place', async ({ page }) => {
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\nUno.\n\nDos.\n\nTres.\n'));
+  await open(page, 'Otra');
+  await typeInEditor(page, 'Cuatro mío.\n');
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\nUno del disco.\n\nDos.\n\nTres.\n'));
+  await page.getByRole('alert').getByRole('button', { name: 'Comparar y mezclar' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Tu versión y la del disco' });
+  await expect(dialog).toContainText('Difieren en 2 sitios.');
+  const places = dialog.getByRole('group', { name: 'Diferencia' });
+  // The first place takes the disk's line; the second keeps mine, the default.
+  await places.nth(0).getByRole('radio').nth(1).check();
+  await dialog.getByRole('button', { name: 'Guardar la mezcla' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('alert')).toBeHidden();
+  await expect.poll(() => disk(page, 'b', 'Otra.md')).toBe('# Otra\n\nUno del disco.\n\nDos.\n\nTres.\nCuatro mío.\n');
+});
+
 test('a conflict can be resolved in favour of the disk', async ({ page }) => {
   await open(page, 'Otra');
   await typeInEditor(page, 'mío');
@@ -68,6 +158,30 @@ test('a conflict can be resolved in favour of the disk', async ({ page }) => {
   await page.getByRole('button', { name: 'Usar la del disco' }).click();
   await expect(page.locator('.cm-content')).toHaveText('de la IA');
   await expect(page.locator('main footer')).toContainText('Guardado');
+});
+
+test('a vault that cannot be watched says so, and can be read again by hand', async ({ page }) => {
+  await open(page, 'Otra');
+  await page.evaluate(() => (window as any).__test.watchFailed('b', 'too many open files'));
+  await expect(page.getByRole('status')).toContainText('Los cambios hechos fuera de la app en «Personal» no se verán solos');
+  // Changed on disk without any notice, as happens then.
+  await page.evaluate(() => {
+    const t = (window as any).__test;
+    t.silentWrite('b', 'Otra.md', '# Cambiada fuera');
+    t.silentWrite('b', 'Nueva.md', '# Nueva');
+  });
+  const badge = page.locator('aside').getByTitle('Los cambios externos no se ven solos. Pulsa para volver a leer el vault.');
+  await badge.click();
+  await expect(prose(page).locator('h1')).toHaveText('Cambiada fuera');
+  await expect(page.locator('aside').getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+});
+
+test('a vault that could not be watched before the window opened is reported too', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__watchProblems = [{ vaultId: 'a', error: 'inotify watch limit reached' }];
+  });
+  await page.reload();
+  await expect(page.getByRole('status')).toContainText('«Trabajo»');
 });
 
 test('note HTML keeps its formatting but cannot run code', async ({ page }) => {
@@ -211,7 +325,7 @@ test('the command palette runs actions and shows their shortcuts', async ({ page
   await page.keyboard.type('exportar');
   const first = palette(page).getByRole('option').first();
   await expect(first).toContainText('Exportar la nota');
-  await expect(first.locator('kbd')).toHaveText(['Ctrl', 'E']);
+  await expect(first.locator('kbd')).toHaveText([CTRL, 'E']);
   await page.keyboard.press('Enter');
   await expect(page.getByRole('dialog', { name: 'Exportar' })).toBeVisible();
 });
@@ -225,7 +339,7 @@ test('actions are found without accents and the last used come first', async ({ 
   await expect(palette(page).getByRole('option').first()).toHaveText('Tema: Medianoche');
   // Shortcuts name the Shift key in the interface language.
   await page.keyboard.type('barra lateral');
-  await expect(palette(page).getByRole('option').first().locator('kbd')).toHaveText(['Ctrl', 'Mayús', 'E']);
+  await expect(palette(page).getByRole('option').first().locator('kbd')).toHaveText([CTRL, SHIFT, 'E']);
 });
 
 test('the quick switcher turns into actions with > and headings with #', async ({ page }) => {
@@ -239,6 +353,288 @@ test('the quick switcher turns into actions with > and headings with #', async (
   await expect(palette(page).getByRole('option')).toHaveText(['Inicio H1']);
   await page.keyboard.press('Enter');
   await expect(page.locator('.cm-activeLine')).toHaveText('# Inicio');
+});
+
+test('the quick switcher starts with the notes opened last', async ({ page }) => {
+  await open(page, 'Otra');
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+p');
+  // The note on screen is not offered: the one before it is.
+  const first = palette(page).getByRole('option').first();
+  await expect(first).toContainText('Otra.md');
+  await expect(first).toContainText('Reciente');
+  await page.keyboard.press('Escape');
+  await page.reload();
+  await page.keyboard.press('Control+p');
+  await expect(palette(page).getByRole('option').first()).toContainText('Otra.md');
+});
+
+test('favourite notes are pinned to the side bar and follow a rename', async ({ page }) => {
+  const aside = page.locator('aside');
+  await aside.getByRole('button', { name: 'Otra', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Añadir a favoritos' }).click();
+  const favorites = aside.getByRole('region', { name: 'Favoritos' });
+  await expect(favorites.getByRole('button')).toHaveText(['Otra']);
+  await favorites.getByRole('button', { name: 'Otra' }).click();
+  await expect(page.locator('main footer')).toContainText('Personal / Otra.md');
+
+  await aside.locator('section.vault').getByRole('button', { name: 'Otra', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Renombrar' }).click();
+  await page.getByRole('form', { name: 'Nuevo nombre' }).getByRole('textbox').fill('Segunda.md');
+  await page.getByRole('form', { name: 'Nuevo nombre' }).getByRole('button', { name: 'Renombrar' }).click();
+  await expect(favorites.getByRole('button')).toHaveText(['Segunda']);
+
+  await favorites.getByRole('button', { name: 'Segunda' }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Quitar de favoritos' }).click();
+  await expect(favorites).toBeHidden();
+});
+
+test('Ctrl+/ lists every shortcut, and the list can be filtered', async ({ page }) => {
+  await page.keyboard.press('Control+/');
+  const list = page.getByRole('dialog', { name: 'Atajos de teclado' });
+  await expect(list.getByRole('region', { name: 'Escribir' })).toContainText('Negrita');
+  await expect(list.getByRole('region', { name: 'Pestañas y paneles' })).toContainText('Cerrar la pestaña');
+  await list.getByRole('textbox').fill('ctrl k');
+  await expect(list.locator('dt')).toHaveText(['Insertar un enlace']);
+  await list.getByRole('textbox').fill('nada de esto');
+  await expect(list).toContainText('Ningún atajo coincide.');
+  await page.keyboard.press('Escape');
+  await expect(list).toBeHidden();
+
+  // Also from the actions, and from inside the editor.
+  await open(page, 'Otra');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('Control+/');
+  await expect(list).toBeVisible();
+  expect(await disk(page, 'b', 'Otra.md')).toBe('# Otra\n');
+});
+
+test('spelling is checked in the language of the app, of the note or none', async ({ page }) => {
+  await open(page, 'Otra');
+  const content = page.locator('.cm-content');
+  await expect(content).toHaveAttribute('spellcheck', 'true');
+  await expect(content).toHaveAttribute('lang', 'es');
+  await expect.poll(() => page.evaluate(() => (window as any).__spellcheck)).toEqual(['es_ES']);
+
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '---\nidioma: en\n---\n# Other\n'));
+  await expect(content).toHaveAttribute('lang', 'en');
+  await expect.poll(() => page.evaluate(() => (window as any).__spellcheck)).toEqual(['en_US']);
+
+  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  await page.getByRole('combobox', { name: 'Corrector ortográfico' }).selectOption('Desactivado');
+  await page.keyboard.press('Escape');
+  await expect(content).toHaveAttribute('spellcheck', 'false');
+  await expect.poll(() => page.evaluate(() => (window as any).__spellcheck)).toEqual([]);
+});
+
+test('after an update the app tells what is new, once', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__appVersion = '0.7.1';
+  });
+  await page.evaluate(() => localStorage.setItem('ultimatemd.newsSeen', '0.6'));
+  await page.reload();
+  const news = page.getByRole('dialog', { name: 'Novedades de UltimateMD 0.7' });
+  await expect(news.getByRole('listitem').first()).toContainText('La IA, a la vista');
+  await news.getByRole('button', { name: 'Entendido' }).click();
+  await page.reload();
+  await expect(page.locator('aside')).toContainText('Trabajo');
+  await expect(news).toBeHidden();
+  // It can be asked for again.
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('novedades');
+  await page.keyboard.press('Enter');
+  await expect(news).toBeVisible();
+});
+
+test('what goes wrong is written to a log that the settings show', async ({ page }) => {
+  // Opening a file that is gone fails, and says so.
+  await page.evaluate(() => (window as any).__test.openFiles(['/fuera/borrado.md']));
+  await expect(page.getByRole('status')).toContainText('No se pudo abrir');
+  await page.evaluate(() => void Promise.reject(new Error('fallo sin atrapar')));
+  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  const section = page.getByRole('region', { name: 'Registro de errores' });
+  await section.getByRole('button', { name: 'Ver' }).click();
+  await expect(section.locator('pre')).toContainText('[error] promise: Error: fallo sin atrapar');
+});
+
+const tabNames = (page: Page) => page.locator('[role=tablist] [role=tab] .name');
+
+test('a tab has a menu to close the others, pin it and reach its file', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await open(page, 'Inicio');
+  await open(page, 'D2');
+  await open(page, 'Otra');
+  const tab = (name: string) => page.getByRole('tab', { name, exact: true });
+  await tab('Inicio').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Fijar la pestaña' }).click();
+  await expect(tab('Inicio').getByTitle('Cerrar (Ctrl+W)')).toHaveCount(0);
+
+  await tab('Otra').click({ button: 'right' });
+  await expect(page.getByRole('menuitem').first().locator('kbd')).toHaveText([CTRL, 'W']);
+  await page.getByRole('menuitem', { name: 'Cerrar las demás' }).click();
+  // The pinned one stays, at the left.
+  await expect(tabNames(page)).toHaveText(['Inicio', 'Otra']);
+
+  await tab('Otra').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Copiar enlace a la nota' }).click();
+  await expect(page.getByRole('status')).toHaveText('Enlace copiado');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('[[Otra]]');
+  await tab('Otra').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Mostrar en el explorador' }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__revealed)).toBe('b:Otra.md');
+
+  // Pins survive a restart.
+  await page.reload();
+  await expect(tab('Inicio').getByTitle('Pestaña fijada')).toBeVisible();
+});
+
+test('tabs are reordered by dragging and with the keyboard', async ({ page }) => {
+  await open(page, 'Inicio');
+  await open(page, 'D2');
+  await open(page, 'Otra');
+  await page.getByRole('tab', { name: 'Otra', exact: true }).dragTo(page.getByRole('tab', { name: 'Inicio', exact: true }), { targetPosition: { x: 4, y: 10 } });
+  await expect(tabNames(page)).toHaveText(['Otra', 'Inicio', 'D2']);
+  await page.getByRole('tab', { name: 'Otra', exact: true }).focus();
+  await page.keyboard.press('Control+Shift+ArrowRight');
+  await expect(tabNames(page)).toHaveText(['Inicio', 'Otra', 'D2']);
+  await expect(page.getByRole('tab', { name: 'Otra', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main footer')).toContainText('Trabajo / D2.md');
+});
+
+test('a second note opens beside the one being edited, and they can swap', async ({ page }) => {
+  await open(page, 'Otra');
+  await page.locator('aside').getByRole('button', { name: 'Inicio', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Abrir al lado' }).click();
+  const beside = page.getByRole('region', { name: 'Al lado: Inicio.md' });
+  await expect(beside.locator('article h1')).toHaveText('Inicio');
+  // The one being edited stays the same.
+  await expect(page.locator('main footer')).toContainText('Personal / Otra.md');
+  await expect(page.locator('.cm-content')).toContainText('# Otra');
+
+  await beside.getByTitle('Editar esta nota (cambia de lado con la otra)').click();
+  await expect(page.locator('main footer')).toContainText('Trabajo / Inicio.md');
+  await expect(page.getByRole('region', { name: 'Al lado: Otra.md' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Al lado: Otra.md' })).toBeVisible();
+  await page.getByRole('region', { name: 'Al lado: Otra.md' }).getByTitle('Cerrar la nota del lado').click();
+  await expect(page.getByRole('region', { name: /^Al lado/ })).toHaveCount(0);
+});
+
+test('the file tree and its menu work with the keyboard alone', async ({ page }) => {
+  const row = (name: string) => page.locator('aside').getByRole('button', { name, exact: true });
+  await row('Trabajo').focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(row('dir')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(row('dir')).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(row('sub')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(row('Destino')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(row('dir')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(row('dir')).toHaveAttribute('aria-expanded', 'false');
+
+  // The menu key opens the menu by the row; arrows and Enter choose from it.
+  await row('D2').focus();
+  await row('D2').dispatchEvent('contextmenu');
+  const menu = page.getByRole('menu');
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(menu.getByRole('menuitem', { name: 'Enviar a la papelera' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(row('D2')).toBeFocused();
+
+  await page.keyboard.press('F2');
+  await page.getByRole('form', { name: 'Nuevo nombre' }).getByRole('textbox').fill('Diagramas.md');
+  await page.keyboard.press('Enter');
+  await expect(row('Diagramas')).toBeVisible();
+  await row('Diagramas').focus();
+  await page.keyboard.press('Delete');
+  await expect(page.getByRole('status')).toContainText('«Diagramas»');
+  await expect(row('Diagramas')).toHaveCount(0);
+});
+
+test('a dialog takes the focus, keeps Tab inside and gives the focus back', async ({ page }) => {
+  const opener = page.locator('aside').getByTitle('Acerca de');
+  await opener.focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Acerca de' });
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  await expect.poll(() => dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press('Tab');
+    expect(await dialog.evaluate((el) => el.contains(document.activeElement)), 'Tab stays in the dialog').toBe(true);
+  }
+  await page.keyboard.press('Shift+Tab');
+  expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(opener).toBeFocused();
+});
+
+test('code blocks name their language and copy, and line spacing can be chosen', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '# Otra\n\n```rust\nfn main() {}\n```\n'));
+  await open(page, 'Otra');
+  const block = prose(page).locator('pre');
+  await expect(block.locator('.code-tools span')).toHaveText('rust');
+  await block.hover();
+  await block.getByRole('button', { name: 'Copiar' }).click();
+  await expect(block.getByRole('button')).toHaveText('Copiado');
+  expect((await page.evaluate(() => navigator.clipboard.readText())).trim()).toBe('fn main() {}');
+
+  const height = () => prose(page).locator('h1').evaluate((el) => parseFloat(getComputedStyle(el.parentElement!).lineHeight));
+  const before = await height();
+  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  await page.getByRole('button', { name: 'Apariencia' }).click();
+  await page.getByLabel('Interlineado').selectOption('Amplio');
+  await page.keyboard.press('Escape');
+  expect(await height()).toBeGreaterThan(before);
+});
+
+test('an example vault is created to learn with, and empty places suggest what to do', async ({ page }) => {
+  await page.evaluate(() => ((window as any).__picked = '/home/yo'));
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('vault de ejemplo');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('aside')).toContainText('Ejemplo UltimateMD');
+  await expect(page.locator('main footer')).toContainText('Ejemplo UltimateMD / Empieza aquí.md');
+  // Its links lead to notes that exist, except the one meant to be missing.
+  await page.getByTitle('Vista previa', { exact: true }).click();
+  await expect(prose(page).locator('a[data-wikilink]')).toHaveCount(3);
+  await expect(prose(page).locator('a.broken')).toHaveCount(0);
+  const vault = await page.evaluate(() => Object.keys((window as any).__test.files.n2));
+  expect(vault).toHaveLength(5);
+
+  // A search that finds nothing offers to create that note.
+  await searchFor(page, 'Acta de enero');
+  await expect(page.locator('.results')).toContainText('Prueba con menos palabras');
+  await page.getByRole('button', { name: 'Crear la nota «Acta de enero»' }).click();
+  await expect(page.locator('main footer')).toContainText('Acta de enero.md');
+});
+
+test('the AI connection can be tested from the settings', async ({ page }) => {
+  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  await page.getByRole('button', { name: 'Inteligencia artificial' }).click();
+  const check = page.getByRole('region', { name: 'Probar la conexión' });
+  await check.getByRole('button', { name: 'Probar' }).click();
+  await expect(check.getByRole('status')).toContainText('Funciona. Servidor 9.9.9.');
+  await expect(check.getByRole('listitem')).toHaveText(['Trabajo Lectura']);
+  await expect(check.getByRole('status')).toContainText('tienen el acceso desactivado: Personal.');
+  await check.getByRole('button', { name: 'Cambiar el acceso' }).click();
+  await expect(page.getByRole('group', { name: 'Acceso MCP de Personal' })).toBeVisible();
+
+  await page.evaluate(() => {
+    (window as any).__mcpCheck = { ok: false, version: null, vaults: [], failed: 'silent', error: 'config file is not valid JSON' };
+  });
+  await page.getByRole('button', { name: 'Inteligencia artificial' }).click();
+  await check.getByRole('button', { name: 'Probar' }).click();
+  await expect(check.getByRole('status')).toContainText('El servidor arrancó pero no respondió a tiempo.');
+  await expect(check.getByRole('status')).toContainText('config file is not valid JSON');
 });
 
 test('global search covers every vault', async ({ page }) => {
@@ -260,6 +656,77 @@ async function searchFor(page: Page, query: string) {
   await page.keyboard.press('Control+Shift+f');
   await page.getByPlaceholder('Buscar en los vaults abiertos').fill(query);
 }
+
+test('search explains its syntax, marks phrases and says when an expression is wrong', async ({ page }) => {
+  await longNote(page);
+  await searchFor(page, '"reunion de marzo" -borrador ruta:notas');
+  await expect(page.locator('.results .line mark')).toHaveText(['Reunión de marzo']);
+  await page.getByTitle('Cómo afinar la búsqueda').click();
+  const help = page.getByRole('definition');
+  await expect(help).toContainText(['Frase exacta', 'Deja fuera las notas que la contienen']);
+  await page.getByPlaceholder('Buscar en los vaults abiertos').fill('/(acta/');
+  await expect(page.getByRole('alert')).toHaveText('La expresión regular entre barras no es válida.');
+});
+
+test('text is replaced across notes after seeing each change, and can be undone', async ({ page }) => {
+  await page.evaluate(() => {
+    const t = (window as any).__test;
+    t.files.a['Clientes.md'] = '# Clientes\n\nEl cliente paga.\nOtro cliente.\n';
+    t.files.b['Notas.md'] = 'Llamar al cliente.\n';
+  });
+  await open(page, 'Otra');
+  await page.keyboard.press('Control+Shift+f');
+  await page.getByRole('tab', { name: 'Reemplazar' }).click();
+  await page.getByRole('textbox', { name: 'Texto a buscar' }).fill('cliente');
+  await page.getByRole('textbox', { name: 'Reemplazar por' }).fill('socio');
+  await expect(page.getByRole('status')).toHaveText('4 líneas en 2 notas. Desmarca lo que no quieras cambiar.');
+  await page.getByRole('button', { name: 'Solo palabras completas' }).click();
+  await expect(page.getByRole('status')).toHaveText('3 líneas en 2 notas. Desmarca lo que no quieras cambiar.');
+
+  const clientes = page.getByRole('region', { name: 'Clientes' });
+  await expect(clientes.locator('ins')).toHaveText(['El socio paga.', 'Otro socio.']);
+  await clientes.locator('.line', { hasText: 'Otro' }).getByRole('checkbox').uncheck();
+  await page.getByRole('button', { name: 'Reemplazar (2)' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Se cambiaron' })).toHaveText('Se cambiaron 2 líneas en 2 notas.');
+  expect(await disk(page, 'a', 'Clientes.md')).toBe('# Clientes\n\nEl socio paga.\nOtro cliente.\n');
+  expect(await disk(page, 'b', 'Notas.md')).toBe('Llamar al socio.\n');
+
+  await page.getByRole('button', { name: 'Deshacer' }).click();
+  await expect.poll(() => disk(page, 'b', 'Notas.md')).toBe('Llamar al cliente.\n');
+  expect(await disk(page, 'a', 'Clientes.md')).toBe('# Clientes\n\nEl cliente paga.\nOtro cliente.\n');
+});
+
+test('tags are marked, suggested, counted and lead to their notes', async ({ page }) => {
+  await page.evaluate(() => {
+    const t = (window as any).__test;
+    t.externalWrite('a', 'Acta.md', 'Reunión con #cliente sobre #presupuesto.');
+    t.externalWrite('a', 'Llamada.md', 'Llamar al #cliente. No es C#.');
+  });
+  await open(page, 'Acta');
+  await expect(prose(page).locator('a.tag')).toHaveText(['#cliente', '#presupuesto']);
+  await expect(page.locator('.cm-content .cm-tag')).toHaveText(['#cliente', '#presupuesto']);
+
+  // Suggested while typing.
+  await typeInEditor(page, ' #cli');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('cliente');
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.cm-content')).toContainText('#presupuesto. #cliente');
+
+  // Counted in the side bar.
+  await page.keyboard.press('Control+Shift+f');
+  await page.getByRole('tab', { name: 'Etiquetas' }).click();
+  const list = page.getByRole('list', { name: 'Etiquetas' });
+  await expect(list.locator('.name')).toHaveText(['#cliente', '#presupuesto']);
+  await expect(list.locator('.count')).toHaveText(['2', '1']);
+  await page.getByRole('textbox', { name: 'Filtrar etiquetas…' }).fill('pres');
+  await expect(list.locator('.name')).toHaveText(['#presupuesto']);
+
+  // A tag in a note lists the notes that have it.
+  await prose(page).locator('a.tag', { hasText: '#cliente' }).first().click();
+  await expect(page.getByRole('tab', { name: 'Buscar' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByPlaceholder('Buscar en los vaults abiertos')).toHaveValue('etiqueta:cliente');
+});
 
 test('search ignores accents and marks the words found', async ({ page }) => {
   await longNote(page);
@@ -435,7 +902,7 @@ test('a vault card picks up the note edited last', async ({ page }) => {
 
 test('the start screen offers its actions and another tip', async ({ page }) => {
   const home = page.locator('.home');
-  await expect(home.getByRole('button', { name: /Abrir nota/ }).locator('kbd')).toHaveText(['Ctrl', 'P']);
+  await expect(home.getByRole('button', { name: /Abrir nota/ }).locator('kbd')).toHaveText([CTRL, 'P']);
   await home.getByRole('button', { name: /Acciones/ }).click();
   await expect(page.getByRole('dialog', { name: 'Abrir nota' }).getByRole('combobox')).toHaveValue('>');
   await page.keyboard.press('Escape');
@@ -537,7 +1004,7 @@ async function onPlatform(page: Page, platform: 'Win32' | 'MacIntel') {
 
 test('on Windows and Linux the app draws the window buttons and saves before closing', async ({ page }) => {
   await onPlatform(page, 'Win32');
-  const controls = page.getByRole('group', { name: 'Ventana' });
+  const controls = page.getByRole('region', { name: 'Ventana' });
   await expect(controls.getByRole('button')).toHaveCount(3);
   await controls.getByTitle('Minimizar la ventana').click();
   await controls.getByTitle('Maximizar la ventana').click();
@@ -1650,6 +2117,53 @@ test('about reports being up to date, a new version and a failure', async ({ pag
   await expect(dialog.getByRole('status')).toContainText('No se pudo comprobar');
 });
 
+test('a new version installs from the app, saving first, or says why not', async ({ page }) => {
+  await release(page, 'v0.2.0');
+  await open(page, 'Otra');
+  await typeInEditor(page, 'sin guardar aún');
+  await about(page);
+  const dialog = page.getByRole('dialog', { name: 'Acerca de' });
+  await dialog.getByRole('button', { name: 'Buscar actualizaciones' }).click();
+  await dialog.getByRole('button', { name: 'Actualizar ahora' }).click();
+  await expect(dialog).toContainText('Descargando… 40 %');
+  await expect.poll(() => page.evaluate(() => (window as any).__updated)).toBe(true);
+  expect(await disk(page, 'b', 'Otra.md')).toContain('sin guardar aún');
+
+  await page.evaluate(() => ((window as any).__updateFails = true));
+  await dialog.getByRole('button', { name: 'Actualizar ahora' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('No se pudo actualizar desde la app.');
+  await expect(dialog.getByRole('button', { name: 'Ir a descargas' })).toBeVisible();
+});
+
+test('a copy installed by the system is told to update through it', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__selfUpdate = false;
+  });
+  await page.reload();
+  await release(page, 'v0.2.0');
+  await about(page);
+  const dialog = page.getByRole('dialog', { name: 'Acerca de' });
+  await dialog.getByRole('button', { name: 'Buscar actualizaciones' }).click();
+  await expect(dialog).toContainText('Esta copia la instaló el sistema');
+  await expect(dialog.getByRole('button', { name: 'Actualizar ahora' })).toHaveCount(0);
+});
+
+test('a portable copy says where its data is and how to update it', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__selfUpdate = false;
+    (window as any).__portable = 'E:/UltimateMD/datos';
+  });
+  await page.reload();
+  await release(page, 'v0.2.0');
+  await about(page);
+  const dialog = page.getByRole('dialog', { name: 'Acerca de' });
+  await expect(dialog).toContainText('se guardan en E:/UltimateMD/datos');
+  await dialog.getByRole('button', { name: 'Buscar actualizaciones' }).click();
+  await expect(dialog).toContainText('descarga el zip nuevo');
+  await expect(dialog).not.toContainText('Esta copia la instaló el sistema');
+  await expect(dialog.getByRole('button', { name: 'Ir a descargas' })).toBeVisible();
+});
+
 test('a new version is announced at startup unless turned off', async ({ page }) => {
   await release(page, 'v0.2.0');
   await page.reload();
@@ -2077,4 +2591,223 @@ test('a vault with its own template offers it first when exporting', async ({ pa
   await exportAs(page, 'Word');
   await step(page, 'Aspecto');
   await expect(page.getByLabel('Plantilla')).toHaveValue(':vault');
+});
+
+const guides = (page: Page) => page.evaluate(() => (window as any).__test.guides);
+
+test('a vault keeps a guide for the diagrams an AI draws, starting from its style', async ({ page }) => {
+  await page.locator('aside').getByRole('button', { name: 'Trabajo', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Estilo de diagramas para la IA' }).click();
+  const screen = page.getByRole('dialog', { name: 'Estilo de diagramas de Trabajo' });
+  await expect(screen.getByRole('region', { name: 'Así dibuja la app los diagramas de este vault' }).locator('svg')).toBeVisible();
+
+  await screen.getByRole('button', { name: 'Partir del estilo actual' }).click();
+  const text = screen.getByRole('textbox', { name: 'Estilo de diagramas de Trabajo' });
+  await expect(text).toHaveValue(/# Estilo de los diagramas de Trabajo/);
+  await expect.poll(async () => (await guides(page)).a).toContain('## Colores');
+
+  await text.fill('Solo azules.');
+  await expect.poll(async () => (await guides(page)).a).toBe('Solo azules.');
+  // Starting over asks first, since it replaces what is written.
+  await screen.getByRole('button', { name: 'Partir del estilo actual' }).click();
+  await page.getByRole('form', { name: /Sustituir lo escrito/ }).getByRole('button', { name: 'Cancelar' }).click();
+  await expect(text).toHaveValue('Solo azules.');
+
+  await screen.getByRole('button', { name: 'Quitar' }).click();
+  await expect.poll(async () => (await guides(page)).a).toBeUndefined();
+  await page.keyboard.press('Escape');
+  await expect(screen).toHaveCount(0);
+});
+
+test('an image an AI drew can be asked for again from the preview', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.evaluate(() => (window as any).__test.externalWrite('a', 'dir/Destino.md', '# Destino\n\n![El flujo](../vacia/imagen.png)\n%%diagrama de IA: El flujo de pago%%\n'));
+  await open(page, 'dir');
+  await open(page, 'Destino');
+  await page.getByTitle('Vista previa', { exact: true }).click();
+  await expect(prose(page)).not.toContainText('diagrama de IA');
+  await prose(page).locator('img').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Copiar petición para volver a dibujarlo' }).click();
+  const prompt = await page.evaluate(() => navigator.clipboard.readText());
+  expect(prompt).toContain('«El flujo de pago»');
+  expect(prompt).toContain('get_diagram_guide');
+});
+
+test('a vault can be read top to bottom as one document', async ({ page }) => {
+  const readVault = async () => {
+    await page.locator('aside').getByRole('button', { name: 'Trabajo', exact: true }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Leer el vault de arriba abajo' }).click();
+  };
+  await readVault();
+  await expect(page.getByRole('heading', { name: 'Leyendo Trabajo' })).toBeVisible();
+  await expect(page.locator('main')).toContainText('4 notas');
+  const index = page.getByRole('navigation', { name: 'Índice de la lectura' });
+  await expect(index.getByRole('button')).toHaveText(['D2', 'Inicio', 'Destino', 'Hondo']);
+
+  // A link to a note being read jumps within the reading, without opening it.
+  const inicio = page.locator('section[data-path="Inicio.md"]');
+  await inicio.getByRole('link', { name: 'Destino' }).click();
+  await expect(index.getByRole('button', { name: 'Destino' })).toHaveAttribute('aria-current', 'location');
+  await expect(page.locator('main [role=tab]')).toHaveCount(0);
+
+  await index.getByRole('button', { name: 'Hondo' }).click();
+  await expect(index.getByRole('button', { name: 'Hondo' })).toHaveAttribute('aria-current', 'location');
+  await page.locator('section[data-path="dir/sub/Hondo.md"]').getByRole('button', { name: 'Editar' }).click();
+  await expect(page.getByRole('heading', { name: 'Leyendo Trabajo' })).toHaveCount(0);
+  await expect(page.locator('main footer')).toContainText('dir/sub/Hondo.md');
+
+  // It goes back to where it was left, and Esc leaves it.
+  await readVault();
+  await expect(index.getByRole('button', { name: 'Hondo' })).toHaveAttribute('aria-current', 'location');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading', { name: 'Leyendo Trabajo' })).toHaveCount(0);
+});
+
+test('a folder can be read on its own', async ({ page }) => {
+  await page.locator('aside').getByRole('button', { name: 'dir', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Leer esta carpeta de arriba abajo' }).click();
+  await expect(page.getByRole('heading', { name: 'Leyendo dir' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Índice de la lectura' }).getByRole('button')).toHaveText(['Destino', 'Hondo']);
+  await expect(page.locator('section[data-path="dir/Destino.md"] .body')).not.toContainText('Cargando');
+});
+
+test('notes answer to their Obsidian aliases and can be shown inside others', async ({ page }) => {
+  await page.evaluate(() => {
+    const t = (window as any).__test;
+    t.externalWrite('a', 'dir/Destino.md', '---\naliases: [Meta final]\n---\n# Destino\n\n## Parte\n\nTexto incrustado.\n\n## Otra\n\nNo.\n');
+    t.externalWrite('a', 'Inicio.md', '# Inicio\n\nVer [[Meta final]].\n\n![[Destino#Parte]]\n');
+  });
+  await open(page, 'Inicio');
+  await page.getByTitle('Vista previa', { exact: true }).click();
+  const link = prose(page).getByRole('link', { name: 'Meta final' });
+  await expect(link).not.toHaveClass(/broken/);
+  const embed = prose(page).locator('.note-embed.filled');
+  await expect(embed).toContainText('Texto incrustado.');
+  await expect(embed).not.toContainText('No.');
+  await link.click();
+  await expect(page.locator('main footer')).toContainText('dir/Destino.md');
+
+  // The alias is offered when linking from the editor.
+  await page.locator('main [role=tab]').first().click();
+  await page.getByTitle('Dividido', { exact: true }).click();
+  await typeInEditor(page, '\n[[Meta');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('Meta final');
+});
+
+test('a vault exports as a website, a page per note with working links', async ({ page }) => {
+  await open(page, 'Inicio');
+  await exportAs(page, 'Sitio web');
+  await step(page, 'Contenido');
+  await page.getByRole('group', { name: 'Alcance' }).getByRole('button', { name: 'Vault' }).click();
+  await expect(page.getByText('Carpetas en el documento')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Documento exportado' })).toBeVisible();
+  const site = await page.evaluate(() => (window as any).__site);
+  expect(site.name).toBe('Trabajo');
+  const paths = site.pages.map((p: { path: string }) => p.path);
+  expect(paths).toEqual(expect.arrayContaining(['Inicio.html', 'D2.html', 'dir/Destino.html', 'dir/sub/Hondo.html', 'index.html']));
+  const inicio = site.pages.find((p: { path: string }) => p.path === 'Inicio.html').html;
+  expect(inicio).toContain('href="dir/Destino.html"');
+  expect(inicio).not.toContain('Falta</a>');
+  expect(inicio).not.toContain('<script>');
+  const hondo = site.pages.find((p: { path: string }) => p.path === 'dir/sub/Hondo.html').html;
+  expect(hondo).toContain('href="../../index.html"');
+  expect(hondo).toMatch(/<a href="Hondo.html" aria-current="page">Hondo<\/a>/);
+});
+
+test('a vault in a Git repository shows its changes and commits them', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__git = { a: [{ path: 'Inicio.md', state: 'modified' }, { path: 'dir/Destino.md', state: 'untracked' }] };
+  });
+  await page.reload();
+  await expect(page.locator('aside [data-row][title="Inicio.md"] .git')).toHaveText('M');
+  // A vault outside Git shows nothing of it.
+  await expect(page.locator('aside').getByRole('button', { name: /^Git:/ })).toHaveCount(1);
+  await page.locator('aside').getByRole('button', { name: 'Git: rama main, 2 cambios' }).click();
+  const screen = page.getByRole('dialog', { name: 'Git en Trabajo' });
+  await screen.getByRole('button', { name: /Inicio/ }).click();
+  await expect(screen.getByRole('region', { name: 'Inicio.md' })).toContainText('Antes.');
+  const commit = screen.getByRole('button', { name: 'Hacer commit de 2 cambios' });
+  await expect(commit).toBeDisabled();
+  await screen.getByLabel('Mensaje del commit').fill('Notas de hoy');
+  await commit.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Commit abc1234 hecho' })).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__commits)).toEqual([{ id: 'a', message: 'Notas de hoy' }]);
+  await expect(screen).toContainText('No hay cambios desde el último commit.');
+});
+
+// Numbers for #80; the limits are loose so that only a real slowdown fails.
+// Rows are found by their path: role queries over thousands of buttons time
+// the test tool rather than the app.
+test('a vault with 10 000 notes opens and its tree stays quick', async ({ page }) => {
+  test.setTimeout(60_000);
+  const row = (path: string) => page.locator(`aside [data-row][title="${path}"]`);
+  await page.evaluate(() => sessionStorage.setItem('bigVault', '10000'));
+  let start = Date.now();
+  await page.reload();
+  await expect(row('Grande')).toBeVisible();
+  const opened = Date.now() - start;
+
+  start = Date.now();
+  await row('Plano').click();
+  await expect(row('Plano/Nota 01999.md')).toBeAttached();
+  const flat = Date.now() - start;
+
+  start = Date.now();
+  await row('Plano/Nota 01999.md').click();
+  await expect(page.locator('main footer')).toContainText('Plano/Nota 01999.md');
+  const note = Date.now() - start;
+
+  console.log(`[bench] abrir ${opened} ms · carpeta de 2000 ${flat} ms · nota ${note} ms`);
+  expect(opened).toBeLessThan(10_000 * SLOW);
+  expect(flat).toBeLessThan(5_000 * SLOW);
+  expect(note).toBeLessThan(3_000 * SLOW);
+});
+
+// What axe can find on its own (#92). A note's own content is left out: it
+// is the user's, and the preview keeps it in a shadow root of its own.
+test('the main screens pass an accessibility check', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const check = async (screen: string, skip: string[] = []) => {
+    const result = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'])
+      .exclude('.scroll > div')
+      // The page's main heading is the note's own, inside what is left out.
+      .disableRules(['page-has-heading-one', ...skip])
+      .analyze();
+    const found = result.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+    expect(found, screen).toEqual([]);
+  };
+  await check('welcome');
+  await open(page, 'Inicio');
+  await expect(page.locator('.cm-content')).toHaveAttribute('aria-label', 'Texto de «Inicio.md»');
+  await check('note');
+  await page.keyboard.press('Control+Shift+p');
+  await expect(palette(page)).toBeVisible();
+  await check('palette');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+Shift+f');
+  await page.getByPlaceholder('Buscar en los vaults abiertos').fill('Destino');
+  await expect(page.locator('aside')).toContainText('Ver [[Destino]]');
+  await check('search');
+  await page.keyboard.press('Escape');
+  await page.getByTitle('Ajustes y MCP').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await check('settings');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+e');
+  await expect(page.getByRole('dialog', { name: 'Exportar' })).toBeVisible();
+  await check('export');
+  await page.keyboard.press('Escape');
+  await page.locator('main [role=tab]').first().click({ button: 'right' });
+  await expect(page.getByRole('menu')).toBeVisible();
+  // A popup menu floats over the page, outside its landmarks, as ARIA expects.
+  await check('menu', ['region']);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('leer el vault');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('navigation', { name: 'Índice de la lectura' })).toBeVisible();
+  await check('reader');
 });

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { keyLabel } from '../shortcuts';
   import Icon from './Icon.svelte';
   import { api, type HomeInfo } from '../api';
   import { language, tr, type Key } from '../i18n.svelte';
@@ -52,8 +53,8 @@
     { icon: 'tasks', label: 'cmd.fromTemplate', keys: [], run: () => store.newNoteFromTemplate() },
     { icon: 'search', label: 'home.search', keys: ['Ctrl', 'Shift', 'F'], run: () => { store.searching = true; store.toggleBar('left', true); } },
     { icon: 'list', label: 'home.actions', keys: ['Ctrl', 'Shift', 'P'], run: () => (store.palette = '>') },
+    { icon: 'keyboard', label: 'cmd.shortcuts', keys: ['Ctrl', '/'], run: () => (store.shortcuts = true) },
   ];
-  const keyLabel = (k: string) => (k === 'Shift' ? tr('keys.shift') : k);
 </script>
 
 <div class="home">
@@ -65,7 +66,9 @@
       <div class="start">
         <button class="primary" onclick={() => store.createVaultDialog()}><Icon name="plus" /> {tr('sidebar.createVault')}</button>
         <button onclick={() => store.openVaultDialog()}><Icon name="folder" /> {tr('sidebar.openFolder')}</button>
+        <button onclick={() => store.createSampleVault()}><Icon name="file" /> {tr('sample.create')}</button>
       </div>
+      <p class="intro small">{tr('sample.hint')}</p>
     {:else}
       <div class="actions">
         {#each ACTIONS as a (a.label)}
@@ -128,6 +131,7 @@
   h1 b { color: var(--text); font-weight: 700; }
   h2 { margin: 0 0 var(--space-2); color: var(--text-3); font-size: var(--font-xs); font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
   .intro { margin: 0; color: var(--text-2); font-size: var(--font-base); line-height: 1.5; }
+  .intro.small { margin-top: var(--space-3); font-size: var(--font-sm); }
   .start { display: flex; flex-wrap: wrap; gap: var(--space-2); }
   .start button { display: inline-flex; align-items: center; gap: var(--space-2); height: 36px; padding: 0 var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--raised); color: var(--text); font-size: var(--font-md); }
   .start .primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }

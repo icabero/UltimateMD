@@ -13,6 +13,8 @@ export interface RenderContext {
   vaultId: string;
   path: string;
   files: string[];
+  /** Other names of notes, in lower case, from `aliases:`. */
+  aliases?: Map<string, string>;
 }
 
 const escapeHtml = (s: string) => new Option(s).innerHTML.replaceAll('"', '&quot;');
@@ -23,7 +25,7 @@ const md: any = new MarkdownIt({
   linkify: true,
   highlight(code: string, lang: string) {
     if (lang && hljs.getLanguage(lang)) {
-      return `<pre class="hljs"><code>${hljs.highlight(code, { language: lang }).value}</code></pre>`;
+      return `<pre class="hljs" data-lang="${escapeHtml(lang)}"><code>${hljs.highlight(code, { language: lang }).value}</code></pre>`;
     }
     return '';
   },
@@ -31,12 +33,23 @@ const md: any = new MarkdownIt({
   .use(footnote)
   .use(taskLists, { enabled: false, label: true });
 
+// Each top-level block says which lines of the note it comes from, so the
+// preview can mark the ones that changed.
+md.core.ruler.push('source_lines', (state: any) => {
+  const offset = state.env?.offset ?? 0;
+  for (const token of state.tokens) {
+    if (token.level === 0 && token.block && token.map && token.nesting >= 0 && token.type !== 'inline') {
+      token.attrSet('data-lines', `${token.map[0] + 1 + offset}-${token.map[1] + offset}`);
+    }
+  }
+});
+
 const defaultFence = md.renderer.rules.fence!;
 md.renderer.rules.fence = (tokens: any, idx: number, options: any, env: any, self: any) => {
   const token = tokens[idx];
   const { lang, words } = splitFence(token.info);
   if (lang === 'mermaid' || lang === 'd2') {
-    return `<div class="diagram" data-lang="${lang}" data-style="${escapeHtml(words)}" data-src="${encodeURIComponent(token.content)}"></div>`;
+    return `<div class="diagram" data-lines="${token.attrGet('data-lines') ?? ''}" data-lang="${lang}" data-style="${escapeHtml(words)}" data-src="${encodeURIComponent(token.content)}"></div>`;
   }
   return defaultFence(tokens, idx, options, env, self);
 };
@@ -62,10 +75,68 @@ md.inline.ruler.before('link', 'wikilink', (state: any, silent: boolean) => {
 md.renderer.rules.wikilink = (tokens: any, idx: number) => {
   const { target, anchor, label, embed } = tokens[idx].meta;
   const t = escapeHtml(target);
-  return embed && kindOf(target) === 'image'
-    ? `<img data-embed="${t}" alt="${escapeHtml(label)}">`
-    : `<a data-wikilink="${t}" data-anchor="${escapeHtml(anchor)}" href="#">${escapeHtml(label)}</a>`;
+  const link = `<a data-wikilink="${t}" data-anchor="${escapeHtml(anchor)}" href="#">${escapeHtml(label)}</a>`;
+  if (embed && kindOf(target) === 'image') return `<img data-embed="${t}" alt="${escapeHtml(label)}">`;
+  // Another note shown here, filled in by the page; until then, or if it is missing, a link.
+  if (embed && (kindOf(target) === 'md' || !target.includes('.'))) {
+    return `<span class="note-embed" data-embed-note="${t}" data-anchor="${escapeHtml(anchor)}">${link}</span>`;
+  }
+  return link;
 };
+
+// #etiqueta, as crates/core/src/tags.rs reads it. Code never gets here.
+const TAG_CHAR = /[\p{L}\p{N}_/-]/u;
+md.inline.ruler.before('link', 'tag', (state: any, silent: boolean) => {
+  const { src, pos } = state;
+  if (src[pos] !== '#') return false;
+  const before = pos > 0 ? src[pos - 1] : '';
+  if (before && (TAG_CHAR.test(before) || before === '&' || before === '#')) return false;
+  let end = pos + 1;
+  while (end < src.length && TAG_CHAR.test(src[end])) end++;
+  const name = src.slice(pos + 1, end).replace(/[/-]+$/, '');
+  if (!name || /^\d+$/.test(name)) return false;
+  if (!silent) state.push('tag', '', 0).meta = { name };
+  state.pos = pos + 1 + name.length;
+  return true;
+});
+
+md.renderer.rules.tag = (tokens: any, idx: number) => {
+  const name = escapeHtml(tokens[idx].meta.name);
+  return `<a class="tag" data-tag="${name}" href="#">#${name}</a>`;
+};
+
+// Two things Obsidian notes carry: ==highlighted text== and %%comments%%,
+// which are for whoever writes and never show.
+md.inline.ruler.before('emphasis', 'obsidian_marks', (state: any, silent: boolean) => {
+  const { src, pos } = state;
+  const mark = src.startsWith('==', pos) ? '==' : src.startsWith('%%', pos) ? '%%' : null;
+  if (!mark) return false;
+  const end = src.indexOf(mark, pos + 2);
+  const inner = end < 0 ? '' : src.slice(pos + 2, end);
+  if (!inner.trim() || inner.includes('\n') || (mark === '==' && /^\s|\s$/.test(inner))) return false;
+  if (!silent && mark === '==') {
+    state.push('mark_open', 'mark', 1);
+    state.md.inline.parse(inner, state.md, state.env, state.tokens);
+    state.push('mark_close', 'mark', -1);
+  }
+  state.pos = end + 2;
+  return true;
+});
+
+// A comment alone on its lines, or spanning several.
+md.block.ruler.before('paragraph', 'obsidian_comment', (state: any, start: number, end: number, silent: boolean) => {
+  const line = (n: number) => state.src.slice(state.bMarks[n] + state.tShift[n], state.eMarks[n]);
+  const first = line(start);
+  if (!first.startsWith('%%')) return false;
+  let last = start;
+  if (!(first.length > 4 && first.trimEnd().endsWith('%%'))) {
+    last = start + 1;
+    while (last < end && !line(last).trimEnd().endsWith('%%')) last++;
+    if (last >= end) return false;
+  }
+  if (!silent) state.line = last + 1;
+  return true;
+});
 
 function splitFrontmatter(text: string): { meta: string | null; body: string } {
   const m = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(text);
@@ -99,13 +170,17 @@ function linkContent(root: DocumentFragment, ctx: RenderContext) {
       el.dataset.path = path;
     }
   }
+  for (const box of root.querySelectorAll<HTMLElement>('[data-embed-note]')) {
+    const path = resolveLink(box.dataset.embedNote!, ctx.path, ctx.files, ctx.aliases);
+    if (path) box.dataset.path = path;
+  }
   for (const a of root.querySelectorAll<HTMLAnchorElement>('a[data-wikilink]')) {
     // `[[#heading]]` points into the same note.
-    const path = a.dataset.wikilink ? resolveLink(a.dataset.wikilink, ctx.path, ctx.files) : ctx.path;
+    const path = a.dataset.wikilink ? resolveLink(a.dataset.wikilink, ctx.path, ctx.files, ctx.aliases) : ctx.path;
     if (path) a.dataset.note = path;
     else a.classList.add('broken');
   }
-  for (const a of root.querySelectorAll<HTMLAnchorElement>('a[href]:not([data-wikilink])')) {
+  for (const a of root.querySelectorAll<HTMLAnchorElement>('a[href]:not([data-wikilink]):not([data-tag])')) {
     const href = a.getAttribute('href')!;
     if (isExternal(href)) {
       a.dataset.external = href;
@@ -188,11 +263,12 @@ export function headingAt(headings: Heading[], line: number) {
 export function renderMarkdown(text: string, ctx: RenderContext): DocumentFragment {
   const { meta, body } = splitFrontmatter(text);
   const head = meta === null ? '' : `<pre class="frontmatter">${escapeHtml(meta)}</pre>`;
-  const fragment = DOMPurify.sanitize(head + md.render(body), {
+  const offset = meta === null ? 0 : text.slice(0, text.length - body.length).split('\n').length - 1;
+  const fragment = DOMPurify.sanitize(head + md.render(body, { offset }), {
     RETURN_DOM_FRAGMENT: true,
     FORCE_BODY: true,
     ADD_TAGS: ['style'],
-    ADD_ATTR: ['data-lang', 'data-src', 'data-style', 'data-embed', 'data-wikilink'],
+    ADD_ATTR: ['data-lang', 'data-src', 'data-style', 'data-embed', 'data-embed-note', 'data-wikilink'],
     FORBID_TAGS: ['form', 'iframe', 'object', 'embed', 'base', 'link', 'meta'],
   });
   shapeCallouts(fragment);

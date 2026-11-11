@@ -10,9 +10,10 @@
     "dev": "node scripts/sidecar.mjs --debug && tauri dev",
     "build": "tauri build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
     "test:e2e": "playwright test",
     "tauri": "tauri",
-    "lint": "eslint . && node scripts/check-tokens.mjs",
+    "lint": "eslint . && node scripts/check-tokens.mjs && node scripts/check-version.mjs",
     "screenshots": "playwright test -c playwright.screenshots.config.ts"
   },
   "dependencies": {
@@ -46,6 +47,7 @@
     "turndown": "7.2.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.64.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
@@ -56,11 +58,13 @@
     "eslint": "^10.14.0",
     "eslint-plugin-svelte": "^3.24.1",
     "globals": "^17.14.0",
+    "jsdom": "^29.1.1",
     "svelte": "^5.57.3",
     "svelte-check": "^4.7.8",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.1",
-    "vite": "^8.3.6"
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
   },
   "overrides": {
     "minimatch": "^11.0.5"

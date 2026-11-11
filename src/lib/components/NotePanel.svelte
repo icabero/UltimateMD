@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import NoteProperties from './NoteProperties.svelte';
+  import NoteHistory from './NoteHistory.svelte';
   import { IS_MAC, frame } from '../frame.svelte';
   import { api, type LinkInfo } from '../api';
   import { tr, type Key } from '../i18n.svelte';
@@ -14,6 +15,7 @@
     { id: 'outline', label: 'panel.outline' },
     { id: 'links', label: 'panel.links' },
     { id: 'properties', label: 'panel.properties' },
+    { id: 'history', label: 'panel.history' },
   ];
   const OUTLINE_DELAY = 200;
   const LINKS_DELAY = 250;
@@ -98,6 +100,8 @@
       </nav>
     {:else if store.layout.panelTab === 'properties'}
       <NoteProperties {tab} />
+    {:else if store.layout.panelTab === 'history'}
+      {#if tab.loose}<p class="empty">{tr('history.loose')}</p>{:else}{#key tab.key}<NoteHistory {tab} />{/key}{/if}
     {:else if tab.loose}
       <p class="empty">{tr('panel.looseLinks')}</p>
     {:else if links}

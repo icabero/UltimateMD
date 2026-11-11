@@ -3,13 +3,17 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { anchorLabel, findAnchor, parseAnchor } from './anchors';
-import { api, type TreeNode, type Vault, type VaultThemes } from './api';
+import { api, type GitStatus, type ReplaceOptions, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
 import { fold } from './fold';
 import { fillTemplate } from './noteTemplates';
 import { withColors, type DiagramStyle } from './diagramStyle';
-import { tr } from './i18n.svelte';
-import { baseName, dirName, join, kindOf, linkFrom, resolveLink, type FileKind } from './paths';
+import { language, tr } from './i18n.svelte';
+import { sampleVault } from './sampleVault';
+import { baseName, dirName, join, kindOf, linkFrom, resolveLink, stem, type FileKind } from './paths';
 import { checksAtStart, isNewer, latestVersion } from './updates';
+import { newsFor, unseenNews } from './news';
+import { changedLines } from './diff';
+import { loadSpellSetting, saveSpellSetting, type SpellSetting } from './spellcheck';
 import { THEMES, applyTheme, frontmatterValue, resolveTheme, themeById, type Theme } from './themes';
 
 export type ViewMode = 'visual' | 'edit' | 'split' | 'preview';
@@ -29,8 +33,26 @@ export interface Tab {
   /** A different version on disk while this tab has unsaved edits. */
   conflict: { content: string; version: string } | null;
   missing: boolean;
+  /** Kept at the left, without a close button, and spared by "close the others". */
+  pinned: boolean;
+  /** Edited here since it was opened, so closing it keeps a version. */
+  touched: boolean;
+  /** Changed on disk by someone else while open and untouched here, until seen or edited. */
+  outside: OutsideChange | null;
   /** Set for a file outside any vault: its location on disk. */
   loose: { absolute: string; dir: string } | null;
+}
+
+/** A note changed outside the app while open: what it was, and which lines of it now changed. */
+export interface OutsideChange {
+  before: string;
+  /** The version written from outside, so undoing can tell if it changed again. */
+  version: string;
+  lines: number[];
+  /** The AI changed it through the MCP server, as far as its log says. */
+  ai: boolean;
+  /** Bumped on each change, so the marks show again. */
+  seen: number;
 }
 
 /** A place to show in a tab: a line, with the words of a search marked. Line 0 is the top. */
@@ -42,7 +64,7 @@ export interface Reveal {
   heading?: number;
 }
 
-export type PanelTab = 'outline' | 'links' | 'properties';
+export type PanelTab = 'outline' | 'links' | 'properties' | 'history';
 
 /** Which side bars someone wants. A narrow window hides them anyway. */
 interface Layout {
@@ -50,6 +72,17 @@ interface Layout {
   right: boolean;
   panelTab: PanelTab;
   rightWidth: number;
+}
+
+/** An entry of a context menu. `separator` draws a line above it. */
+export interface MenuItem {
+  label: string;
+  icon?: string;
+  keys?: string[];
+  danger?: boolean;
+  disabled?: boolean;
+  separator?: boolean;
+  run: () => void;
 }
 
 export interface ToastAction {
@@ -89,6 +122,32 @@ const VIEW_KEY = 'ultimatemd.view';
 const LAYOUT_KEY = 'ultimatemd.layout';
 const READING_KEY = 'ultimatemd.reading';
 const IMAGES_KEY = 'ultimatemd.images';
+const RECENT_KEY = 'ultimatemd.recent';
+const FAVORITES_KEY = 'ultimatemd.favorites';
+const RECENT_MAX = 30;
+
+/** A note somewhere: in which vault and where in it. */
+export interface Place {
+  vaultId: string;
+  path: string;
+}
+
+function loadPlaces(key: string): Place[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(key) ?? '[]');
+    return Array.isArray(list) ? list.filter((p) => typeof p?.vaultId === 'string' && typeof p?.path === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePlaces(key: string, places: Place[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(places));
+  } catch {
+    // Lasts for this session only.
+  }
+}
 /** Where pasted and dropped images go: a folder at the vault root, or beside the note. */
 export type ImagePlace = 'vault' | 'note';
 export const IMAGE_FOLDER = 'adjuntos';
@@ -96,12 +155,16 @@ export const ZOOM = { min: 0.6, max: 2, step: 0.1 };
 export const TEXT_SCALES = [0.9, 1, 1.15, 1.3] as const;
 export const LINE_WIDTHS = { narrow: '600px', normal: null, wide: '960px', full: 'none' } as const;
 export type LineWidth = keyof typeof LINE_WIDTHS;
+/** How far apart lines are, as an amount added to each view's own spacing. */
+export const LEADINGS = { compact: -0.2, normal: 0, relaxed: 0.25 } as const;
+export type Leading = keyof typeof LEADINGS;
 
-/** How someone likes to read: the interface zoom, the notes' text size and line width. */
+/** How someone likes to read: the interface zoom, the notes' text size, line width and line spacing. */
 interface Reading {
   zoom: number;
   textScale: number;
   lineWidth: LineWidth;
+  leading: Leading;
 }
 /** Below these window widths a side bar folds away by itself. */
 const LEFT_MIN = 760;
@@ -125,7 +188,7 @@ function loadThemeChoice(): ThemeChoice {
 }
 
 function loadReading(): Reading {
-  const fallback: Reading = { zoom: 1, textScale: 1, lineWidth: 'normal' };
+  const fallback: Reading = { zoom: 1, textScale: 1, lineWidth: 'normal', leading: 'normal' };
   try {
     return { ...fallback, ...JSON.parse(localStorage.getItem(READING_KEY) ?? '{}') };
   } catch {
@@ -192,6 +255,13 @@ function imageName(file: File) {
 class Store {
   vaults = $state<Vault[]>([]);
   trees = $state<Record<string, TreeNode[]>>({});
+  /** Each vault's Git status, or null when it is not in a repository. */
+  git = $state<Record<string, GitStatus | null>>({});
+  /** The vault whose Git changes are on screen. */
+  gitScreen = $state<string | null>(null);
+  #gitTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+  /** Each vault's notes that declare `aliases:`, by path. */
+  aliases = $state<Record<string, Record<string, string[]>>>({});
   tabs = $state<Tab[]>([]);
   activeKey = $state<string | null>(null);
   toast = $state<Toast | null>(null);
@@ -202,9 +272,25 @@ class Store {
   palette = $state<string | null>(null);
   settings = $state(false);
   searching = $state(false);
+  /** Text for the search panel to look for, handed over by another part of the app. */
+  searchQuery = $state<string | null>(null);
   exporting = $state(false);
   tutorial = $state(!tutorialSeen());
   about = $state(false);
+  /** The list of every keyboard shortcut. */
+  shortcuts = $state(false);
+  /** Choosing, place by place, between the edits in the tab on screen and its version on disk. */
+  merging = $state(false);
+  /** The context menu on screen, and where. */
+  menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  /** The tab shown beside the one being edited, for reference. */
+  sideKey = $state<string | null>(null);
+  /** Showing what changed outside the app in the note on screen. */
+  outsideDiff = $state(false);
+  /** Whether and in which language spelling is checked while writing. */
+  spellcheck = $state<SpellSetting>(loadSpellSetting());
+  /** The version whose news show, as `0.7`. */
+  news = $state<string | null>(null);
   /** A newer published version, once known. */
   update = $state<string | null>(null);
   /** The view new tabs open in: the last one the user chose. */
@@ -214,8 +300,14 @@ class Store {
   themeEditor = $state<string | null>(null);
   /** The vault whose broken links are listed. */
   brokenLinks = $state<string | null>(null);
+  /** The vault whose log of what the AI did is open. */
+  aiLog = $state<string | null>(null);
   /** The vault whose Word settings are open. */
   wordScreen = $state<string | null>(null);
+  /** The vault whose diagram guide for the AI is being edited. */
+  guideScreen = $state<string | null>(null);
+  /** A vault or folder being read top to bottom, in place of the editor. */
+  reader = $state<{ vaultId: string; folder: string } | null>(null);
   /** Where a note from a template goes, while choosing the template. */
   templatePicker = $state<{ vaultId: string; dir: string } | null>(null);
   /** Taken by the editor, or the preview when it shows alone. */
@@ -230,8 +322,18 @@ class Store {
   editDiagram = $state<{ key: string; index: number } | null>(null);
   /** The line with the cursor, or the top of the preview when it shows alone. */
   position = $state<{ key: string; line: number } | null>(null);
+  /** Tags of each vault, the most used first. Dropped when the vault changes, read again when needed. */
+  tags = $state<Record<string, { tag: string; notes: number }[]>>({});
+  /** Vaults whose changes made outside the app are not followed, with why. */
+  unwatched = $state<Record<string, string>>({});
+  /** Notes opened lately, the last one first. */
+  recent = $state<Place[]>(loadPlaces(RECENT_KEY));
+  /** Notes pinned to the top of the side bar, in the order they were added. */
+  favorites = $state<Place[]>(loadPlaces(FAVORITES_KEY));
 
   #timers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Above zero while the app itself rewrites notes, such as links after a move: those are not outside changes. */
+  #ownWrites = 0;
   #toastTimer: ReturnType<typeof setTimeout> | undefined;
 
   get theme(): Theme {
@@ -266,12 +368,22 @@ class Store {
     return { theme: withColors(theme, style), sketch: !!style.sketch || value === 'boceto' };
   }
 
+  /** How the app draws a vault's diagrams when a note says nothing else. */
+  vaultDiagramLook(vaultId: string) {
+    const value = this.vaultThemes[vaultId]?.defaultDiagramTheme ?? null;
+    const theme =
+      (value !== 'boceto' && this.lookUpTheme(vaultId, value)) ||
+      this.lookUpTheme(vaultId, this.vaultThemes[vaultId]?.defaultTheme) ||
+      this.theme;
+    return { theme, sketch: value === 'boceto' };
+  }
+
   /** Follows a `[[link]]` written in a note, offering to create it if it is missing. */
   /** Follows a link written in `tab`. An empty name means the same note; `anchor` is `#Heading` or `^block`. */
   async followLink(tab: Tab, name: string, anchor?: string | null) {
     const target = name.trim();
     if (!target) return this.goToAnchor(tab.vaultId, tab.path, anchor);
-    const path = resolveLink(target, tab.path, this.files(tab.vaultId));
+    const path = this.resolve(tab.vaultId, target, tab.path);
     if (path) return this.openNoteAt(tab.vaultId, path, anchor);
     if (await this.confirm(tr('preview.createMissing', { name: target }), tr('common.create'))) await this.createNote(tab.vaultId, dirName(tab.path), target);
   }
@@ -346,6 +458,136 @@ class Store {
     }
   }
 
+  isFavorite(vaultId: string, path: string) {
+    return this.favorites.some((f) => f.vaultId === vaultId && f.path === path);
+  }
+
+  toggleFavorite(vaultId: string, path: string) {
+    this.favorites = this.isFavorite(vaultId, path)
+      ? this.favorites.filter((f) => !(f.vaultId === vaultId && f.path === path))
+      : [...this.favorites, { vaultId, path }];
+    savePlaces(FAVORITES_KEY, this.favorites);
+  }
+
+  #remember(vaultId: string, path: string) {
+    this.recent = [{ vaultId, path }, ...this.recent.filter((r) => !(r.vaultId === vaultId && r.path === path))].slice(0, RECENT_MAX);
+    savePlaces(RECENT_KEY, this.recent);
+  }
+
+  /** Keeps favourites and recent notes pointing at a file or folder that moved, or drops them when it is gone. */
+  #repointPlaces(vaultId: string, from: string, to: string | null) {
+    const fix = (list: Place[]) =>
+      list.flatMap((p) => {
+        if (p.vaultId !== vaultId || !(p.path === from || p.path.startsWith(`${from}/`))) return [p];
+        return to === null ? [] : [{ vaultId, path: to + p.path.slice(from.length) }];
+      });
+    this.recent = fix(this.recent);
+    this.favorites = fix(this.favorites);
+    savePlaces(RECENT_KEY, this.recent);
+    savePlaces(FAVORITES_KEY, this.favorites);
+  }
+
+  /** Opens a context menu where the pointer is, or by the element when it came from the keyboard. */
+  openMenu(e: MouseEvent, items: MenuItem[]) {
+    e.preventDefault();
+    e.stopPropagation();
+    let { clientX: x, clientY: y } = e;
+    if (!x && !y && e.target instanceof Element) {
+      const box = e.target.getBoundingClientRect();
+      [x, y] = [box.left + 12, box.bottom - 4];
+    }
+    this.menu = { x, y, items };
+  }
+
+  /** Where a file is on this computer. */
+  absolutePath(tab: { vaultId: string; path: string; loose?: Tab['loose'] }) {
+    if (tab.loose) return tab.loose.absolute;
+    const root = this.vault(tab.vaultId)?.path ?? '';
+    const back = String.fromCharCode(92);
+    return root.includes(back) ? `${root}${back}${tab.path.replaceAll('/', back)}` : `${root}/${tab.path}`;
+  }
+
+  async copyText(text: string, message: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      this.notify(message);
+    } catch (e) {
+      this.fail(e);
+    }
+  }
+
+  /** Copies a `[[link]]` to a note, as short as it can be told apart. */
+  copyLink(vaultId: string, path: string) {
+    const short = stem(path);
+    const unique = this.files(vaultId).filter((f) => stem(f) === short).length < 2;
+    void this.copyText(`[[${unique ? short : path.slice(0, path.lastIndexOf('.'))}]]`, tr('menu.linkCopied'));
+  }
+
+  revealInFolder(vaultId: string, path: string) {
+    void api.revealPath(vaultId, path).catch((e) => this.fail(e));
+  }
+
+  get sideTab() {
+    const tab = this.tabs.find((t) => t.key === this.sideKey) ?? null;
+    return tab && tab.key !== this.activeKey ? tab : null;
+  }
+
+  /** Shows a note beside the one being edited, to read while writing. */
+  async openBeside(vaultId: string, path: string) {
+    const before = this.activeKey;
+    await this.openFile(vaultId, path);
+    const key = tabKey(vaultId, path);
+    if (!this.tabs.some((t) => t.key === key)) return;
+    if (before && before !== key) {
+      this.sideKey = key;
+      this.activeKey = before;
+    }
+    this.persist();
+  }
+
+  /** The note at the side becomes the one being edited, and the other goes to the side. */
+  swapSide() {
+    const side = this.sideTab;
+    if (!side) return;
+    [this.sideKey, this.activeKey] = [this.activeKey, side.key];
+    this.persist();
+  }
+
+  togglePin(tab: Tab) {
+    const from = this.tabs.indexOf(tab);
+    if (from < 0) return;
+    this.tabs.splice(from, 1);
+    tab.pinned = !tab.pinned;
+    // Pinned tabs sit together at the left: the tab goes to the end of that group, or right after it.
+    this.tabs.splice(this.tabs.filter((t) => t.pinned).length, 0, tab);
+    this.persist();
+  }
+
+  /** Moves a tab to another place, within its group: pinned ones stay before the rest. */
+  moveTab(key: string, to: number) {
+    const from = this.tabs.findIndex((t) => t.key === key);
+    if (from < 0) return;
+    const tab = this.tabs[from];
+    const pinned = this.tabs.filter((t) => t.pinned).length;
+    const [min, max] = tab.pinned ? [0, pinned - 1] : [pinned, this.tabs.length - 1];
+    const target = Math.min(max, Math.max(min, to));
+    if (target === from) return;
+    this.tabs.splice(from, 1);
+    this.tabs.splice(target, 0, tab);
+    this.persist();
+  }
+
+  /** Closes every tab but this one and the pinned ones. */
+  async closeOthers(keep: Tab) {
+    for (const tab of this.tabs.filter((t) => t.key !== keep.key && !t.pinned)) await this.close(tab);
+    this.activeKey = keep.key;
+    this.persist();
+  }
+
+  async closeAll() {
+    for (const tab of this.tabs.filter((t) => !t.pinned)) await this.close(tab);
+  }
+
   get active() {
     return this.tabs.find((t) => t.key === this.activeKey) ?? null;
   }
@@ -362,6 +604,63 @@ class Store {
     return flatten(this.trees[vaultId] ?? []);
   }
 
+  /** A vault's aliases in lower case, each to its note: the first note wins, as in the core. */
+  aliasMap(vaultId: string) {
+    // Built anew from the reactive aliases each time, so it needs no reactivity of its own.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const map = new Map<string, string>();
+    for (const [path, names] of Object.entries(this.aliases[vaultId] ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))) {
+      for (const name of names) if (!map.has(name.toLowerCase())) map.set(name.toLowerCase(), path);
+    }
+    return map;
+  }
+
+  /** Reads a vault's notes as they are now: an open tab's text, unsaved or not, or the file. */
+  noteReader(vaultId: string) {
+    return async (path: string) =>
+      this.tabs.find((t) => t.vaultId === vaultId && t.path === path)?.content ??
+      (await api.read(vaultId, path).catch(() => null))?.content ??
+      null;
+  }
+
+  /** Where a link written in a note leads, aliases included. */
+  resolve(vaultId: string, target: string, from: string) {
+    return resolveLink(target, from, this.files(vaultId), this.aliasMap(vaultId));
+  }
+
+  /** Asks Git what changed in a vault; quietly nothing when Git is not there. */
+  async loadGit(vaultId: string) {
+    try {
+      this.git[vaultId] = await api.gitStatus(vaultId);
+    } catch {
+      this.git[vaultId] = null;
+    }
+  }
+
+  /** The same, once a burst of changes settles. */
+  laterGit(vaultId: string) {
+    clearTimeout(this.#gitTimers[vaultId]);
+    this.#gitTimers[vaultId] = setTimeout(() => void this.loadGit(vaultId), 800);
+  }
+
+  /** How a file differs from the last commit, if the vault is in Git. */
+  gitState(vaultId: string, path: string) {
+    return this.git[vaultId]?.changes.find((c) => c.path === path)?.state ?? null;
+  }
+
+  /** Reads the aliases of a whole vault, or again of the notes that changed. */
+  async loadAliases(vaultId: string, paths?: string[]) {
+    try {
+      const found = await api.aliases(vaultId, paths);
+      const next = paths ? { ...(this.aliases[vaultId] ?? {}) } : {};
+      for (const path of paths ?? []) delete next[path];
+      for (const note of found) next[note.path] = note.aliases;
+      this.aliases[vaultId] = next;
+    } catch {
+      // Links by alias stay unresolved until the next change.
+    }
+  }
+
   notify(message: unknown, options: { actions?: ToastAction[]; details?: string; onDone?: () => void } = {}) {
     const text = String(message);
     const firstLine = text.split(/\r?\n/)[0];
@@ -372,6 +671,13 @@ class Store {
     this.toast = { id: (before?.id ?? 0) + 1, message: message_, details, actions: options.actions ?? [], onDone: options.onDone };
     before?.onDone?.();
     this.holdToast(false);
+  }
+
+  /** Shows something that went wrong and writes it to the log, where it can be read later. */
+  fail(error: unknown, options: Parameters<Store['notify']>[1] = {}) {
+    const text = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    void api.logError('ui', text).catch(() => {});
+    this.notify(error instanceof Error ? error.message : error, options);
   }
 
   /** Takes the notice away, letting whatever waited on it finish. */
@@ -395,8 +701,8 @@ class Store {
     if (!path) return;
     this.notify(tr('export.done'), {
       actions: [
-        { label: tr('export.openFile'), run: () => void api.openExported(path).catch((e) => this.notify(e)) },
-        { label: tr('export.showInFolder'), run: () => void api.revealExported(path).catch((e) => this.notify(e)) },
+        { label: tr('export.openFile'), run: () => void api.openExported(path).catch((e) => this.fail(e)) },
+        { label: tr('export.showInFolder'), run: () => void api.revealExported(path).catch((e) => this.fail(e)) },
       ],
     });
   }
@@ -431,15 +737,117 @@ class Store {
     await listen<{ vaultId: string; paths: string[] }>('vault-changed', (e) => this.onChanged(e.payload));
     await listen<string>('themes-changed', (e) => this.loadVaultThemes(e.payload));
     await listen<string[]>('open-files', (e) => this.openPaths(e.payload));
+    await listen<WatchProblem>('watch-failed', (e) => this.onUnwatched(e.payload));
     await this.loadVaults();
     await this.restore();
     await this.openPaths(await api.takePendingFiles());
+    for (const problem of await api.watchProblems().catch(() => [])) this.onUnwatched(problem);
     void this.checkUpdates();
+    void this.showNews(false);
+  }
+
+  /** Shows what the running version brought: after an update by itself, or when asked. */
+  async showNews(asked = true) {
+    const version = await getVersion().catch(() => null);
+    if (!version) return;
+    const news = asked ? newsFor(version) : unseenNews(version);
+    if (news && !(this.tutorial && !asked)) this.news = news;
+  }
+
+  /** Re-reads the notes of some vaults, in tabs and trees, after the app changed them on disk. */
+  async #reloadChanged(paths: { vaultId: string; path: string }[]) {
+    for (const vaultId of new Set(paths.map((p) => p.vaultId))) {
+      await this.onChanged({ vaultId, paths: paths.filter((p) => p.vaultId === vaultId).map((p) => p.path) }, true);
+    }
+  }
+
+  /** Replaces the chosen lines in several notes, with a notice that can undo it. */
+  async replaceInVaults(replace: ReplaceOptions, notes: { vaultId: string; path: string; version: string; lines: number[] }[]) {
+    await this.saveAll();
+    let result;
+    this.#ownWrites++;
+    try {
+      result = await api.replaceApply(replace, notes);
+    } catch (e) {
+      this.fail(e);
+      return;
+    } finally {
+      this.#ownWrites--;
+    }
+    const { replaced, skipped } = result;
+    await this.#reloadChanged(replaced);
+    const lines = replaced.reduce((n, r) => n + r.lines, 0);
+    const undo = async () => {
+      const failed: string[] = [];
+      for (const r of replaced) {
+        await api.write(r.vaultId, r.path, r.before, r.version).catch(() => failed.push(baseName(r.path)));
+      }
+      await this.#reloadChanged(replaced);
+      this.notify(failed.length ? tr('replace.undoPartly', { list: failed.join(', ') }) : tr('replace.undone'));
+    };
+    const message = tr('replace.done', { lines, notes: replaced.length });
+    this.notify(skipped.length ? `${message} ${tr('replace.skipped', { list: skipped.map(baseName).join(', ') })}` : message, {
+      actions: replaced.length ? [{ label: tr('common.undo'), run: () => void undo() }] : [],
+    });
+  }
+
+  async loadTags(vaultId: string) {
+    const known = this.tags[vaultId];
+    if (known) return known;
+    const loaded = await api.tags(vaultId).catch(() => []);
+    this.tags[vaultId] = loaded;
+    return loaded;
+  }
+
+  /** Lists the notes with a tag in the search panel. */
+  searchTag(tag: string) {
+    this.searchQuery = `etiqueta:${tag}`;
+    this.searching = true;
+    this.toggleBar('left', true);
+  }
+
+  /** Whether the AI wrote this note a moment ago, by the MCP server's log. */
+  async changedByAi(vaultId: string, path: string, version: string) {
+    return api.aiWrote(vaultId, path, version).catch(() => false);
+  }
+
+  /** Puts back a note as it was before a change made outside the app. */
+  async undoOutside(tab: Tab) {
+    const change = tab.outside;
+    if (!change) return;
+    try {
+      tab.version = await api.write(tab.vaultId, tab.path, change.before, change.version);
+    } catch (e) {
+      if (String(e).includes('changed since')) this.notify(tr('outside.changedAgain'));
+      else this.fail(e);
+      return;
+    }
+    tab.content = change.before;
+    tab.outside = null;
+    tab.revision++;
+    this.notify(tr('outside.undone'));
+  }
+
+  /** A vault that cannot be watched: changes made outside the app only show when it is read again. */
+  onUnwatched({ vaultId, error }: WatchProblem) {
+    const vault = this.vault(vaultId);
+    if (!vault || this.unwatched[vaultId] === error) return;
+    this.unwatched[vaultId] = error;
+    this.notify(tr('watch.failed', { name: vault.name }), {
+      details: `${tr('watch.failedHint')}\n\n${error}`,
+      actions: [{ label: tr('watch.reread'), run: () => void this.reread(vaultId) }],
+    });
+  }
+
+  /** Reads a vault again from disk: its tree and the notes open from it. */
+  async reread(vaultId: string) {
+    await this.refreshTree(vaultId);
+    await this.onChanged({ vaultId, paths: this.tabs.filter((t) => t.vaultId === vaultId).map((t) => t.path) });
   }
 
   async loadVaults() {
     this.vaults = await api.listVaults();
-    await Promise.all(this.openVaults.flatMap((v) => [this.refreshTree(v.id), this.loadVaultThemes(v.id)]));
+    await Promise.all(this.openVaults.flatMap((v) => [this.refreshTree(v.id), this.loadVaultThemes(v.id), this.loadAliases(v.id), this.loadGit(v.id)]));
   }
 
   async refreshTree(id: string) {
@@ -447,7 +855,7 @@ class Store {
       this.trees[id] = await api.tree(id);
     } catch (e) {
       this.trees[id] = [];
-      this.notify(e);
+      this.fail(e);
     }
   }
 
@@ -457,6 +865,24 @@ class Store {
     if (typeof parent !== 'string') return;
     const name = await this.prompt(tr('sidebar.vaultName'), '', tr('common.create'));
     if (name?.trim()) await this.addVault(() => api.createVault(parent, name.trim()));
+  }
+
+  /** Asks where, and creates a vault of invented notes to learn with. */
+  async createSampleVault() {
+    const parent = await openDialog({ directory: true, title: tr('sample.where') });
+    if (typeof parent !== 'string') return;
+    const sample = sampleVault(language());
+    const vault = await this.addVault(() => api.createVault(parent, sample.name));
+    if (!vault) return;
+    try {
+      for (const [path, content] of Object.entries(sample.files)) await api.create(vault.id, path, content);
+    } catch (e) {
+      this.fail(e);
+    }
+    await this.refreshTree(vault.id);
+    this.closeTutorial();
+    await this.openFile(vault.id, sample.start);
+    this.notify(tr('sample.created', { name: sample.name }));
   }
 
   /** Asks for a folder and opens it as a vault. */
@@ -471,7 +897,7 @@ class Store {
       await this.loadVaults();
       return vault;
     } catch (e) {
-      this.notify(e);
+      this.fail(e);
     }
   }
 
@@ -501,7 +927,7 @@ class Store {
           await this.openFile(opened.id, opened.name, { absolute: opened.absolute, dir: opened.dir });
         }
       } catch (e) {
-        this.notify(tr('store.openFailed', { path, error: String(e) }));
+        this.fail(tr('store.openFailed', { path, error: String(e) }));
       }
     }
   }
@@ -522,6 +948,7 @@ class Store {
 
   async openFile(vaultId: string, path: string, loose: Tab['loose'] = null) {
     const key = tabKey(vaultId, path);
+    if (!loose && this.vault(vaultId)) this.#remember(vaultId, path);
     if (this.tabs.some((t) => t.key === key)) {
       this.activeKey = key;
       this.persist();
@@ -530,7 +957,7 @@ class Store {
     const kind = kindOf(path);
     if (kind === 'other') {
       // Not text this app can edit: hand it to the system's default program.
-      await api.openWithSystem(vaultId, path).catch((e) => this.notify(e));
+      await api.openWithSystem(vaultId, path).catch((e) => this.fail(e));
       return;
     }
     let content = '';
@@ -539,13 +966,13 @@ class Store {
       try {
         ({ content, version } = await api.read(vaultId, path));
       } catch (e) {
-        this.notify(e);
+        this.fail(e);
         return;
       }
     }
     this.tabs.push({
       key, vaultId, path, kind, content, version,
-      dirty: false, saving: false, view: kind === 'md' || this.preferredView !== 'visual' ? this.preferredView : 'split', revision: 0, conflict: null, missing: false, loose,
+      dirty: false, saving: false, view: kind === 'md' || this.preferredView !== 'visual' ? this.preferredView : 'split', revision: 0, conflict: null, missing: false, pinned: false, touched: false, outside: null, loose,
     });
     this.activeKey = key;
     this.persist();
@@ -600,6 +1027,11 @@ class Store {
     }
   }
 
+  setSpellcheck(setting: SpellSetting) {
+    this.spellcheck = setting;
+    saveSpellSetting(setting);
+  }
+
   setImagePlace(place: ImagePlace) {
     this.imagePlace = place;
     try {
@@ -626,7 +1058,7 @@ class Store {
         const path = await api.saveImage(tab.vaultId, dir, name, new Uint8Array(await file.arrayBuffer()));
         links.push(`![](${linkFrom(tab.path, path)})`);
       } catch (e) {
-        this.notify(e);
+        this.fail(e);
       }
     }
     if (!links.length) return null;
@@ -677,7 +1109,7 @@ class Store {
       try {
         content = fillTemplate(await api.noteTemplate(vaultId, template), { titulo: name.replace(/\.md$/i, ''), vault: this.vault(vaultId)?.name ?? '' });
       } catch (e) {
-        return this.notify(e);
+        return this.fail(e);
       }
     }
     await this.createNote(vaultId, dir, name, content);
@@ -691,7 +1123,7 @@ class Store {
       await api.saveNoteTemplate(tab.vaultId, name, tab.content);
       this.notify(tr('templates.saved', { name }));
     } catch (e) {
-      this.notify(e);
+      this.fail(e);
     }
   }
 
@@ -704,6 +1136,8 @@ class Store {
 
   edit(tab: Tab, content: string) {
     if (content === tab.content) return;
+    tab.outside = null;
+    tab.touched = true;
     tab.content = content;
     tab.dirty = true;
     clearTimeout(this.#timers.get(tab.key));
@@ -718,9 +1152,10 @@ class Store {
     try {
       tab.version = await api.write(tab.vaultId, tab.path, text, tab.version);
       tab.dirty = tab.content !== text;
+      delete this.tags[tab.vaultId];
     } catch (e) {
       if (String(e).includes('changed since')) await this.detectConflict(tab);
-      else this.notify(e);
+      else this.fail(e);
     } finally {
       tab.saving = false;
     }
@@ -748,6 +1183,17 @@ class Store {
     tab.revision++;
   }
 
+  /** Ends a conflict with a text put together from both versions. */
+  async resolveConflict(tab: Tab, text: string) {
+    if (!tab.conflict) return;
+    tab.version = tab.conflict.version;
+    tab.conflict = null;
+    tab.content = text;
+    tab.dirty = true;
+    tab.revision++;
+    await this.save(tab);
+  }
+
   /** Keeps the edits in this tab, replacing the version on disk. */
   async keepMine(tab: Tab) {
     if (!tab.conflict) return;
@@ -757,14 +1203,28 @@ class Store {
     await this.save(tab);
   }
 
+  /** Brings back an older version of a note, keeping the one it replaces. */
+  async restoreVersion(tab: Tab, text: string) {
+    await this.save(tab);
+    if (tab.conflict || tab.missing) return;
+    await api.historyKeep(tab.vaultId, tab.path, true).catch(() => false);
+    this.edit(tab, text);
+    tab.revision++;
+    await this.save(tab);
+    this.notify(tr('history.restored'));
+  }
+
   async close(tab: Tab) {
     await this.save(tab);
+    // What was written in this sitting stays as a version.
+    if (tab.touched && !tab.loose && isText(tab.kind) && !tab.conflict && !tab.missing) void api.historyKeep(tab.vaultId, tab.path, false).catch(() => false);
     const name = baseName(tab.path);
     if (tab.conflict && !(await this.confirm(tr('store.closeConflict', { name }), tr('common.close'), true))) return;
     const i = this.tabs.findIndex((t) => t.key === tab.key);
     if (i < 0) return;
     this.tabs.splice(i, 1);
     if (tab.loose) await api.closeLoose(tab.vaultId);
+    if (this.sideKey === tab.key) this.sideKey = null;
     if (this.activeKey === tab.key) this.activeKey = this.tabs[Math.min(i, this.tabs.length - 1)]?.key ?? null;
     this.persist();
   }
@@ -775,9 +1235,12 @@ class Store {
     this.activeKey = this.tabs[(i + step + this.tabs.length) % this.tabs.length].key;
   }
 
-  async onChanged({ vaultId, paths }: { vaultId: string; paths: string[] }) {
+  async onChanged({ vaultId, paths }: { vaultId: string; paths: string[] }, own = this.#ownWrites > 0) {
+    delete this.tags[vaultId];
     const inVault = this.tabs.every((t) => t.vaultId !== vaultId || !t.loose);
     if (inVault) await this.refreshTree(vaultId);
+    if (inVault) void this.loadAliases(vaultId, paths);
+    if (inVault && this.git[vaultId]) this.laterGit(vaultId);
     const known = new Set(this.files(vaultId));
     for (const tab of this.tabs) {
       if (tab.vaultId !== vaultId || !paths.includes(tab.path)) continue;
@@ -793,6 +1256,14 @@ class Store {
       if (tab.dirty) {
         await this.detectConflict(tab);
       } else {
+        if (own) tab.outside = null;
+        else if (tab.kind === 'md') {
+          const before = tab.outside?.before ?? tab.content;
+          const lines = changedLines(before, disk.content);
+          tab.outside = lines.length
+            ? { before, version: disk.version, lines, ai: await this.changedByAi(vaultId, tab.path, disk.version), seen: (tab.outside?.seen ?? 0) + 1 }
+            : null;
+        }
         tab.content = disk.content;
         tab.version = disk.version;
         tab.revision++;
@@ -808,7 +1279,7 @@ class Store {
       await this.refreshTree(vaultId);
       if (open) await this.openFile(vaultId, path);
     } catch (e) {
-      this.notify(e);
+      this.fail(e);
     }
   }
 
@@ -817,7 +1288,7 @@ class Store {
       await api.createDir(vaultId, join(dir, name));
       await this.refreshTree(vaultId);
     } catch (e) {
-      this.notify(e);
+      this.fail(e);
     }
   }
 
@@ -826,10 +1297,12 @@ class Store {
     if (from === to) return;
     await this.saveAll();
     let update;
+    this.#ownWrites++;
     try {
       update = await api.rename(vaultId, from, to);
     } catch (e) {
-      this.notify(e);
+      this.#ownWrites--;
+      this.fail(e);
       return;
     }
     for (const tab of this.tabs) {
@@ -842,14 +1315,22 @@ class Store {
         if (wasActive) this.activeKey = tab.key;
       }
     }
+    this.#repointPlaces(vaultId, from, to);
     // Open tabs of the notes rewritten show the new links.
-    await this.onChanged({ vaultId, paths: update.notes });
+    await this.onChanged({ vaultId, paths: update.notes }, true);
+    this.#ownWrites--;
     this.persist();
     const { links, notes } = update;
     if (links === 0) return;
     const note = baseName(notes[0]).replace(/\.(md|markdown)$/i, '');
     if (notes.length > 1) this.notify(tr('links.updatedMany', { links, notes: notes.length }));
     else this.notify(tr(links === 1 ? 'links.updatedOne' : 'links.updatedNote', { links, note }));
+  }
+
+  /** Asks for the new name of a file or folder and renames it. */
+  async renamePrompt(vaultId: string, path: string) {
+    const name = await this.prompt(tr('sidebar.newName'), baseName(path), tr('common.rename'));
+    if (name?.trim()) await this.renameEntry(vaultId, path, name.trim());
   }
 
   async renameEntry(vaultId: string, path: string, name: string) {
@@ -867,7 +1348,7 @@ class Store {
     try {
       token = await api.trash(vaultId, path);
     } catch (e) {
-      this.notify(e);
+      this.fail(e);
       return;
     }
     const inside = (t: Tab) => t.vaultId === vaultId && (t.path === path || t.path.startsWith(`${path}/`));
@@ -877,16 +1358,22 @@ class Store {
       await this.close(tab);
     }
     await this.refreshTree(vaultId);
+    const places = { recent: this.recent, favorites: this.favorites };
+    this.#repointPlaces(vaultId, path, null);
     let undone = false;
     const undo = async () => {
       undone = true;
       try {
         await api.undoTrash(vaultId, token);
       } catch (e) {
-        this.notify(e);
+        this.fail(e);
         return;
       }
       await this.refreshTree(vaultId);
+      this.recent = places.recent;
+      this.favorites = places.favorites;
+      savePlaces(RECENT_KEY, this.recent);
+      savePlaces(FAVORITES_KEY, this.favorites);
       for (const t of closed) {
         await this.openFile(vaultId, t.path);
         if (this.active) this.active.view = t.view;
@@ -895,29 +1382,31 @@ class Store {
     this.notify(tr('store.trashed', { name: baseName(path).replace(/\.(md|markdown)$/i, '') }), {
       actions: [{ label: tr('common.undo'), run: () => void undo() }],
       onDone: () => {
-        if (!undone) void api.finishTrash(vaultId, token).catch((e) => this.notify(e));
+        if (!undone) void api.finishTrash(vaultId, token).catch((e) => this.fail(e));
       },
     });
   }
 
   persist() {
     try {
-      const open = this.tabs.map(({ vaultId, path, view, loose }) => ({ vaultId, path, view, file: loose?.absolute }));
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ open, active: this.activeKey }));
+      const open = this.tabs.map(({ vaultId, path, view, loose, pinned }) => ({ vaultId, path, view, file: loose?.absolute, pinned: pinned || undefined }));
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ open, active: this.activeKey, side: this.sideKey }));
     } catch {
       // The session is a convenience; the app works without it.
     }
   }
 
   async restore() {
+    const recent = this.recent;
     try {
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) return;
-      const { open, active } = JSON.parse(raw) as {
-        open: { vaultId: string; path: string; view: ViewMode; file?: string }[];
+      const { open, active, side } = JSON.parse(raw) as {
+        open: { vaultId: string; path: string; view: ViewMode; file?: string; pinned?: boolean }[];
         active: string | null;
+        side?: string | null;
       };
-      for (const { vaultId, path, view, file } of open) {
+      for (const { vaultId, path, view, file, pinned } of open) {
         if (file) {
           // A loose file gets a new id each run, and may no longer exist.
           const opened = await api.openPath(file).catch(() => null);
@@ -927,11 +1416,19 @@ class Store {
           if (!this.vault(vaultId)?.open || !this.files(vaultId).includes(path)) continue;
           await this.openFile(vaultId, path);
         }
-        if (this.active) this.active.view = view;
+        if (this.active) {
+          this.active.view = view;
+          this.active.pinned = !!pinned;
+        }
       }
       if (active && this.tabs.some((t) => t.key === active)) this.activeKey = active;
+      if (side && this.tabs.some((t) => t.key === side)) this.sideKey = side;
     } catch {
       // A damaged session only means starting with no tabs.
+    } finally {
+      // Reopening the tabs is not opening notes anew.
+      this.recent = recent;
+      savePlaces(RECENT_KEY, recent);
     }
   }
 }

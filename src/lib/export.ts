@@ -1,4 +1,5 @@
 // Exports use a fixed print look, whatever theme is on screen.
+import { expandEmbeds } from './embeds';
 import { api, type ExportPlan, type PlanSection, type TreeNode } from './api';
 import { hasStyle, parseStyle, withColors } from './diagramStyle';
 import { explainDiagramError } from './diagramErrors';
@@ -40,11 +41,11 @@ export interface ExportOptions {
   template: string | null;
 }
 
-const byName = (a: TreeNode, b: TreeNode) => a.name.localeCompare(b.name, language(), { numeric: true });
-const isNote = (n: TreeNode) => !n.isDir && kindOf(n.path) === 'md';
-const hasNotes = (n: TreeNode): boolean => (n.isDir ? n.children.some(hasNotes) : isNote(n));
+export const byName = (a: TreeNode, b: TreeNode) => a.name.localeCompare(b.name, language(), { numeric: true });
+export const isNote = (n: TreeNode) => !n.isDir && kindOf(n.path) === 'md';
+export const hasNotes = (n: TreeNode): boolean => (n.isDir ? n.children.some(hasNotes) : isNote(n));
 
-function findFolder(nodes: TreeNode[], path: string): TreeNode | null {
+export function findFolder(nodes: TreeNode[], path: string): TreeNode | null {
   for (const node of nodes.filter((n) => n.isDir)) {
     if (node.path === path) return node;
     const found = findFolder(node.children, path);
@@ -58,7 +59,7 @@ export function foldersOf(nodes: TreeNode[]): string[] {
   return nodes.filter((n) => n.isDir && hasNotes(n)).flatMap((n) => [n.path, ...foldersOf(n.children)]);
 }
 
-function rootOf(tab: Tab, options: ExportOptions) {
+export function rootOf(tab: Tab, options: ExportOptions) {
   const tree = store.trees[tab.vaultId] ?? [];
   if (options.scope === 'vault') return { name: store.vault(tab.vaultId)?.name ?? '', children: tree };
   const folder = findFolder(tree, options.folder);
@@ -120,10 +121,13 @@ export function planSections(tab: Tab, options: ExportOptions): PlanSection[] {
 
 const noteSections = (sections: PlanSection[]) => sections.filter((s) => s.kind === 'note');
 
-async function readNotes(tab: Tab, sections: PlanSection[]) {
+export async function readNotes(tab: Tab, sections: PlanSection[]) {
   const notes = new Map<string, string>();
+  const read = store.noteReader(tab.vaultId);
+  const resolve = (target: string, from: string) => store.resolve(tab.vaultId, target, from);
   for (const { path } of noteSections(sections)) {
-    notes.set(path, (await api.read(tab.vaultId, path)).content);
+    // Embedded notes go into the document as their text.
+    notes.set(path, await expandEmbeds((await api.read(tab.vaultId, path)).content, path, resolve, read));
   }
   return notes;
 }
@@ -147,7 +151,7 @@ interface Look {
  * Dark themes draw light text meant for a dark page, so on paper only their
  * shapes and the diagram's own colours carry over.
  */
-function printLook(tab: Tab, note: string, words: string): Look {
+export function printLook(tab: Tab, note: string, words: string): Look {
   const style = parseStyle(words);
   const chosen = hasStyle(style) || frontmatterValue(note, 'tema-diagramas') || store.vaultThemes[tab.vaultId]?.defaultDiagramTheme;
   if (!chosen) return { theme: PRINT_THEME, sketch: false };
@@ -271,7 +275,7 @@ export async function buildPlan(tab: Tab, options: ExportOptions, onProgress?: P
   };
 }
 
-function toBase64(bytes: number[]) {
+export function toBase64(bytes: number[]) {
   let text = '';
   for (let i = 0; i < bytes.length; i += CHUNK) text += String.fromCharCode(...bytes.slice(i, i + CHUNK));
   return btoa(text);
@@ -311,7 +315,7 @@ export async function buildContent(tab: Tab, options: ExportOptions, onProgress?
       continue;
     }
     const part = document.createElement('section');
-    part.append(renderMarkdown(notes.get(section.path) ?? '', { vaultId: tab.vaultId, path: section.path, files: store.files(tab.vaultId) }));
+    part.append(renderMarkdown(notes.get(section.path) ?? '', { vaultId: tab.vaultId, path: section.path, files: store.files(tab.vaultId), aliases: store.aliasMap(tab.vaultId) }));
     for (const el of part.querySelectorAll<HTMLElement>('.diagram')) el.dataset.note = section.path;
     shiftHeadings(part, section.shift);
     root.append(part);

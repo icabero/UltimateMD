@@ -42,10 +42,28 @@ pub struct Registry {
     pub vaults: Vec<Vault>,
 }
 
-/// Config folder, overridable with `ULTIMATEMD_CONFIG_DIR`.
+/// The file that, next to the program, makes a copy portable.
+pub const PORTABLE_MARK: &str = "portable";
+
+/// Where a portable copy keeps everything: `datos` next to the program, when
+/// the `portable` file is there too. The MCP server sits in the same folder,
+/// so it finds the same vaults.
+pub fn portable_dir() -> Option<PathBuf> {
+    portable_dir_beside(std::env::current_exe().ok()?.parent()?)
+}
+
+fn portable_dir_beside(program: &Path) -> Option<PathBuf> {
+    program.join(PORTABLE_MARK).is_file().then(|| program.join("datos"))
+}
+
+/// Config folder: `ULTIMATEMD_CONFIG_DIR` if set, then a portable copy's own
+/// folder, then the user's config folder.
 pub fn config_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("ULTIMATEMD_CONFIG_DIR") {
         return PathBuf::from(dir);
+    }
+    if let Some(dir) = portable_dir() {
+        return dir;
     }
     ProjectDirs::from("dev", "ultimatemd", "UltimateMD")
         .map(|d| d.config_dir().to_path_buf())
@@ -173,6 +191,17 @@ impl Registry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_portable_copy_keeps_its_data_beside_the_program() {
+        let d = tempfile::tempdir().unwrap();
+        assert_eq!(portable_dir_beside(d.path()), None);
+        std::fs::create_dir(d.path().join(PORTABLE_MARK)).unwrap();
+        assert_eq!(portable_dir_beside(d.path()), None, "a folder is not the mark");
+        std::fs::remove_dir(d.path().join(PORTABLE_MARK)).unwrap();
+        std::fs::write(d.path().join(PORTABLE_MARK), "").unwrap();
+        assert_eq!(portable_dir_beside(d.path()), Some(d.path().join("datos")));
+    }
 
     #[test]
     fn add_create_remove_roundtrip() {

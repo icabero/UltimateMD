@@ -5,17 +5,19 @@
   import ExportReview from './ExportReview.svelte';
   import Icon from './Icon.svelte';
   import { api, type TemplateStyle } from '../api';
+  import { exportSite } from '../site';
   import { buildContent, buildPlan, documentCss, exportHtml, foldersOf, levelCount, levelExamples, reviewExport, type ExportOptions, type ExportProblem, type LevelChoice, type Scope } from '../export';
   import { tr, type Key } from '../i18n.svelte';
   import { baseName } from '../paths';
   import { store, type Tab } from '../store.svelte';
 
-  type Format = 'pdf' | 'docx' | 'html';
+  type Format = 'pdf' | 'docx' | 'html' | 'site';
 
   const FORMATS: { id: Format; label: string; hint: Key }[] = [
     { id: 'pdf', label: 'PDF', hint: 'export.pdfHint' },
     { id: 'docx', label: 'Word', hint: 'export.docxHint' },
     { id: 'html', label: 'HTML', hint: 'export.htmlHint' },
+    { id: 'site', label: tr('export.site'), hint: 'export.siteHint' },
   ];
   const STEPS: Key[] = ['export.stepFormat', 'export.stepContent', 'export.stepLook'];
   const CONTENT_STEP = 1;
@@ -137,7 +139,7 @@
     try {
       return await action();
     } catch (e) {
-      store.notify(e);
+      store.fail(e);
     }
   }
 
@@ -146,7 +148,8 @@
     previewing = true;
     previewError = '';
     try {
-      if (format === 'html') {
+      // A site's pages read like the single page, one after another.
+      if (format === 'html' || format === 'site') {
         const article = await buildContent(tab, $state.snapshot(options) as ExportOptions);
         if (id !== run || !htmlHost) return;
         const shadow = htmlHost.shadowRoot ?? htmlHost.attachShadow({ mode: 'open' });
@@ -255,6 +258,7 @@
     const written = await runAction(async () => {
       const current = $state.snapshot(options) as ExportOptions;
       if (format === 'html') return exportHtml(tab, current, onProgress);
+      if (format === 'site') return exportSite(tab, current, onProgress);
       const plan = await buildPlan(tab, current, onProgress);
       progress = null;
       return format === 'docx' ? api.exportDocx(plan) : api.exportPdf(plan);
@@ -342,7 +346,7 @@
             </label>
           {/if}
 
-          {#if scope !== 'note'}
+          {#if scope !== 'note' && format !== 'site'}
             <h3>{tr('export.foldersInDoc')}</h3>
             {#each levels as level, i}
               <div class="level">
@@ -392,7 +396,7 @@
           <!-- eslint-disable-next-line svelte/no-at-html-tags -- our own translation, with markup -->
           <p>{@html tr('export.templateHelp')}</p>
         {:else}
-          <p class="hint">{tr('export.htmlLook')}</p>
+          <p class="hint">{tr(format === 'site' ? 'export.siteLook' : 'export.htmlLook')}</p>
         {/if}
       </div>
 
@@ -416,7 +420,7 @@
       </footer>
     </div>
 
-    <div class="preview" aria-label={tr('export.preview')} aria-busy={previewing}>
+    <div class="preview" role="region" aria-label={tr('export.preview')} aria-busy={previewing}>
       {#if previewError}
         <p class="error" role="alert">{previewError}</p>
       {:else if format === 'pdf'}

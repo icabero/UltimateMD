@@ -42,6 +42,65 @@ export interface HomeInfo {
   recent: { vaultId: string; path: string; modified: number }[];
 }
 
+export interface WatchProblem {
+  vaultId: string;
+  error: string;
+}
+
+/** What the MCP server answered when tried. `failed` names the step that went wrong. */
+export interface McpCheck {
+  ok: boolean;
+  version: string | null;
+  vaults: { name: string; access: McpAccess }[];
+  failed: 'missing' | 'start' | 'silent' | 'answer' | null;
+  error: string | null;
+}
+
+export interface ReplaceOptions {
+  find: string;
+  with: string;
+  matchCase: boolean;
+  wholeWord: boolean;
+  regex: boolean;
+}
+
+/** A note where a replace would change these lines. */
+export interface ReplacePlan {
+  vaultId: string;
+  path: string;
+  version: string;
+  changes: { line: number; before: string; after: string }[];
+}
+
+export interface ReplaceResult {
+  /** `before` is the text to put back to undo; `version` what was written. */
+  replaced: { vaultId: string; path: string; before: string; version: string; lines: number }[];
+  /** Notes that changed after the preview, left alone. */
+  skipped: string[];
+}
+
+/** One thing the AI did through the MCP server. */
+export interface AiEntry {
+  id: string;
+  /** Milliseconds since the epoch. */
+  time: number;
+  tool: string;
+  path: string;
+  /** Where a moved note was. */
+  from: string | null;
+  /** Names the note's text before, for `historyRead`. */
+  before: string | null;
+  after: string | null;
+  undone: boolean;
+}
+
+/** A version the app kept of a note. */
+export interface Snapshot {
+  time: number;
+  blob: string;
+  source: 'edit' | 'before-ai' | 'before-restore';
+}
+
 export interface LinkInfo {
   outgoing: string[];
   unresolved: string[];
@@ -132,6 +191,16 @@ export interface DefaultAppInfo {
   isDefault: boolean;
 }
 
+export interface GitChange {
+  path: string;
+  state: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflict';
+}
+
+export interface GitStatus {
+  branch: string | null;
+  changes: GitChange[];
+}
+
 export const api = {
   listVaults: () => invoke<Vault[]>('list_vaults'),
   createVault: (parent: string, name: string) => invoke<Vault>('create_vault', { parent, name }),
@@ -166,6 +235,31 @@ export const api = {
   /** How many links it changed. */
   repointLink: (id: string, note: string, target: string, to: string) => invoke<number>('repoint_link', { id, note, target, to }),
   openWithSystem: (id: string, path: string) => invoke<void>('open_with_system', { id, path }),
+  replacePreview: (replace: ReplaceOptions) => invoke<ReplacePlan[]>('replace_preview', { replace }),
+  replaceApply: (replace: ReplaceOptions, notes: { vaultId: string; path: string; version: string; lines: number[] }[]) =>
+    invoke<ReplaceResult>('replace_apply', { replace, notes }),
+  /** The vault's tags, the most used first. */
+  tags: (id: string) => invoke<{ tag: string; notes: number }[]>('vault_tags', { id }),
+  aiLog: (id: string) => invoke<AiEntry[]>('ai_log', { id }),
+  aiUndo: (id: string, entry: string) => invoke<void>('ai_undo', { id, entry }),
+  aiWrote: (id: string, path: string, version: string) => invoke<boolean>('ai_wrote', { id, path, version }),
+  historyList: (id: string, path: string) => invoke<Snapshot[]>('history_list', { id, path }),
+  historyRead: (id: string, blob: string) => invoke<string>('history_read', { id, blob }),
+  /** Keeps the note as it is on disk as a version. True if one was kept. */
+  historyKeep: (id: string, path: string, beforeRestore: boolean) => invoke<boolean>('history_keep', { id, path, beforeRestore }),
+  /** Writes an error to the log file. */
+  logError: (source: string, message: string) => invoke<void>('log_error', { source, message }),
+  readLog: () => invoke<string>('read_log'),
+  revealLog: () => invoke<void>('reveal_log'),
+  /** Whether this copy can update itself, rather than through the system's packages. */
+  updateSupported: () => invoke<boolean>('update_supported'),
+  /** Where a portable copy keeps its data, or null when installed. */
+  portableData: () => invoke<string | null>('portable_data'),
+  /** Downloads and installs the newest version, then restarts. Progress comes as `update-progress` events. */
+  updateInstall: () => invoke<void>('update_install'),
+  /** Shows a file or folder in the system's file manager. */
+  revealPath: (id: string, path: string) => invoke<void>('reveal_path', { id, path }),
+  checkMcp: () => invoke<McpCheck>('check_mcp'),
   mcpInfo: () => invoke<{ binary: string; available: boolean }>('mcp_info'),
   openPath: (path: string) => invoke<Opened>('open_path', { path }),
   closeLoose: (id: string) => invoke<void>('close_loose', { id }),
@@ -194,11 +288,30 @@ export const api = {
   saveTemplateCopy: (name: string) => invoke<boolean>('save_template_copy', { name }),
   wordConfig: (id: string) => invoke<WordConfig>('word_config', { id }),
   saveWordSettings: (id: string, settings: WordSettings) => invoke<void>('save_word_settings', { id, settings }),
+  /** What changed since the last commit, or null when the vault is not in a Git repository. */
+  gitStatus: (id: string) => invoke<GitStatus | null>('git_status', { id }),
+  /** A note as it was in the last commit, or null if it was not in it. */
+  gitCommitted: (id: string, path: string) => invoke<string | null>('git_committed', { id, path }),
+  /** Commits every change in the vault and returns the commit's short id. */
+  gitCommit: (id: string, message: string) => invoke<string>('git_commit', { id, message }),
+  /** The other names notes answer to: of the whole vault, or of `paths` only. */
+  aliases: (id: string, paths?: string[]) => invoke<{ path: string; aliases: string[] }[]>('vault_aliases', { id, paths: paths ?? null }),
+  /** The vault's guide for the diagrams an AI draws, or null. */
+  diagramGuide: (id: string) => invoke<string | null>('diagram_guide', { id }),
+  /** Saves the guide; an empty text removes it. */
+  saveDiagramGuide: (id: string, text: string) => invoke<void>('save_diagram_guide', { id, text }),
   chooseVaultTemplate: (id: string) => invoke<boolean>('choose_vault_template', { id }),
   removeVaultTemplate: (id: string) => invoke<void>('remove_vault_template', { id }),
   wordSample: (id: string, settings: WordSettings, markdown: string, picture: number[]) => invoke<number[]>('word_sample', { id, settings, markdown, picture }),
+  /** Tells the system spell checker which dictionaries to use, where it needs telling. */
+  /** Vaults whose changes on disk are not followed, and why. */
+  watchProblems: () => invoke<WatchProblem[]>('watch_problems'),
+  setSpellcheck: (languages: string[]) => invoke<void>('set_spellcheck', { languages }),
   installerLanguage: () => invoke<string | null>('installer_language'),
   exportFile: (name: string, data: Uint8Array) => invoke<string | null>('export_file', { name, data: Array.from(data) }),
+  /** Writes a static site in a new folder where the user picks, and returns its index page. */
+  exportSite: (id: string, name: string, pages: { path: string; html: string }[], assets: string[]) =>
+    invoke<string | null>('export_site', { id, name, pages, assets }),
 };
 
 /** URL of a vault file, served by the app's `umd` protocol. */

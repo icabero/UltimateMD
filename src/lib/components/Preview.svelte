@@ -4,6 +4,8 @@
   import { api, fileUrl } from '../api';
   import { parseStyle } from '../diagramStyle';
   import { diagramErrorBox, explainDiagramError } from '../diagramErrors';
+  import { aiImages, redrawPrompt } from '../diagramGuide';
+  import { fillEmbeds } from '../embeds';
   import { renderDiagram, toPng, toSvgBytes } from '../diagrams';
   import { findTerms } from '../fold';
   import { tr } from '../i18n.svelte';
@@ -13,6 +15,17 @@
   import previewCss from '../preview.css?inline';
 
   let { tab }: { tab: Tab } = $props();
+
+  /** An image an AI drew can be asked for again, following the vault's guide. */
+  function imageMenu(e: MouseEvent) {
+    const image = e.composedPath().find((n): n is HTMLImageElement => n instanceof HTMLImageElement);
+    const path = image?.dataset.path;
+    const shows = path ? aiImages(tab.path, tab.content).get(path) : undefined;
+    if (!path || shows === undefined) return;
+    store.openMenu(e, [
+      { label: tr('guide.copyRedraw'), icon: 'copy', run: () => void store.copyText(redrawPrompt(tab.path, path, shows), tr('guide.copied')) },
+    ]);
+  }
 
   const DELAY = 150;
   let host = $state<HTMLDivElement>();
@@ -47,9 +60,37 @@
     return b;
   }
 
+  /** Each code block names its language and can be copied with one click. Only on screen, never in an export. */
+  function codeTools() {
+    for (const pre of body.querySelectorAll<HTMLElement>('pre:not(.frontmatter)')) {
+      const code = pre.querySelector('code');
+      if (!code || pre.closest('.diagram, .diagram-error')) continue;
+      const lang = pre.dataset.lang ?? /language-(\S+)/.exec(code.className)?.[1] ?? '';
+      const tools = document.createElement('div');
+      tools.className = 'code-tools';
+      if (lang) {
+        const name = document.createElement('span');
+        name.textContent = lang;
+        tools.append(name);
+      }
+      const copy = exportButton(tr('common.copy'), () => {
+        void navigator.clipboard.writeText(code.textContent ?? '').then(() => {
+          copy.textContent = tr('common.copied');
+          setTimeout(() => (copy.textContent = tr('common.copy')), 1500);
+        });
+      });
+      tools.append(copy);
+      pre.classList.add('with-tools');
+      pre.prepend(tools);
+    }
+  }
+
   async function hydrate(id: number) {
     const blocks = [...body.querySelectorAll<HTMLElement>('.diagram')];
-    await Promise.all(blocks.map(async (el, index) => {
+    // Diagrams of embedded notes are drawn, but belong to their own notes.
+    const own = blocks.filter((el) => !el.closest('.note-embed'));
+    await Promise.all(blocks.map(async (el) => {
+      const index = own.indexOf(el);
       const src = decodeURIComponent(el.dataset.src ?? '');
       try {
         const style = parseStyle(el.dataset.style ?? '');
@@ -68,18 +109,15 @@
       } catch (e) {
         if (id !== run) return;
         const problem = explainDiagramError(el.dataset.lang!, src, e);
-        el.replaceChildren(diagramErrorBox(problem, tab.kind === 'md' ? () => store.openDiagram(tab, index) : undefined));
+        el.replaceChildren(diagramErrorBox(problem, tab.kind === 'md' && index >= 0 ? () => store.openDiagram(tab, index) : undefined));
       }
     }));
   }
 
   function render() {
     const id = ++run;
-    const fragment = renderMarkdown(tab.content, {
-      vaultId: tab.vaultId,
-      path: tab.path,
-      files: store.files(tab.vaultId),
-    });
+    const context = { vaultId: tab.vaultId, path: tab.path, files: store.files(tab.vaultId), aliases: store.aliasMap(tab.vaultId) };
+    const fragment = renderMarkdown(tab.content, context);
     // Diagrams already drawn stay on screen until their source really changes.
     const look = store.diagramLook(tab);
     const lookKey = `${look.sketch}:${themeKey(look.theme)}`;
@@ -92,13 +130,37 @@
     }
     if ('highlights' in CSS) CSS.highlights.delete(FOUND);
     body.replaceChildren(fragment);
+    markOutside();
+    codeTools();
     rendered = true;
     reveal();
     publishPosition();
-    void hydrate(id);
+    void fillEmbeds(body, context, store.noteReader(tab.vaultId)).then(() => {
+      if (id === run) void hydrate(id);
+    });
   }
 
-  const headings = () => [...body.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')];
+  let markedSeen = 0;
+
+  /** Briefly marks the blocks changed outside the app, once per change. */
+  function markOutside() {
+    const change = tab.outside;
+    if (!change || change.seen === markedSeen) return;
+    markedSeen = change.seen;
+    const lines = new Set(change.lines);
+    for (const el of body.querySelectorAll<HTMLElement>(':scope > [data-lines]')) {
+      const [from, to] = el.dataset.lines!.split('-').map(Number);
+      for (let line = from; line <= to; line++) {
+        if (lines.has(line)) {
+          el.classList.add('outside-change');
+          break;
+        }
+      }
+    }
+  }
+
+  // The note's own headings: an embedded note's belong to it.
+  const headings = () => [...body.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')].filter((h) => !h.closest('.note-embed'));
 
   let parsed = { content: '', headings: [] as Heading[] };
   let frame = 0;
@@ -171,6 +233,7 @@
       root.getElementById(decodeURIComponent(href.slice(1)))?.scrollIntoView();
       return;
     }
+    if (a.dataset.tag) return store.searchTag(a.dataset.tag);
     if (a.dataset.note) return store.openNoteAt(tab.vaultId, a.dataset.note, a.dataset.anchor);
     if (a.dataset.external && /^(https?|mailto):/i.test(a.dataset.external)) return openUrl(a.dataset.external);
     if (a.dataset.wikilink !== undefined) await store.followLink(tab, a.dataset.wikilink, a.dataset.anchor);
@@ -186,6 +249,7 @@
     body.className = 'prose';
     root.append(style, body);
     body.addEventListener('click', onClick);
+    body.addEventListener('contextmenu', imageMenu);
   });
 
   $effect(() => {

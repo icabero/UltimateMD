@@ -429,7 +429,7 @@
     </footer>
   </div>
 
-  <div class="preview" aria-label={tr('export.preview')}>
+  <div class="preview" role="region" aria-label={tr('export.preview')}>
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- renderDiagram sanitizes the SVG -->
     <div class="drawing" class:animated={!!style.animated}>{@html svg}</div>
     {#if error}

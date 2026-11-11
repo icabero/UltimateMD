@@ -28,8 +28,11 @@ export function resolveRelative(dir: string, ref: string): string | null {
   return parts.join('/');
 }
 
-/** Same resolution order as the core crate: sibling, vault root, then by name. */
-export function resolveLink(target: string, from: string, files: string[]): string | null {
+/**
+ * Same resolution order as the core crate: sibling, vault root, by name, and
+ * last by an alias from `aliases:`, keyed in lower case.
+ */
+export function resolveLink(target: string, from: string, files: string[], aliases?: Map<string, string>): string | null {
   const clean = target.replace(/^\.?\//, '').toLowerCase();
   const bare = (s: string) => s.replace(/\.md$/i, '').toLowerCase();
   const wanted = bare(clean);
@@ -40,6 +43,7 @@ export function resolveLink(target: string, from: string, files: string[]): stri
     files.find((f) => matches(f, sibling)) ??
     files.find((f) => matches(f, wanted)) ??
     files.find((f) => baseName(f).toLowerCase() === clean || stem(f).toLowerCase() === wanted) ??
+    aliases?.get(target.trim().toLowerCase()) ??
     null
   );
 }
