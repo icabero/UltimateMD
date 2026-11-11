@@ -416,7 +416,7 @@
       </footer>
     </div>
 
-    <div class="preview" aria-label={tr('export.preview')} aria-busy={previewing}>
+    <div class="preview" role="region" aria-label={tr('export.preview')} aria-busy={previewing}>
       {#if previewError}
         <p class="error" role="alert">{previewError}</p>
       {:else if format === 'pdf'}

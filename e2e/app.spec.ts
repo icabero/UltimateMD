@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { parseSource, toSource, type Diagram, type Engine } from '../src/lib/diagramBuilder';
 import { fenceLine, parseStyle } from '../src/lib/diagramStyle';
@@ -997,7 +998,7 @@ async function onPlatform(page: Page, platform: 'Win32' | 'MacIntel') {
 
 test('on Windows and Linux the app draws the window buttons and saves before closing', async ({ page }) => {
   await onPlatform(page, 'Win32');
-  const controls = page.getByRole('group', { name: 'Ventana' });
+  const controls = page.getByRole('region', { name: 'Ventana' });
   await expect(controls.getByRole('button')).toHaveCount(3);
   await controls.getByTitle('Minimizar la ventana').click();
   await controls.getByTitle('Maximizar la ventana').click();
@@ -2596,4 +2597,46 @@ test('a vault with 10 000 notes opens and its tree stays quick', async ({ page }
   expect(opened).toBeLessThan(10_000);
   expect(flat).toBeLessThan(5_000);
   expect(note).toBeLessThan(3_000);
+});
+
+// What axe can find on its own (#92). A note's own content is left out: it
+// is the user's, and the preview keeps it in a shadow root of its own.
+test('the main screens pass an accessibility check', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const check = async (screen: string, skip: string[] = []) => {
+    const result = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'])
+      .exclude('.scroll > div')
+      // The page's main heading is the note's own, inside what is left out.
+      .disableRules(['page-has-heading-one', ...skip])
+      .analyze();
+    const found = result.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+    expect(found, screen).toEqual([]);
+  };
+  await check('welcome');
+  await open(page, 'Inicio');
+  await expect(page.locator('.cm-content')).toHaveAttribute('aria-label', 'Texto de «Inicio.md»');
+  await check('note');
+  await page.keyboard.press('Control+Shift+p');
+  await expect(palette(page)).toBeVisible();
+  await check('palette');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+Shift+f');
+  await page.getByPlaceholder('Buscar en los vaults abiertos').fill('Destino');
+  await expect(page.locator('aside')).toContainText('Ver [[Destino]]');
+  await check('search');
+  await page.keyboard.press('Escape');
+  await page.getByTitle('Ajustes y MCP').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await check('settings');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+e');
+  await expect(page.getByRole('dialog', { name: 'Exportar' })).toBeVisible();
+  await check('export');
+  await page.keyboard.press('Escape');
+  await page.locator('main [role=tab]').first().click({ button: 'right' });
+  await expect(page.getByRole('menu')).toBeVisible();
+  // A popup menu floats over the page, outside its landmarks, as ARIA expects.
+  await check('menu', ['region']);
 });

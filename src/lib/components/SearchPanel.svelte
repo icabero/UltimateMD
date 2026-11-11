@@ -145,7 +145,7 @@
   button:hover { background: var(--hover); }
   .name { flex-direction: column; padding: var(--space-1-5) var(--space-2) var(--space-1); }
   .title { overflow: hidden; font-size: var(--font-md); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
-  .where { overflow: hidden; color: var(--text-3); font-size: var(--font-xs); white-space: nowrap; text-overflow: ellipsis; }
+  .where { overflow: hidden; color: var(--text-2); font-size: var(--font-xs); white-space: nowrap; text-overflow: ellipsis; }
   .line { gap: var(--space-2); padding: var(--space-1) var(--space-2); }
   .n { flex: none; min-width: 2.2em; color: var(--text-3); font-size: var(--font-xs); font-variant-numeric: tabular-nums; line-height: 1.6; text-align: right; }
   .text { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: var(--font-sm); line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }

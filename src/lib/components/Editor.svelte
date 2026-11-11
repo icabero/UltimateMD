@@ -20,6 +20,7 @@
   import { fenceAt, insertBlock, insertLink, wrap } from '../formatting';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
+  import { baseName } from '../paths';
   import { frontmatterChange, frontmatterValue } from '../themes';
   import { EDIT_DIAGRAM, visualMode } from '../visual';
   import { headingCompletions, linkAt, noteCompletions, wikilinks } from '../wikilinks';
@@ -187,6 +188,8 @@
       extensions: [
         lineNumbers(), history(), drawSelection(), highlightActiveLine(), indentOnInput(), bracketMatching(),
         highlightSelectionMatches(), search({ top: true }),
+        // Screen readers announce the text box by the note it holds.
+        EditorView.contentAttributes.of({ 'aria-label': tr('editor.label', { name: baseName(current.path) }) }),
         keymap.of([...shortcuts, indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
         syntaxHighlighting(highlight), baseTheme, EditorView.lineWrapping,
         language.of(languageFor(current.kind)),

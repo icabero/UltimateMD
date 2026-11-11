@@ -703,6 +703,7 @@ export const en: Record<Key, string> = {
   'toolbar.noteLink': 'Link note',
   'toolbar.style': 'Style',
   'toolbar.styleTitle': 'Diagram style',
+  'editor.label': 'Text of “{name}”',
   'editor.followLink': 'Ctrl+click to open',
   'builder.rawHint': 'This diagram is hand-written. Change its code here and see the result as you type.',
   'builder.state': 'States',

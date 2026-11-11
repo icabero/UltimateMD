@@ -702,6 +702,7 @@ export const es = {
   'toolbar.noteLink': 'Enlazar nota',
   'toolbar.style': 'Estilo',
   'toolbar.styleTitle': 'Estilo de los diagramas',
+  'editor.label': 'Texto de «{name}»',
   'editor.followLink': 'Ctrl+clic para abrir',
   'builder.rawHint': 'Este diagrama está escrito a mano. Cambia su código aquí y verás el resultado al momento.',
   'builder.state': 'Estados',

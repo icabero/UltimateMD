@@ -163,7 +163,7 @@
     {/if}
   </div>
 
-  <div class="preview" aria-label={tr('word.sampleTitle')} aria-busy={busy}>
+  <div class="preview" role="region" aria-label={tr('word.sampleTitle')} aria-busy={busy}>
     <p class="note">{tr('word.sampleNote')}</p>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     <DocxSheet bind:this={sheet} />
