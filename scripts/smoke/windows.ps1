@@ -27,6 +27,19 @@ if ($Bundles) {
   # /D must come last and without quotes.
   Start-Process $setup.FullName -ArgumentList '/S', "/D=$nsis" -Wait
   $null = Assert-Installed $nsis
+
+  # An AI client keeps the MCP server running: installing again must still work.
+  $busy = [System.Diagnostics.ProcessStartInfo]::new("$nsis\ultimatemd-mcp.exe")
+  $busy.UseShellExecute = $false
+  $busy.RedirectStandardInput = $true
+  $server = [System.Diagnostics.Process]::Start($busy)
+  Start-Sleep -Seconds 2
+  if ($server.HasExited) { throw 'The MCP server did not stay running for the check' }
+  Start-Process $setup.FullName -ArgumentList '/S', "/D=$nsis" -Wait
+  if (-not $server.WaitForExit(5000)) { throw 'The installer left the MCP server running' }
+  $null = Assert-Installed $nsis
+  Write-Host 'ok: installing over a running MCP server closes it and works'
+
   Start-Process "$nsis\uninstall.exe" -ArgumentList '/S' -Wait
   # The uninstaller hands over to a copy of itself and returns at once.
   Start-Sleep -Seconds 10
