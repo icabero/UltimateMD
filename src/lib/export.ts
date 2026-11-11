@@ -1,4 +1,5 @@
 // Exports use a fixed print look, whatever theme is on screen.
+import { expandEmbeds } from './embeds';
 import { api, type ExportPlan, type PlanSection, type TreeNode } from './api';
 import { hasStyle, parseStyle, withColors } from './diagramStyle';
 import { explainDiagramError } from './diagramErrors';
@@ -122,8 +123,11 @@ const noteSections = (sections: PlanSection[]) => sections.filter((s) => s.kind 
 
 async function readNotes(tab: Tab, sections: PlanSection[]) {
   const notes = new Map<string, string>();
+  const read = store.noteReader(tab.vaultId);
+  const resolve = (target: string, from: string) => store.resolve(tab.vaultId, target, from);
   for (const { path } of noteSections(sections)) {
-    notes.set(path, (await api.read(tab.vaultId, path)).content);
+    // Embedded notes go into the document as their text.
+    notes.set(path, await expandEmbeds((await api.read(tab.vaultId, path)).content, path, resolve, read));
   }
   return notes;
 }
@@ -311,7 +315,7 @@ export async function buildContent(tab: Tab, options: ExportOptions, onProgress?
       continue;
     }
     const part = document.createElement('section');
-    part.append(renderMarkdown(notes.get(section.path) ?? '', { vaultId: tab.vaultId, path: section.path, files: store.files(tab.vaultId) }));
+    part.append(renderMarkdown(notes.get(section.path) ?? '', { vaultId: tab.vaultId, path: section.path, files: store.files(tab.vaultId), aliases: store.aliasMap(tab.vaultId) }));
     for (const el of part.querySelectorAll<HTMLElement>('.diagram')) el.dataset.note = section.path;
     shiftHeadings(part, section.shift);
     root.append(part);

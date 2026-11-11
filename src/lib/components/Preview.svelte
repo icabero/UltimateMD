@@ -5,6 +5,7 @@
   import { parseStyle } from '../diagramStyle';
   import { diagramErrorBox, explainDiagramError } from '../diagramErrors';
   import { aiImages, redrawPrompt } from '../diagramGuide';
+  import { fillEmbeds } from '../embeds';
   import { renderDiagram, toPng, toSvgBytes } from '../diagrams';
   import { findTerms } from '../fold';
   import { tr } from '../i18n.svelte';
@@ -86,7 +87,10 @@
 
   async function hydrate(id: number) {
     const blocks = [...body.querySelectorAll<HTMLElement>('.diagram')];
-    await Promise.all(blocks.map(async (el, index) => {
+    // Diagrams of embedded notes are drawn, but belong to their own notes.
+    const own = blocks.filter((el) => !el.closest('.note-embed'));
+    await Promise.all(blocks.map(async (el) => {
+      const index = own.indexOf(el);
       const src = decodeURIComponent(el.dataset.src ?? '');
       try {
         const style = parseStyle(el.dataset.style ?? '');
@@ -105,18 +109,15 @@
       } catch (e) {
         if (id !== run) return;
         const problem = explainDiagramError(el.dataset.lang!, src, e);
-        el.replaceChildren(diagramErrorBox(problem, tab.kind === 'md' ? () => store.openDiagram(tab, index) : undefined));
+        el.replaceChildren(diagramErrorBox(problem, tab.kind === 'md' && index >= 0 ? () => store.openDiagram(tab, index) : undefined));
       }
     }));
   }
 
   function render() {
     const id = ++run;
-    const fragment = renderMarkdown(tab.content, {
-      vaultId: tab.vaultId,
-      path: tab.path,
-      files: store.files(tab.vaultId),
-    });
+    const context = { vaultId: tab.vaultId, path: tab.path, files: store.files(tab.vaultId), aliases: store.aliasMap(tab.vaultId) };
+    const fragment = renderMarkdown(tab.content, context);
     // Diagrams already drawn stay on screen until their source really changes.
     const look = store.diagramLook(tab);
     const lookKey = `${look.sketch}:${themeKey(look.theme)}`;
@@ -134,7 +135,9 @@
     rendered = true;
     reveal();
     publishPosition();
-    void hydrate(id);
+    void fillEmbeds(body, context, store.noteReader(tab.vaultId)).then(() => {
+      if (id === run) void hydrate(id);
+    });
   }
 
   let markedSeen = 0;
@@ -156,7 +159,8 @@
     }
   }
 
-  const headings = () => [...body.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')];
+  // The note's own headings: an embedded note's belong to it.
+  const headings = () => [...body.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')].filter((h) => !h.closest('.note-embed'));
 
   let parsed = { content: '', headings: [] as Heading[] };
   let frame = 0;

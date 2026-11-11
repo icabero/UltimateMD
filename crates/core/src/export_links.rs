@@ -9,6 +9,7 @@
 //! those names, which [`internal`] recognises.
 
 use crate::docx::{Section, normalize_wikilinks, split_frontmatter};
+use crate::links::Index;
 use crate::search::fold;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use regex::{Captures, Regex};
@@ -80,13 +81,22 @@ pub fn bodies(sections: &[Section], language: &str) -> Vec<String> {
         })
         .collect();
     let paths: Vec<String> = notes.iter().flatten().map(|n| n.path.clone()).collect();
+    let aliases: Vec<(String, String)> = sections
+        .iter()
+        .filter_map(|s| match s {
+            Section::Note { path, markdown, .. } => Some((path, markdown)),
+            Section::Heading { .. } => None,
+        })
+        .flat_map(|(path, markdown)| crate::aliases::parse(markdown).into_iter().map(move |a| (a, path.clone())))
+        .collect();
+    let resolver = Index::new(&paths).with_aliases(aliases.iter().map(|(a, n)| (a.as_str(), n.as_str())));
     cleaned
         .iter()
         .enumerate()
         .map(|(index, body)| match body {
             Some(body) => {
                 let from = notes[index].as_ref().map_or("", |n| n.path.as_str());
-                finish(&rewrite(body, index, from, &notes, &paths), language)
+                finish(&rewrite(body, index, from, &notes, &paths, &resolver), language)
             }
             None => String::new(),
         })
@@ -144,7 +154,14 @@ fn section_of(notes: &[Option<Prepared>], path: &str) -> Option<usize> {
     notes.iter().position(|n| n.as_ref().is_some_and(|n| n.path == path))
 }
 
-fn rewrite(body: &str, index: usize, from: &str, notes: &[Option<Prepared>], paths: &[String]) -> String {
+fn rewrite(
+    body: &str,
+    index: usize,
+    from: &str,
+    notes: &[Option<Prepared>],
+    paths: &[String],
+    resolver: &Index,
+) -> String {
     outside_code(body, |text| {
         let wiki = WIKI.replace_all(text, |c: &Captures| {
             if !c[1].is_empty() {
@@ -158,7 +175,7 @@ fn rewrite(body: &str, index: usize, from: &str, notes: &[Option<Prepared>], pat
             let section = if name.is_empty() {
                 Some(index)
             } else {
-                crate::links::resolve(name, from, paths).and_then(|p| section_of(notes, p))
+                resolver.resolve(name, from).and_then(|p| section_of(notes, p))
             };
             match section.and_then(|s| locate(notes, s, fragment)) {
                 Some((anchor, title)) => {
@@ -184,7 +201,7 @@ fn rewrite(body: &str, index: usize, from: &str, notes: &[Option<Prepared>], pat
                     let file = file.replace("%20", " ");
                     crate::paths::join_relative(from, &file)
                         .filter(|p| paths.contains(p))
-                        .or_else(|| crate::links::resolve(&file, from, paths).cloned())
+                        .or_else(|| resolver.resolve(&file, from).cloned())
                         .and_then(|p| section_of(notes, &p))
                 };
                 match section.and_then(|s| locate(notes, s, fragment)) {
@@ -251,6 +268,12 @@ mod tests {
         assert_eq!(out[0], "");
         assert_eq!(out[1], "# Primera\n\nVer [El plan](#umd2), [Riesgos del plan](#umd2_1), [aquí](#umd2) y fuera.\n");
         assert_eq!(out[2], "# Dos\n\n## Riesgos del plan\n\n[atrás](#umd1) [arriba](#umd2_0) `[[dos]]`\n");
+    }
+
+    #[test]
+    fn a_link_by_alias_jumps_too() {
+        let sections = [note("a.md", "Ver [[Portada]].\n"), note("b.md", "---\naliases: [Portada]\n---\n# Inicio\n")];
+        assert_eq!(bodies(&sections, "es")[0], "Ver [Inicio](#umd1).\n");
     }
 
     #[test]

@@ -278,6 +278,8 @@ export const api = {
   saveTemplateCopy: (name: string) => invoke<boolean>('save_template_copy', { name }),
   wordConfig: (id: string) => invoke<WordConfig>('word_config', { id }),
   saveWordSettings: (id: string, settings: WordSettings) => invoke<void>('save_word_settings', { id, settings }),
+  /** The other names notes answer to: of the whole vault, or of `paths` only. */
+  aliases: (id: string, paths?: string[]) => invoke<{ path: string; aliases: string[] }[]>('vault_aliases', { id, paths: paths ?? null }),
   /** The vault's guide for the diagrams an AI draws, or null. */
   diagramGuide: (id: string) => invoke<string | null>('diagram_guide', { id }),
   /** Saves the guide; an empty text removes it. */

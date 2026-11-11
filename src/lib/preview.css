@@ -85,3 +85,7 @@ hr::after { content: '\00b7\2002\00b7\2002\00b7'; font-size: 1.3em; letter-spaci
 .hljs-deletion { color: var(--danger); }
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: 700; }
+.note-embed.filled { display: block; margin: 1em 0; padding: .4em 1em .6em; border-left: 3px solid var(--line); border-radius: 4px; background: color-mix(in srgb, var(--text) 3%, transparent); }
+.note-embed .embed-source { display: inline-block; margin-bottom: .2em; color: var(--text-2); font: 600 .78em/1.4 var(--sans); text-decoration: none; }
+.note-embed .embed-body > :first-child { margin-top: .3em; }
+.note-embed .embed-body > :last-child { margin-bottom: 0; }

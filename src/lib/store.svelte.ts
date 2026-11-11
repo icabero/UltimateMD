@@ -255,6 +255,8 @@ function imageName(file: File) {
 class Store {
   vaults = $state<Vault[]>([]);
   trees = $state<Record<string, TreeNode[]>>({});
+  /** Each vault's notes that declare `aliases:`, by path. */
+  aliases = $state<Record<string, Record<string, string[]>>>({});
   tabs = $state<Tab[]>([]);
   activeKey = $state<string | null>(null);
   toast = $state<Toast | null>(null);
@@ -376,7 +378,7 @@ class Store {
   async followLink(tab: Tab, name: string, anchor?: string | null) {
     const target = name.trim();
     if (!target) return this.goToAnchor(tab.vaultId, tab.path, anchor);
-    const path = resolveLink(target, tab.path, this.files(tab.vaultId));
+    const path = this.resolve(tab.vaultId, target, tab.path);
     if (path) return this.openNoteAt(tab.vaultId, path, anchor);
     if (await this.confirm(tr('preview.createMissing', { name: target }), tr('common.create'))) await this.createNote(tab.vaultId, dirName(tab.path), target);
   }
@@ -597,6 +599,43 @@ class Store {
     return flatten(this.trees[vaultId] ?? []);
   }
 
+  /** A vault's aliases in lower case, each to its note: the first note wins, as in the core. */
+  aliasMap(vaultId: string) {
+    // Built anew from the reactive aliases each time, so it needs no reactivity of its own.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const map = new Map<string, string>();
+    for (const [path, names] of Object.entries(this.aliases[vaultId] ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))) {
+      for (const name of names) if (!map.has(name.toLowerCase())) map.set(name.toLowerCase(), path);
+    }
+    return map;
+  }
+
+  /** Reads a vault's notes as they are now: an open tab's text, unsaved or not, or the file. */
+  noteReader(vaultId: string) {
+    return async (path: string) =>
+      this.tabs.find((t) => t.vaultId === vaultId && t.path === path)?.content ??
+      (await api.read(vaultId, path).catch(() => null))?.content ??
+      null;
+  }
+
+  /** Where a link written in a note leads, aliases included. */
+  resolve(vaultId: string, target: string, from: string) {
+    return resolveLink(target, from, this.files(vaultId), this.aliasMap(vaultId));
+  }
+
+  /** Reads the aliases of a whole vault, or again of the notes that changed. */
+  async loadAliases(vaultId: string, paths?: string[]) {
+    try {
+      const found = await api.aliases(vaultId, paths);
+      const next = paths ? { ...(this.aliases[vaultId] ?? {}) } : {};
+      for (const path of paths ?? []) delete next[path];
+      for (const note of found) next[note.path] = note.aliases;
+      this.aliases[vaultId] = next;
+    } catch {
+      // Links by alias stay unresolved until the next change.
+    }
+  }
+
   notify(message: unknown, options: { actions?: ToastAction[]; details?: string; onDone?: () => void } = {}) {
     const text = String(message);
     const firstLine = text.split(/\r?\n/)[0];
@@ -783,7 +822,7 @@ class Store {
 
   async loadVaults() {
     this.vaults = await api.listVaults();
-    await Promise.all(this.openVaults.flatMap((v) => [this.refreshTree(v.id), this.loadVaultThemes(v.id)]));
+    await Promise.all(this.openVaults.flatMap((v) => [this.refreshTree(v.id), this.loadVaultThemes(v.id), this.loadAliases(v.id)]));
   }
 
   async refreshTree(id: string) {
@@ -1175,6 +1214,7 @@ class Store {
     delete this.tags[vaultId];
     const inVault = this.tabs.every((t) => t.vaultId !== vaultId || !t.loose);
     if (inVault) await this.refreshTree(vaultId);
+    if (inVault) void this.loadAliases(vaultId, paths);
     const known = new Set(this.files(vaultId));
     for (const tab of this.tabs) {
       if (tab.vaultId !== vaultId || !paths.includes(tab.path)) continue;

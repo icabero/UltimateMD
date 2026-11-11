@@ -128,6 +128,7 @@ pub struct Index<'a> {
     notes: &'a [String],
     by_path: HashMap<String, usize>,
     by_name: HashMap<String, usize>,
+    by_alias: HashMap<String, usize>,
 }
 
 impl<'a> Index<'a> {
@@ -139,7 +140,19 @@ impl<'a> Index<'a> {
             by_path.entry(without.to_ascii_lowercase()).or_insert(i);
             by_name.entry(stem(note).to_ascii_lowercase()).or_insert(i);
         }
-        Self { notes, by_path, by_name }
+        Self { notes, by_path, by_name, by_alias: HashMap::new() }
+    }
+
+    /// Adds the other names notes answer to, as `(alias, note)`. They count
+    /// only when no note has that path or name, as in Obsidian.
+    pub fn with_aliases<'b>(mut self, aliases: impl IntoIterator<Item = (&'b str, &'b str)>) -> Self {
+        let place: HashMap<&str, usize> = self.notes.iter().enumerate().map(|(i, n)| (n.as_str(), i)).collect();
+        for (alias, note) in aliases {
+            if let Some(&i) = place.get(note) {
+                self.by_alias.entry(alias.trim().to_lowercase()).or_insert(i);
+            }
+        }
+        self
     }
 
     pub fn resolve(&self, target: &str, from: &str) -> Option<&'a String> {
@@ -150,8 +163,23 @@ impl<'a> Index<'a> {
             dir => format!("{}/{without_ext}", dir.to_ascii_lowercase()),
         };
         let found = self.by_path.get(&sibling).or_else(|| self.by_path.get(&without_ext));
-        found.or_else(|| self.by_name.get(&without_ext)).map(|&i| &self.notes[i])
+        let found = found.or_else(|| self.by_name.get(&without_ext));
+        found.or_else(|| self.by_alias.get(&target.trim().to_lowercase())).map(|&i| &self.notes[i])
     }
+}
+
+/// Every note of a listing, read once, for the scans that need them all.
+fn read_all(listing: &crate::Listing) -> Vec<crate::Note> {
+    listing.paths().iter().filter_map(|p| listing.read(p).ok()).collect()
+}
+
+/// The aliases every note declares, as `(alias, note)`.
+fn aliases_of(notes: &[crate::Note]) -> Vec<(String, String)> {
+    notes.iter().flat_map(|n| crate::aliases::parse(&n.content).into_iter().map(|a| (a, n.path.clone()))).collect()
+}
+
+fn pairs(aliases: &[(String, String)]) -> impl Iterator<Item = (&str, &str)> {
+    aliases.iter().map(|(a, n)| (a.as_str(), n.as_str()))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -167,7 +195,9 @@ pub fn info(vault: &VaultFs, path: &str) -> Result<LinkInfo> {
     let path = crate::paths::normalize(path)?;
     let listing = vault.listing()?;
     let notes = listing.paths();
-    let index = Index::new(notes);
+    let all = read_all(&listing);
+    let aliases = aliases_of(&all);
+    let index = Index::new(notes).with_aliases(pairs(&aliases));
     let (mut outgoing, mut unresolved) = (Vec::new(), Vec::new());
     for target in extract(&vault.read(&path)?.content) {
         match index.resolve(&target, &path) {
@@ -178,11 +208,10 @@ pub fn info(vault: &VaultFs, path: &str) -> Result<LinkInfo> {
         }
     }
     let mut backlinks = Vec::new();
-    for note in notes.iter().filter(|n| **n != path) {
-        let Ok(other) = listing.read(note) else { continue };
-        let links_here = extract(&other.content).iter().any(|t| index.resolve(t, note) == Some(&path));
+    for other in all.iter().filter(|n| n.path != path) {
+        let links_here = extract(&other.content).iter().any(|t| index.resolve(t, &other.path) == Some(&path));
         if links_here {
-            backlinks.push(note.clone());
+            backlinks.push(other.path.clone());
         }
     }
     Ok(LinkInfo { outgoing, unresolved, backlinks })
@@ -334,10 +363,21 @@ fn plan_move(vault: &VaultFs, from: &str, to: &str) -> Result<Vec<Rewrite>> {
     let listing = vault.listing()?;
     let before = listing.paths();
     let after: Vec<String> = before.iter().map(|n| moved(n, from, to).unwrap_or_else(|| n.clone())).collect();
-    let places = Places { vault, from, to, before: Index::new(before), after: Index::new(&after) };
+    let all = read_all(&listing);
+    // An alias goes with its note, so a link written with one keeps working.
+    let aliases = aliases_of(&all);
+    let moved_aliases: Vec<(String, String)> =
+        aliases.iter().map(|(a, n)| (a.clone(), moved(n, from, to).unwrap_or_else(|| n.clone()))).collect();
+    let places = Places {
+        vault,
+        from,
+        to,
+        before: Index::new(before).with_aliases(pairs(&aliases)),
+        after: Index::new(&after).with_aliases(pairs(&moved_aliases)),
+    };
     let mut plan = Vec::new();
-    for note in before {
-        let Ok(read) = listing.read(note) else { continue };
+    for read in &all {
+        let note = &read.path;
         let here = places.after_move(note);
         let mut content = String::with_capacity(read.content.len());
         let (mut at, mut links) = (0, 0);
@@ -352,7 +392,7 @@ fn plan_move(vault: &VaultFs, from: &str, to: &str) -> Result<Vec<Rewrite>> {
         }
         if links > 0 {
             content.push_str(&read.content[at..]);
-            plan.push(Rewrite { path: here, version: read.version, content, links });
+            plan.push(Rewrite { path: here, version: read.version.clone(), content, links });
         }
     }
     Ok(plan)
@@ -459,13 +499,15 @@ fn file_exists(target: &str, from: &str, files: &[String]) -> bool {
 pub fn broken(vault: &VaultFs) -> Result<Vec<BrokenLink>> {
     let listing = vault.listing()?;
     let notes = listing.paths();
-    let index = Index::new(notes);
+    let all = read_all(&listing);
+    let aliases = aliases_of(&all);
+    let index = Index::new(notes).with_aliases(pairs(&aliases));
     let mut files = Vec::new();
     all_files(&vault.tree()?, &mut files);
     let attachments: Vec<String> = files.iter().filter(|f| !is_note_file(f)).cloned().collect();
     let mut out = Vec::new();
-    for note in notes {
-        let Ok(read) = listing.read(note) else { continue };
+    for read in &all {
+        let note = &read.path;
         let content = &read.content;
         for link in find_links(content) {
             let raw = &content[link.start..link.end];

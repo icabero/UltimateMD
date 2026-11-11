@@ -3,6 +3,7 @@
 //! Both the desktop app and the MCP server are thin layers over this crate, so
 //! they share one set of rules about what can be read or written.
 
+pub mod aliases;
 pub mod callouts;
 pub mod diagram_guide;
 pub mod docx;

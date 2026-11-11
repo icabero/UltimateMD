@@ -2665,6 +2665,29 @@ test('a folder can be read on its own', async ({ page }) => {
   await expect(page.locator('section[data-path="dir/Destino.md"] .body')).not.toContainText('Cargando');
 });
 
+test('notes answer to their Obsidian aliases and can be shown inside others', async ({ page }) => {
+  await page.evaluate(() => {
+    const t = (window as any).__test;
+    t.externalWrite('a', 'dir/Destino.md', '---\naliases: [Meta final]\n---\n# Destino\n\n## Parte\n\nTexto incrustado.\n\n## Otra\n\nNo.\n');
+    t.externalWrite('a', 'Inicio.md', '# Inicio\n\nVer [[Meta final]].\n\n![[Destino#Parte]]\n');
+  });
+  await open(page, 'Inicio');
+  await page.getByTitle('Vista previa', { exact: true }).click();
+  const link = prose(page).getByRole('link', { name: 'Meta final' });
+  await expect(link).not.toHaveClass(/broken/);
+  const embed = prose(page).locator('.note-embed.filled');
+  await expect(embed).toContainText('Texto incrustado.');
+  await expect(embed).not.toContainText('No.');
+  await link.click();
+  await expect(page.locator('main footer')).toContainText('dir/Destino.md');
+
+  // The alias is offered when linking from the editor.
+  await page.locator('main [role=tab]').first().click();
+  await page.getByTitle('Dividido', { exact: true }).click();
+  await typeInEditor(page, '\n[[Meta');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('Meta final');
+});
+
 // Numbers for #80; the limits are loose so that only a real slowdown fails.
 // Rows are found by their path: role queries over thousands of buttons time
 // the test tool rather than the app.

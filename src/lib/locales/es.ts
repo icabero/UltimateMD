@@ -735,6 +735,8 @@ export const es = {
   'toolbar.style': 'Estilo',
   'toolbar.styleTitle': 'Estilo de los diagramas',
   'editor.label': 'Texto de «{name}»',
+  'editor.aliasOf': 'otro nombre de {name}',
+  'embed.missing': 'Esta nota o esta parte no existe',
   'editor.followLink': 'Ctrl+clic para abrir',
   'builder.rawHint': 'Este diagrama está escrito a mano. Cambia su código aquí y verás el resultado al momento.',
   'builder.state': 'Estados',

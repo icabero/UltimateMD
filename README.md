@@ -118,12 +118,19 @@ Abre la carpeta del vault como cualquier otra. UltimateMD no toca `.obsidian` ni
 | Callouts `> [!tipo]`, también plegables con `-` y `+` | Con su color e icono |
 | `==resaltado==` y `%%comentarios%%` | El comentario no se ve ni sale al exportar. En Word y PDF el resaltado queda como texto normal |
 | Tareas `- [ ]` y `- [x]` | Se marcan con un clic en el modo visual |
+| `aliases:` del frontmatter | `[[Otro nombre]]` lleva a la nota, se sugiere al escribir `[[` y sigue funcionando al renombrarla o moverla |
+| `![[otra nota]]`, `![[nota#Título]]` y `![[nota#^bloque]]` | Se ve su texto dentro de la nota, en la lectura de arriba abajo y al exportar |
 
 | Aún no | Qué pasa |
 |---|---|
-| `aliases:` del frontmatter | Un enlace escrito con el alias sale como roto |
-| `![[otra nota]]` y `![[nota#Título]]` | Se muestra como enlace, no con el texto de la otra nota |
 | Bloques `dataview` y archivos `.canvas` | El bloque se ve como código y el lienzo no se abre |
+
+En el otro sentido, lo que escribe UltimateMD se abre en Obsidian:
+
+- Los enlaces, las imágenes pegadas en `adjuntos/`, los callouts y las propiedades son Markdown normal. Las propiedades propias, como `tema`, `tema-diagramas` o `diagramas`, son una propiedad más para Obsidian.
+- Los diagramas Mermaid se dibujan también en Obsidian, con su propio aspecto: las palabras de estilo de la línea del bloque (`mermaid tema=sepia boceto`) solo las usa UltimateMD. Los bloques D2 necesitan un plugin de D2 en Obsidian.
+- La carpeta `.ultimatemd`, con los temas, la plantilla de Word y la guía de diagramas del vault, queda oculta en Obsidian, como `.obsidian` en UltimateMD.
+- Los comentarios `%%diagrama de IA: …%%` que acompañan a las imágenes dibujadas por la IA son comentarios de Obsidian y tampoco se ven allí.
 
 ## Diagramas
 

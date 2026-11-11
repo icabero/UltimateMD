@@ -421,6 +421,15 @@
     reveal_path: ({ id, path }) => void (window.__revealed = `${id}:${path}`),
     update_supported: () => window.__selfUpdate ?? true,
     portable_data: () => window.__portable ?? null,
+    vault_aliases: ({ id, paths }) =>
+      Object.keys(files[id])
+        .filter((p) => p.endsWith('.md') && (!paths || paths.includes(p)))
+        .map((path) => {
+          const meta = /^---\n([\s\S]*?)\n---/.exec(files[id][path])?.[1] ?? '';
+          const list = /^aliases:\s*\[(.*)\]/m.exec(meta)?.[1] ?? '';
+          return { path, aliases: list.split(',').map((a) => a.trim()).filter(Boolean) };
+        })
+        .filter((n) => n.aliases.length),
     // Kept apart, as .ultimatemd is hidden from the tree.
     diagram_guide: ({ id }) => guides[id] ?? null,
     save_diagram_guide: ({ id, text }) => {

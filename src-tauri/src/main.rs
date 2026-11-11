@@ -167,6 +167,7 @@ fn main() {
             update::update_supported,
             update::portable_data,
             commands::diagram_guide,
+            commands::vault_aliases,
             commands::save_diagram_guide,
             update::update_install,
             logbook::log_error,

@@ -544,6 +544,13 @@ pub fn word_config(id: String) -> Result<WordConfig> {
     })
 }
 
+/// The other names notes answer to, from `aliases:`: of the whole vault, or
+/// only of `paths` after they changed.
+#[tauri::command(async)]
+pub fn vault_aliases(id: String, paths: Option<Vec<String>>) -> Result<Vec<ultimatemd_core::aliases::NoteAliases>> {
+    ultimatemd_core::aliases::of_vault(&fs(&id)?, paths.as_deref())
+}
+
 /// The vault's guide for the diagrams an AI draws, if it has one.
 #[tauri::command(async)]
 pub fn diagram_guide(id: String) -> Result<Option<String>> {

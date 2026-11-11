@@ -13,6 +13,8 @@ export interface RenderContext {
   vaultId: string;
   path: string;
   files: string[];
+  /** Other names of notes, in lower case, from `aliases:`. */
+  aliases?: Map<string, string>;
 }
 
 const escapeHtml = (s: string) => new Option(s).innerHTML.replaceAll('"', '&quot;');
@@ -73,9 +75,13 @@ md.inline.ruler.before('link', 'wikilink', (state: any, silent: boolean) => {
 md.renderer.rules.wikilink = (tokens: any, idx: number) => {
   const { target, anchor, label, embed } = tokens[idx].meta;
   const t = escapeHtml(target);
-  return embed && kindOf(target) === 'image'
-    ? `<img data-embed="${t}" alt="${escapeHtml(label)}">`
-    : `<a data-wikilink="${t}" data-anchor="${escapeHtml(anchor)}" href="#">${escapeHtml(label)}</a>`;
+  const link = `<a data-wikilink="${t}" data-anchor="${escapeHtml(anchor)}" href="#">${escapeHtml(label)}</a>`;
+  if (embed && kindOf(target) === 'image') return `<img data-embed="${t}" alt="${escapeHtml(label)}">`;
+  // Another note shown here, filled in by the page; until then, or if it is missing, a link.
+  if (embed && (kindOf(target) === 'md' || !target.includes('.'))) {
+    return `<span class="note-embed" data-embed-note="${t}" data-anchor="${escapeHtml(anchor)}">${link}</span>`;
+  }
+  return link;
 };
 
 // #etiqueta, as crates/core/src/tags.rs reads it. Code never gets here.
@@ -164,9 +170,13 @@ function linkContent(root: DocumentFragment, ctx: RenderContext) {
       el.dataset.path = path;
     }
   }
+  for (const box of root.querySelectorAll<HTMLElement>('[data-embed-note]')) {
+    const path = resolveLink(box.dataset.embedNote!, ctx.path, ctx.files, ctx.aliases);
+    if (path) box.dataset.path = path;
+  }
   for (const a of root.querySelectorAll<HTMLAnchorElement>('a[data-wikilink]')) {
     // `[[#heading]]` points into the same note.
-    const path = a.dataset.wikilink ? resolveLink(a.dataset.wikilink, ctx.path, ctx.files) : ctx.path;
+    const path = a.dataset.wikilink ? resolveLink(a.dataset.wikilink, ctx.path, ctx.files, ctx.aliases) : ctx.path;
     if (path) a.dataset.note = path;
     else a.classList.add('broken');
   }
@@ -258,7 +268,7 @@ export function renderMarkdown(text: string, ctx: RenderContext): DocumentFragme
     RETURN_DOM_FRAGMENT: true,
     FORCE_BODY: true,
     ADD_TAGS: ['style'],
-    ADD_ATTR: ['data-lang', 'data-src', 'data-style', 'data-embed', 'data-wikilink'],
+    ADD_ATTR: ['data-lang', 'data-src', 'data-style', 'data-embed', 'data-embed-note', 'data-wikilink'],
     FORBID_TAGS: ['form', 'iframe', 'object', 'embed', 'base', 'link', 'meta'],
   });
   shapeCallouts(fragment);

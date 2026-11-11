@@ -736,6 +736,8 @@ export const eu: Record<Key, string> = {
   'toolbar.style': 'Estiloa',
   'toolbar.styleTitle': 'Diagramen estiloa',
   'editor.label': '«{name}» oharraren testua',
+  'editor.aliasOf': '{name} oharraren beste izen bat',
+  'embed.missing': 'Ohar hau edo zati hau ez dago',
   'editor.followLink': 'Ctrl+klik irekitzeko',
   'builder.rawHint': 'Diagrama hau eskuz idatzita dago. Aldatu kodea hemen eta emaitza unean bertan ikusiko duzu.',
   'builder.state': 'Egoerak',

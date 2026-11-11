@@ -9,6 +9,7 @@
   import { parseAnchor } from '../anchors';
   import { parseStyle } from '../diagramStyle';
   import { renderDiagram } from '../diagrams';
+  import { fillEmbeds } from '../embeds';
   import { fold } from '../fold';
   import { tr } from '../i18n.svelte';
   import { renderMarkdown } from '../markdown';
@@ -54,11 +55,13 @@
       const { content } = await api.read(vaultId, path);
       texts.set(path, content);
       const body = section.querySelector<HTMLElement>('.body')!;
-      body.replaceChildren(renderMarkdown(readingText(content), { vaultId, path, files: store.files(vaultId) }));
+      const context = { vaultId, path, files: store.files(vaultId), aliases: store.aliasMap(vaultId) };
+      body.replaceChildren(renderMarkdown(readingText(content), context));
       // A first heading that only repeats the note's name, shown above already.
       const first = body.firstElementChild;
       const name = section.querySelector('.note-title')?.textContent ?? '';
       if (first?.tagName === 'H1' && fold(first.textContent ?? '').trim() === fold(name).trim()) first.remove();
+      await fillEmbeds(body, context, store.noteReader(vaultId));
       section.classList.add('ready');
       for (const el of body.querySelectorAll<HTMLElement>('.diagram')) void draw(path, el);
     } catch (e) {

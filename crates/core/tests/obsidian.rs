@@ -33,12 +33,31 @@ fn wikilinks_resolve_by_name_heading_block_and_folder() {
 }
 
 #[test]
-fn only_the_missing_note_and_the_alias_are_reported_broken() {
+fn only_the_missing_note_is_reported_broken() {
     let broken = links::broken(&vault()).unwrap();
-    let mut targets: Vec<&str> = broken.iter().map(|b| b.target.as_str()).collect();
-    targets.sort();
-    // Aliases from the frontmatter are not followed yet; the README says so.
-    assert_eq!(targets, ["Ideas sueltas", "Salida a producción"]);
+    let targets: Vec<&str> = broken.iter().map(|b| b.target.as_str()).collect();
+    assert_eq!(targets, ["Ideas sueltas"]);
+}
+
+#[test]
+fn a_link_by_alias_leads_to_its_note_and_survives_a_move() {
+    let info = links::info(&vault(), "Inicio.md").unwrap();
+    assert!(info.unresolved.iter().all(|t| t != "Salida a producción"), "{:?}", info.unresolved);
+    assert!(info.outgoing.contains(&"Proyectos/Web/Lanzamiento.md".to_string()));
+
+    // Moved in a copy, so the fixture stays as it is.
+    let copy = tempfile::tempdir().unwrap();
+    for note in vault().notes().unwrap() {
+        let to = copy.path().join(&note);
+        std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+        std::fs::write(to, vault().read(&note).unwrap().content).unwrap();
+    }
+    let v = VaultFs::new(copy.path());
+    links::move_path(&v, "Proyectos/Web/Lanzamiento.md", "Archivo/Lanzamiento final.md").unwrap();
+    let inicio = v.read("Inicio.md").unwrap().content;
+    assert!(inicio.contains("[[Salida a producción]]"), "the alias link is left as written");
+    assert!(inicio.contains("[[Lanzamiento final|el plan de salida]]"));
+    assert!(links::broken(&v).unwrap().iter().all(|b| b.target != "Salida a producción"));
 }
 
 #[test]

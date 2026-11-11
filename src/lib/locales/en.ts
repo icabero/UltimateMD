@@ -736,6 +736,8 @@ export const en: Record<Key, string> = {
   'toolbar.style': 'Style',
   'toolbar.styleTitle': 'Diagram style',
   'editor.label': 'Text of “{name}”',
+  'editor.aliasOf': 'another name for {name}',
+  'embed.missing': 'This note or this part does not exist',
   'editor.followLink': 'Ctrl+click to open',
   'builder.rawHint': 'This diagram is hand-written. Change its code here and see the result as you type.',
   'builder.state': 'States',
