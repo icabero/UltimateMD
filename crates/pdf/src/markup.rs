@@ -1,10 +1,10 @@
 //! Turns notes into Typst source. All text is emitted as string literals.
 
 use crate::Input;
-use pulldown_cmark::{BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Parser, Tag, TagEnd};
 use std::collections::HashMap;
-use ultimatemd_core::callouts;
-use ultimatemd_core::docx::{Section, normalize_wikilinks, split_frontmatter};
+use ultimatemd_core::docx::{Section, split_frontmatter};
+use ultimatemd_core::export_links;
 
 /// Width of the text area on A4 with these margins, in points.
 const TEXT_WIDTH: f64 = 453.0;
@@ -87,6 +87,9 @@ enum Open {
 struct Writer<'a> {
     input: &'a Input<'a>,
     note: String,
+    /// The section being written and how many of its headings came before.
+    section: usize,
+    note_heading: usize,
     shift: usize,
     out: Vec<String>,
     open: Vec<Open>,
@@ -187,7 +190,9 @@ impl Writer<'_> {
         match tag {
             Tag::Heading { level, .. } => {
                 let level = (heading_number(level) + self.shift).min(6);
-                self.wrap(move |c| format!("#heading(level: {level})[{c}]\n\n"));
+                let name = export_links::heading_anchor(self.section, self.note_heading);
+                self.note_heading += 1;
+                self.wrap(move |c| format!("#heading(level: {level})[{c}]<{name}>\n\n"));
             }
             Tag::BlockQuote(None) => self.wrap(|c| format!("#quote(block: true)[{c}]\n\n")),
             Tag::BlockQuote(Some(kind)) => {
@@ -214,7 +219,10 @@ impl Writer<'_> {
             Tag::Strikethrough => self.wrap(|c| format!("#strike[{c}]")),
             Tag::Link { dest_url, .. } => {
                 let url = dest_url.to_string();
-                if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:") {
+                if let Some(anchor) = export_links::internal(&url) {
+                    let anchor = anchor.to_string();
+                    self.wrap(move |c| format!("#link(<{anchor}>)[{c}]"));
+                } else if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:") {
                     let target = quoted(&url);
                     self.wrap(move |c| format!("#link({target})[{c}]"));
                 } else {
@@ -350,14 +358,12 @@ pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
     if input.cover {
         source.push_str(&cover(input.title, &author, input.date, input.contents));
     }
-    let options = Options::ENABLE_TABLES
-        | Options::ENABLE_FOOTNOTES
-        | Options::ENABLE_STRIKETHROUGH
-        | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_GFM;
+    let bodies = export_links::bodies(input.sections, input.language);
     let mut writer = Writer {
         input,
         note: String::new(),
+        section: 0,
+        note_heading: 0,
         shift: 0,
         out: vec![String::new()],
         open: Vec::new(),
@@ -367,7 +373,7 @@ pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
         images: Vec::new(),
         notes: HashMap::new(),
     };
-    for section in input.sections {
+    for (index, section) in input.sections.iter().enumerate() {
         match section {
             Section::Heading { text: title, level, page_break, .. } => {
                 let level = (*level).clamp(1, 6);
@@ -376,17 +382,18 @@ pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
                 }
                 source.push_str(&format!("#heading(level: {level})[{}]\n\n", text(title)));
             }
-            Section::Note { path, markdown, shift, page_break } => {
+            Section::Note { path, shift, page_break, .. } => {
                 if *page_break {
                     source.push_str("#pagebreak(weak: true)\n");
                 }
                 writer.note = path.clone();
                 writer.shift = *shift;
                 writer.notes.clear();
-                let body =
-                    callouts::normalize(&ultimatemd_core::marks::strip(split_frontmatter(markdown).1), input.language);
-                let body = normalize_wikilinks(&body);
-                for event in Parser::new_ext(&body, options) {
+                writer.section = index;
+                writer.note_heading = 0;
+                // Where links to the note land.
+                writer.push(&format!("#metadata(none)<{}>\n", export_links::note_anchor(index)));
+                for event in Parser::new_ext(&bodies[index], export_links::OPTIONS) {
                     writer.event(event);
                 }
                 let content = std::mem::take(&mut writer.out[0]);

@@ -77,6 +77,7 @@ Lo exportado usa un aspecto de documento, sea cual sea el tema activo. Los diagr
 
 - **Alcance:** la nota, una carpeta o el vault. Las notas salen en orden natural: primero las de cada carpeta y luego sus subcarpetas. Usa prefijos como `01-` para fijar el orden.
 - **Carpetas:** cada nivel puede ser un título, un estilo de tu plantilla o no aparecer, con salto de página opcional. Los títulos de las notas bajan de nivel para encajar.
+- **Enlaces entre notas:** en Word y PDF, un `[[enlace]]` a una nota o a un título que va en el mismo documento salta a ese punto y muestra su título, no el nombre del archivo. Las notas no cambian.
 - **PDF:** se compone directamente con un motor tipográfico integrado, sin diálogo de impresión, con portada e índice opcionales. Lleva el título y el `autor` del frontmatter en sus propiedades, y puede generarse como PDF/A para archivar.
 - **Word:** la nota se escribe dentro de una copia de tu plantilla. Incluye una plantilla de ejemplo que puedes guardar y adaptar.
 - **Word por vault:** cada vault puede llevar su propia plantilla y ajustar títulos, texto, tablas, imágenes y código, con una muestra en directo. Se abre desde el icono de Word junto al nombre del vault. Los estilos de títulos numerados de la plantilla se detectan solos.

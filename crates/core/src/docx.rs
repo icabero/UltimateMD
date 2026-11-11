@@ -7,7 +7,7 @@ mod detect;
 
 use crate::word_settings::WordSettings;
 use crate::{Error, Result};
-use pulldown_cmark::{BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Parser, Tag, TagEnd};
 use regex::{Captures, Regex};
 use std::collections::{BTreeMap, HashMap};
 use std::io::{Cursor, Read, Write};
@@ -220,10 +220,12 @@ pub fn split_frontmatter(markdown: &str) -> (HashMap<String, String>, &str) {
 
 /// Turns Obsidian-style links, which CommonMark does not know, into standard ones.
 pub fn normalize_wikilinks(markdown: &str) -> String {
-    let embeds = WIKI_EMBED.replace_all(markdown, |c: &Captures| format!("![]({})", c[1].trim().replace(' ', "%20")));
-    WIKI_LINK
-        .replace_all(&embeds, |c: &Captures| c.get(2).map_or(&c[1], |m| m.as_str()).trim().to_string())
-        .into_owned()
+    crate::export_links::outside_code(markdown, |text| {
+        let embeds = WIKI_EMBED.replace_all(text, |c: &Captures| format!("![]({})", c[1].trim().replace(' ', "%20")));
+        WIKI_LINK
+            .replace_all(&embeds, |c: &Captures| c.get(2).map_or(&c[1], |m| m.as_str()).trim().to_string())
+            .into_owned()
+    })
 }
 
 #[derive(Default, Clone, Copy)]
@@ -257,6 +259,7 @@ struct Writer<'a> {
     /// The paragraph being written: its properties and its runs.
     para: Option<(String, String)>,
     format: Format,
+    /// What the open link's `w:hyperlink` points to: `r:id="…"` or `w:anchor="…"`.
     link: Option<String>,
     rels: Vec<String>,
     media: Vec<(String, Vec<u8>)>,
@@ -285,6 +288,11 @@ struct Writer<'a> {
     page_break: bool,
     note: String,
     note_index: usize,
+    /// Headings of the current note met so far, for their bookmarks.
+    note_heading: usize,
+    /// The bookmark the note's first paragraph carries.
+    pending_bookmark: Option<String>,
+    next_bookmark: u32,
     shift: usize,
     table: Option<Table>,
     /// The table style formats its first row, so the header needs no bold of its own.
@@ -334,10 +342,22 @@ impl Writer<'_> {
             properties
         };
         self.para = Some((properties, String::new()));
+        if let Some(name) = self.pending_bookmark.take() {
+            self.bookmark(&name);
+        }
         if self.footnote_start {
             self.footnote_start = false;
             let style = self.styles.superscript();
             self.push_raw(&format!("<w:r><w:rPr>{style}</w:rPr><w:footnoteRef/></w:r>"));
+        }
+    }
+
+    /// Marks where the paragraph being written starts, for links that jump to it.
+    fn bookmark(&mut self, name: &str) {
+        let id = self.next_bookmark;
+        self.next_bookmark += 1;
+        if let Some((_, runs)) = &mut self.para {
+            runs.push_str(&format!(r#"<w:bookmarkStart w:id="{id}" w:name="{name}"/><w:bookmarkEnd w:id="{id}"/>"#));
         }
     }
 
@@ -426,8 +446,8 @@ impl Writer<'_> {
         let run =
             format!(r#"<w:r>{}<w:t xml:space="preserve">{}</w:t></w:r>"#, self.run_properties(code), escape(text));
         match &self.link {
-            Some(rel) => {
-                let wrapped = format!(r#"<w:hyperlink r:id="{rel}">{run}</w:hyperlink>"#);
+            Some(target) => {
+                let wrapped = format!(r#"<w:hyperlink {target}>{run}</w:hyperlink>"#);
                 self.push_raw(&wrapped);
             }
             None => self.push_raw(&run),
@@ -679,6 +699,9 @@ impl Writer<'_> {
                     format!(r#"<w:pStyle w:val="{id}"/>{numbering}"#)
                 });
                 self.open(properties);
+                let name = crate::export_links::heading_anchor(self.note_index, self.note_heading);
+                self.note_heading += 1;
+                self.bookmark(&name);
                 self.format.bold = style.is_none();
                 self.heading = Some(Heading { level, text: String::new() });
             }
@@ -714,8 +737,10 @@ impl Writer<'_> {
             Tag::Strikethrough => self.format.strike = true,
             Tag::Link { dest_url, .. } => {
                 let url = dest_url.to_string();
-                if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:") {
-                    self.link = Some(self.add_rel("hyperlink", &url, true));
+                if let Some(anchor) = crate::export_links::internal(&url) {
+                    self.link = Some(format!(r#"w:anchor="{anchor}""#));
+                } else if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:") {
+                    self.link = Some(format!(r#"r:id="{}""#, self.add_rel("hyperlink", &url, true)));
                 }
             }
             Tag::Image { dest_url, title, .. } => {
@@ -1126,12 +1151,7 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
     let numbering = text_of(&parts, NUMBERING).unwrap_or_default();
     let notes = text_of(&parts, FOOTNOTES).unwrap_or_default();
 
-    let options = Options::ENABLE_TABLES
-        | Options::ENABLE_FOOTNOTES
-        | Options::ENABLE_STRIKETHROUGH
-        | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_GFM;
-
+    let bodies = crate::export_links::bodies(input.sections, input.language);
     let mut writer = Writer {
         styles: &styles,
         input,
@@ -1162,6 +1182,9 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
         page_break: false,
         note: String::new(),
         note_index: 0,
+        note_heading: 0,
+        pending_bookmark: None,
+        next_bookmark: 900_000,
         shift: 0,
         table: None,
         styled_header: styles.get("table grid").is_some_and(|id| formats_first_row(&styles_xml, id)),
@@ -1179,7 +1202,7 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
                 writer.section_heading(text, style.as_deref(), *level, *page_break)
             }
             Section::Note { path, markdown, shift, page_break } => {
-                let (meta, body) = split_frontmatter(markdown);
+                let meta = split_frontmatter(markdown).0;
                 // The first note to state a value provides it.
                 for (key, value) in meta {
                     values.entry(key).or_insert(value);
@@ -1187,10 +1210,11 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
                 writer.flush();
                 writer.note = path.clone();
                 writer.note_index = index;
+                writer.note_heading = 0;
+                writer.pending_bookmark = Some(crate::export_links::note_anchor(index));
                 writer.shift = *shift;
                 writer.page_break = *page_break;
-                let body = crate::callouts::normalize(&crate::marks::strip(body), input.language);
-                for event in Parser::new_ext(&normalize_wikilinks(&body), options) {
+                for event in Parser::new_ext(&bodies[index], crate::export_links::OPTIONS) {
                     writer.event(event, &mut saved);
                 }
                 writer.flush();

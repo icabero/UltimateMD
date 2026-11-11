@@ -6,6 +6,7 @@
 pub mod callouts;
 pub mod docx;
 pub mod error;
+pub mod export_links;
 pub mod files;
 pub mod history;
 pub mod links;
