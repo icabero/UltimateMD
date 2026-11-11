@@ -172,6 +172,13 @@
             <button class="icon small" title={tr('sidebar.newNote')} onclick={() => newNote(vault.id, '')}><Icon name="plus" size={14} /></button>
             <button class="icon small" title={tr('sidebar.newFolder')} onclick={() => newFolder(vault.id, '')}><Icon name="folderPlus" size={14} /></button>
             <button class="icon small" title={tr('word.openSettings')} onclick={() => (store.wordScreen = vault.id)}><Icon name="word" size={14} /></button>
+            {#if store.git[vault.id]}
+              {@const git = store.git[vault.id]!}
+              {@const label = tr('git.open', { branch: git.branch ?? tr('git.detached'), n: git.changes.length })}
+              <button class="icon small git" title={label} aria-label={label} onclick={() => (store.gitScreen = vault.id)}>
+                <Icon name="branch" size={14} />{#if git.changes.length}<span class="count">{git.changes.length}</span>{/if}
+              </button>
+            {/if}
           </div>
           {#if !collapsed[vault.id]}
             {#each store.trees[vault.id] ?? [] as node (node.path)}
@@ -223,4 +230,6 @@
   footer { display: flex; gap: var(--space-1); padding: var(--space-2); border-top: 1px solid var(--line); }
   footer button { display: flex; flex: 1; align-items: center; justify-content: center; gap: var(--space-1-5); height: 30px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); white-space: nowrap; }
   footer button:hover { background: var(--hover); color: var(--text); }
+  .git { display: flex; align-items: center; gap: var(--space-0-5); width: auto; padding: 0 var(--space-1); }
+  .git .count { font-size: var(--font-xs); }
 </style>

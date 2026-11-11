@@ -434,6 +434,13 @@
       window.__site = { name, pages, assets };
       return `/exportado/${name}/index.html`;
     },
+    git_status: ({ id }) => (window.__git?.[id] ? { branch: 'main', changes: window.__git[id] } : null),
+    git_committed: ({ path }) => (path === 'Inicio.md' ? '# Inicio\n\nAntes.\n' : null),
+    git_commit: ({ id, message }) => {
+      window.__commits = [...(window.__commits ?? []), { id, message }];
+      window.__git[id] = [];
+      return 'abc1234';
+    },
     // Kept apart, as .ultimatemd is hidden from the tree.
     diagram_guide: ({ id }) => guides[id] ?? null,
     save_diagram_guide: ({ id, text }) => {

@@ -653,6 +653,24 @@ pub fn vault_aliases(id: String, paths: Option<Vec<String>>) -> Result<Vec<ultim
     ultimatemd_core::aliases::of_vault(&fs(&id)?, paths.as_deref())
 }
 
+/// What changed since the last commit, when the vault is in a Git repository.
+#[tauri::command(async)]
+pub fn git_status(id: String) -> Result<Option<ultimatemd_core::git::Status>> {
+    ultimatemd_core::git::status(fs(&id)?.root())
+}
+
+/// A note as it was in the last commit.
+#[tauri::command(async)]
+pub fn git_committed(id: String, path: String) -> Result<Option<String>> {
+    ultimatemd_core::git::committed(fs(&id)?.root(), &path)
+}
+
+/// Commits the vault's changes; its short id.
+#[tauri::command(async)]
+pub fn git_commit(id: String, message: String) -> Result<String> {
+    ultimatemd_core::git::commit(fs(&id)?.root(), &message)
+}
+
 /// The vault's guide for the diagrams an AI draws, if it has one.
 #[tauri::command(async)]
 pub fn diagram_guide(id: String) -> Result<Option<String>> {

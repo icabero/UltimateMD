@@ -10,6 +10,7 @@ pub mod docx;
 pub mod error;
 pub mod export_links;
 pub mod files;
+pub mod git;
 pub mod history;
 pub mod links;
 pub mod marks;

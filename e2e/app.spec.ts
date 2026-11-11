@@ -2709,6 +2709,27 @@ test('a vault exports as a website, a page per note with working links', async (
   expect(hondo).toMatch(/<a href="Hondo.html" aria-current="page">Hondo<\/a>/);
 });
 
+test('a vault in a Git repository shows its changes and commits them', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__git = { a: [{ path: 'Inicio.md', state: 'modified' }, { path: 'dir/Destino.md', state: 'untracked' }] };
+  });
+  await page.reload();
+  await expect(page.locator('aside [data-row][title="Inicio.md"] .git')).toHaveText('M');
+  // A vault outside Git shows nothing of it.
+  await expect(page.locator('aside').getByRole('button', { name: /^Git:/ })).toHaveCount(1);
+  await page.locator('aside').getByRole('button', { name: 'Git: rama main, 2 cambios' }).click();
+  const screen = page.getByRole('dialog', { name: 'Git en Trabajo' });
+  await screen.getByRole('button', { name: /Inicio/ }).click();
+  await expect(screen.getByRole('region', { name: 'Inicio.md' })).toContainText('Antes.');
+  const commit = screen.getByRole('button', { name: 'Hacer commit de 2 cambios' });
+  await expect(commit).toBeDisabled();
+  await screen.getByLabel('Mensaje del commit').fill('Notas de hoy');
+  await commit.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Commit abc1234 hecho' })).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__commits)).toEqual([{ id: 'a', message: 'Notas de hoy' }]);
+  await expect(screen).toContainText('No hay cambios desde el último commit.');
+});
+
 // Numbers for #80; the limits are loose so that only a real slowdown fails.
 // Rows are found by their path: role queries over thousands of buttons time
 // the test tool rather than the app.

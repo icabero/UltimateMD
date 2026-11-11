@@ -28,6 +28,7 @@
   import WordScreen from './lib/components/WordScreen.svelte';
   import DiagramGuide from './lib/components/DiagramGuide.svelte';
   import Reader from './lib/components/Reader.svelte';
+  import GitScreen from './lib/components/GitScreen.svelte';
   import BrokenLinks from './lib/components/BrokenLinks.svelte';
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
@@ -252,6 +253,7 @@
 {#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
 {#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
 {#if store.guideScreen}<DiagramGuide vaultId={store.guideScreen} />{/if}
+{#if store.gitScreen}<GitScreen vaultId={store.gitScreen} />{/if}
 {#if store.merging && tab?.conflict}<ConflictMerge {tab} />{/if}
 {#if store.news}<News version={store.news} />{/if}
 {#if store.aiLog}<AiLog vaultId={store.aiLog} />{/if}

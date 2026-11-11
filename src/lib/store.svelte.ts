@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { anchorLabel, findAnchor, parseAnchor } from './anchors';
-import { api, type ReplaceOptions, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
+import { api, type GitStatus, type ReplaceOptions, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
 import { fold } from './fold';
 import { fillTemplate } from './noteTemplates';
 import { withColors, type DiagramStyle } from './diagramStyle';
@@ -255,6 +255,11 @@ function imageName(file: File) {
 class Store {
   vaults = $state<Vault[]>([]);
   trees = $state<Record<string, TreeNode[]>>({});
+  /** Each vault's Git status, or null when it is not in a repository. */
+  git = $state<Record<string, GitStatus | null>>({});
+  /** The vault whose Git changes are on screen. */
+  gitScreen = $state<string | null>(null);
+  #gitTimers: Record<string, ReturnType<typeof setTimeout>> = {};
   /** Each vault's notes that declare `aliases:`, by path. */
   aliases = $state<Record<string, Record<string, string[]>>>({});
   tabs = $state<Tab[]>([]);
@@ -623,6 +628,26 @@ class Store {
     return resolveLink(target, from, this.files(vaultId), this.aliasMap(vaultId));
   }
 
+  /** Asks Git what changed in a vault; quietly nothing when Git is not there. */
+  async loadGit(vaultId: string) {
+    try {
+      this.git[vaultId] = await api.gitStatus(vaultId);
+    } catch {
+      this.git[vaultId] = null;
+    }
+  }
+
+  /** The same, once a burst of changes settles. */
+  laterGit(vaultId: string) {
+    clearTimeout(this.#gitTimers[vaultId]);
+    this.#gitTimers[vaultId] = setTimeout(() => void this.loadGit(vaultId), 800);
+  }
+
+  /** How a file differs from the last commit, if the vault is in Git. */
+  gitState(vaultId: string, path: string) {
+    return this.git[vaultId]?.changes.find((c) => c.path === path)?.state ?? null;
+  }
+
   /** Reads the aliases of a whole vault, or again of the notes that changed. */
   async loadAliases(vaultId: string, paths?: string[]) {
     try {
@@ -822,7 +847,7 @@ class Store {
 
   async loadVaults() {
     this.vaults = await api.listVaults();
-    await Promise.all(this.openVaults.flatMap((v) => [this.refreshTree(v.id), this.loadVaultThemes(v.id), this.loadAliases(v.id)]));
+    await Promise.all(this.openVaults.flatMap((v) => [this.refreshTree(v.id), this.loadVaultThemes(v.id), this.loadAliases(v.id), this.loadGit(v.id)]));
   }
 
   async refreshTree(id: string) {
@@ -1215,6 +1240,7 @@ class Store {
     const inVault = this.tabs.every((t) => t.vaultId !== vaultId || !t.loose);
     if (inVault) await this.refreshTree(vaultId);
     if (inVault) void this.loadAliases(vaultId, paths);
+    if (inVault && this.git[vaultId]) this.laterGit(vaultId);
     const known = new Set(this.files(vaultId));
     for (const tab of this.tabs) {
       if (tab.vaultId !== vaultId || !paths.includes(tab.path)) continue;

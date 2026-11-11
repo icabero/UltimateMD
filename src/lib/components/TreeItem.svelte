@@ -7,6 +7,9 @@
   import { baseName, join, kindOf } from '../paths';
   import { store } from '../store.svelte';
 
+  /** As Git writes them. */
+  const GIT_LETTER = { modified: 'M', added: 'A', deleted: 'D', renamed: 'R', untracked: 'U', conflict: '!' } as const;
+
   let { vaultId, node, depth, onmenu }: {
     vaultId: string;
     node: TreeNode;
@@ -19,6 +22,7 @@
   // Only the active tab's key, not the tab itself: a large folder has thousands
   // of rows, and each change to any open tab would otherwise reach every one.
   const active = $derived(store.activeKey === `${vaultId}:${node.path}`);
+  const git = $derived(node.isDir ? null : store.gitState(vaultId, node.path));
   const icon = $derived(node.isDir ? 'folder' : { md: 'file', html: 'code', image: 'image', other: 'file' }[kindOf(node.path)]);
 
   // Reveals the note being edited, including one opened from a link or search.
@@ -74,6 +78,7 @@
   {/if}
   <span class="ico"><Icon name={icon} size={15} /></span>
   <span class="label">{node.isDir ? node.name : node.name.replace(/\.(md|markdown)$/i, '')}</span>
+  {#if git}<span class="git {git}" title={tr(`git.${git}`)}>{GIT_LETTER[git]}</span>{/if}
 </button>
 {#if node.isDir && expanded}
   <div transition:unfold>
@@ -93,6 +98,9 @@
   .row.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 500; }
   .row.over { outline: 1.5px dashed var(--accent); outline-offset: -2px; }
   .label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .git { flex: none; margin-left: auto; color: var(--accent-text); font: 600 var(--font-xs)/1 var(--mono); }
+  .git.untracked, .git.added { color: var(--text-2); }
+  .git.conflict { color: var(--danger); }
   .ico { display: flex; flex: none; opacity: .65; }
   .chev { display: flex; flex: none; transition: transform .12s; }
   .chev.open { transform: rotate(90deg); }

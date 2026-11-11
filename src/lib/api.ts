@@ -191,6 +191,16 @@ export interface DefaultAppInfo {
   isDefault: boolean;
 }
 
+export interface GitChange {
+  path: string;
+  state: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflict';
+}
+
+export interface GitStatus {
+  branch: string | null;
+  changes: GitChange[];
+}
+
 export const api = {
   listVaults: () => invoke<Vault[]>('list_vaults'),
   createVault: (parent: string, name: string) => invoke<Vault>('create_vault', { parent, name }),
@@ -278,6 +288,12 @@ export const api = {
   saveTemplateCopy: (name: string) => invoke<boolean>('save_template_copy', { name }),
   wordConfig: (id: string) => invoke<WordConfig>('word_config', { id }),
   saveWordSettings: (id: string, settings: WordSettings) => invoke<void>('save_word_settings', { id, settings }),
+  /** What changed since the last commit, or null when the vault is not in a Git repository. */
+  gitStatus: (id: string) => invoke<GitStatus | null>('git_status', { id }),
+  /** A note as it was in the last commit, or null if it was not in it. */
+  gitCommitted: (id: string, path: string) => invoke<string | null>('git_committed', { id, path }),
+  /** Commits every change in the vault and returns the commit's short id. */
+  gitCommit: (id: string, message: string) => invoke<string>('git_commit', { id, message }),
   /** The other names notes answer to: of the whole vault, or of `paths` only. */
   aliases: (id: string, paths?: string[]) => invoke<{ path: string; aliases: string[] }[]>('vault_aliases', { id, paths: paths ?? null }),
   /** The vault's guide for the diagrams an AI draws, or null. */

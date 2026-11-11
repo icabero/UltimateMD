@@ -133,6 +133,15 @@ En el otro sentido, lo que escribe UltimateMD se abre en Obsidian:
 - La carpeta `.ultimatemd`, con los temas, la plantilla de Word y la guía de diagramas del vault, queda oculta en Obsidian, como `.obsidian` en UltimateMD.
 - Los comentarios `%%diagrama de IA: …%%` que acompañan a las imágenes dibujadas por la IA son comentarios de Obsidian y tampoco se ven allí.
 
+## Vaults con Git
+
+Si un vault ya está en un repositorio de Git, o es una carpeta dentro de uno, UltimateMD lo nota solo. La app nunca crea un repositorio. Necesita tener `git` instalado.
+
+- En el árbol, cada archivo cambiado lleva su letra: **M** modificado, **A** añadido, **U** nuevo sin seguimiento, **R** renombrado y **!** en conflicto.
+- Junto al nombre del vault aparece la rama con el número de cambios. Al pulsarla ves la lista; elige un archivo para ver qué cambió desde el último commit.
+- Escribe un mensaje y haz commit de todos los cambios del vault, y solo de esos, aunque el repositorio tenga más carpetas.
+- Para subir o traer commits (`push` y `pull`), usa tu programa de Git de siempre.
+
 ## Diagramas
 
 ![Creador de diagramas con el formulario a la izquierda y el dibujo a la derecha](site/img/diagramas.png)
