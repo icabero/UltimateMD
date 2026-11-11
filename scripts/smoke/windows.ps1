@@ -34,12 +34,20 @@ if ($Bundles) {
   $msi = Get-ChildItem "$Bundles/msi/*.msi" | Select-Object -First 1
   if (-not $msi) { throw "No MSI in $Bundles/msi" }
   $log = Join-Path $env:RUNNER_TEMP 'msi.log'
-  $run = Start-Process msiexec -ArgumentList '/i', "`"$($msi.FullName)`"", '/qn', '/norestart', '/l*v', "`"$log`"" -Wait -PassThru
+  # A folder of its own, as with NSIS: where it goes by default depends on the template.
+  $msiDir = 'C:\umd-msi'
+  $run = Start-Process msiexec -ArgumentList '/i', "`"$($msi.FullName)`"", '/qn', '/norestart', "INSTALLDIR=`"$msiDir`"", '/l*v', "`"$log`"" -Wait -PassThru
   if ($run.ExitCode -ne 0) {
     Get-Content $log -Tail 40
     throw "The MSI failed with $($run.ExitCode)"
   }
-  $null = Assert-Installed "$env:ProgramFiles\UltimateMD"
+  # Some templates nest the app one folder down.
+  $found = Get-ChildItem $msiDir -Recurse -Filter 'ultimatemd-mcp.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $found) {
+    Select-String -Path $log -Pattern 'INSTALLDIR|ultimatemd-mcp' | Select-Object -Last 10 | ForEach-Object { $_.Line }
+    throw "The MSI installed nothing in $msiDir"
+  }
+  $null = Assert-Installed $found.DirectoryName
 }
 
 # The portable must start and keep its log in datos, beside it.
