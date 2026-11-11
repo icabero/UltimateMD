@@ -988,6 +988,8 @@ test('with reduced motion nothing animates', async ({ page }) => {
 });
 
 test('dialogs grow into place when motion is allowed', async ({ page }) => {
+  // On the macOS CI runner no animation is seen most of the time: #171.
+  test.fixme(MAC && !!process.env.CI, 'Fails on the macOS CI runner, see #171');
   // Noted as each animation starts: on a slow machine it may be over before the test looks.
   await page.evaluate(() => {
     const started: number[] = ((window as any).__animations = []);
