@@ -2673,6 +2673,11 @@ test('a vault can be read top to bottom as one document', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Leyendo Trabajo' })).toHaveCount(0);
 });
 
+test('the eye beside a vault reads it top to bottom', async ({ page }) => {
+  await page.locator('aside').getByRole('button', { name: 'Leer el vault de arriba abajo' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Leyendo Trabajo' })).toBeVisible();
+});
+
 test('a folder can be read on its own', async ({ page }) => {
   await page.locator('aside').getByRole('button', { name: 'dir', exact: true }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Leer esta carpeta de arriba abajo' }).click();

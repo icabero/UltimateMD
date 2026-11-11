@@ -171,6 +171,7 @@
             {/if}
             <button class="icon small" title={tr('sidebar.newNote')} onclick={() => newNote(vault.id, '')}><Icon name="plus" size={14} /></button>
             <button class="icon small" title={tr('sidebar.newFolder')} onclick={() => newFolder(vault.id, '')}><Icon name="folderPlus" size={14} /></button>
+            <button class="icon small" title={tr('reader.readVault')} onclick={() => (store.reader = { vaultId: vault.id, folder: '' })}><Icon name="eye" size={14} /></button>
             <button class="icon small" title={tr('word.openSettings')} onclick={() => (store.wordScreen = vault.id)}><Icon name="word" size={14} /></button>
             {#if store.git[vault.id]}
               {@const git = store.git[vault.id]!}
