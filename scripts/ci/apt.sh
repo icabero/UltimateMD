@@ -3,6 +3,10 @@
 # timeouts and retries. The Azure mirror they come with sometimes stops
 # answering, and then every package waits 20 seconds until the job times out.
 set -euo pipefail
+# The runners read their mirror from a list, which names only Azure's.
+if [ -f /etc/apt/apt-mirrors.txt ]; then
+  echo 'http://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
+fi
 for list in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do
   [ -f "$list" ] && sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' "$list"
 done
