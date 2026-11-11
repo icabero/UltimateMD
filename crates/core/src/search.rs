@@ -224,12 +224,13 @@ pub fn search(vault: &VaultFs, query: &str, limit: usize) -> Result<Vec<SearchHi
     let marks = query.marks();
     let hit = |path: &str, line, text| SearchHit { path: path.to_string(), line, text, score: 0 };
     let mut found: Vec<(u32, Vec<SearchHit>)> = Vec::new();
-    for path in vault.notes()? {
-        if !query.wants_path(&path) {
+    let listing = vault.listing()?;
+    for path in listing.paths() {
+        if !query.wants_path(path) {
             continue;
         }
         let name = path.rsplit_once('.').map_or(path.as_str(), |(stem, _)| stem);
-        let Ok(note) = vault.read(&path) else { continue };
+        let Ok(note) = listing.read(path) else { continue };
         if !query.wants_note(name, &note.content) {
             continue;
         }
@@ -237,7 +238,7 @@ pub fn search(vault: &VaultFs, query: &str, limit: usize) -> Result<Vec<SearchHi
         let mut hits = Vec::new();
         if !query.has_text() || query.matches_text(name) {
             score += NAME_SCORE;
-            hits.push(hit(&path, 0, String::new()));
+            hits.push(hit(path, 0, String::new()));
         }
         if query.has_text() {
             for (i, line) in note.content.lines().enumerate() {
@@ -246,7 +247,7 @@ pub fn search(vault: &VaultFs, query: &str, limit: usize) -> Result<Vec<SearchHi
                 }
                 if query.matches_text(line) {
                     score += if is_heading(line) { HEADING_SCORE } else { LINE_SCORE };
-                    hits.push(hit(&path, i + 1, snippet(line, &marks)));
+                    hits.push(hit(path, i + 1, snippet(line, &marks)));
                 }
             }
         }

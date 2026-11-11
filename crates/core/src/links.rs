@@ -2,6 +2,7 @@
 
 use crate::{Result, VaultFs, WriteMode};
 use serde::Serialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Kind {
@@ -121,6 +122,38 @@ pub fn resolve<'a>(target: &str, from: &str, notes: &'a [String]) -> Option<&'a 
         .or_else(|| notes.iter().find(|n| stem(n).eq_ignore_ascii_case(without_ext)))
 }
 
+/// Resolves many links against the same notes, as [`resolve`] does, without
+/// going through every note for each link.
+pub struct Index<'a> {
+    notes: &'a [String],
+    by_path: HashMap<String, usize>,
+    by_name: HashMap<String, usize>,
+}
+
+impl<'a> Index<'a> {
+    pub fn new(notes: &'a [String]) -> Self {
+        let (mut by_path, mut by_name) = (HashMap::new(), HashMap::new());
+        for (i, note) in notes.iter().enumerate() {
+            let without = note.rsplit_once('.').map_or(note.as_str(), |(s, _)| s);
+            // The first in order wins, as with resolve.
+            by_path.entry(without.to_ascii_lowercase()).or_insert(i);
+            by_name.entry(stem(note).to_ascii_lowercase()).or_insert(i);
+        }
+        Self { notes, by_path, by_name }
+    }
+
+    pub fn resolve(&self, target: &str, from: &str) -> Option<&'a String> {
+        let clean = target.trim_start_matches("./").trim_start_matches('/');
+        let without_ext = clean.strip_suffix(".md").unwrap_or(clean).to_ascii_lowercase();
+        let sibling = match parent(from) {
+            "" => without_ext.clone(),
+            dir => format!("{}/{without_ext}", dir.to_ascii_lowercase()),
+        };
+        let found = self.by_path.get(&sibling).or_else(|| self.by_path.get(&without_ext));
+        found.or_else(|| self.by_name.get(&without_ext)).map(|&i| &self.notes[i])
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkInfo {
@@ -132,10 +165,12 @@ pub struct LinkInfo {
 /// Outgoing links and backlinks of a note. Scans the whole vault.
 pub fn info(vault: &VaultFs, path: &str) -> Result<LinkInfo> {
     let path = crate::paths::normalize(path)?;
-    let notes = vault.notes()?;
+    let listing = vault.listing()?;
+    let notes = listing.paths();
+    let index = Index::new(notes);
     let (mut outgoing, mut unresolved) = (Vec::new(), Vec::new());
     for target in extract(&vault.read(&path)?.content) {
-        match resolve(&target, &path, &notes) {
+        match index.resolve(&target, &path) {
             Some(n) if !outgoing.contains(n) => outgoing.push(n.clone()),
             Some(_) => {}
             None if !unresolved.contains(&target) => unresolved.push(target),
@@ -144,8 +179,8 @@ pub fn info(vault: &VaultFs, path: &str) -> Result<LinkInfo> {
     }
     let mut backlinks = Vec::new();
     for note in notes.iter().filter(|n| **n != path) {
-        let Ok(other) = vault.read(note) else { continue };
-        let links_here = extract(&other.content).iter().any(|t| resolve(t, note, &notes) == Some(&path));
+        let Ok(other) = listing.read(note) else { continue };
+        let links_here = extract(&other.content).iter().any(|t| index.resolve(t, note) == Some(&path));
         if links_here {
             backlinks.push(note.clone());
         }
@@ -209,8 +244,8 @@ struct Places<'a> {
     vault: &'a VaultFs,
     from: &'a str,
     to: &'a str,
-    before: &'a [String],
-    after: &'a [String],
+    before: Index<'a>,
+    after: Index<'a>,
 }
 
 impl Places<'_> {
@@ -235,9 +270,9 @@ impl Places<'_> {
                 None => join_rel(parent(from), &decoded),
             };
             let old = exact(note);
-            let target = match old.as_ref().and_then(|p| self.before.iter().find(|n| *n == p)) {
+            let target = match old.as_ref().and_then(|p| self.before.notes.iter().find(|n| *n == p)) {
                 Some(t) => t,
-                None => resolve(&decoded, note, self.before)?,
+                None => self.before.resolve(&decoded, note)?,
             };
             let wanted = self.after_move(target);
             if note == here && *target == wanted {
@@ -245,10 +280,10 @@ impl Places<'_> {
             }
             return (exact(here).as_deref() != Some(wanted.as_str())).then(|| markdown_path(raw, here, &wanted));
         }
-        let target = resolve(raw, note, self.before)?;
+        let target = self.before.resolve(raw, note)?;
         let wanted = self.after_move(target);
         let decoded = raw;
-        if resolve(decoded, here, self.after) == Some(&wanted) {
+        if self.after.resolve(decoded, here) == Some(&wanted) {
             return None;
         }
         // A wikilink keeps its style: a bare name stays a name while it is
@@ -256,7 +291,7 @@ impl Places<'_> {
         let ext = &decoded[without_ext(decoded).len()..];
         let with_ext = |s: &str| format!("{s}{ext}");
         let by_path = with_ext(without_ext(&wanted));
-        let fits = |c: &String| resolve(c, here, self.after) == Some(&wanted);
+        let fits = |c: &String| self.after.resolve(c, here) == Some(&wanted);
         let mut candidates = Vec::new();
         if !decoded.contains('/') {
             candidates.push(with_ext(stem(&wanted)));
@@ -296,12 +331,13 @@ struct Rewrite {
 }
 
 fn plan_move(vault: &VaultFs, from: &str, to: &str) -> Result<Vec<Rewrite>> {
-    let before = vault.notes()?;
+    let listing = vault.listing()?;
+    let before = listing.paths();
     let after: Vec<String> = before.iter().map(|n| moved(n, from, to).unwrap_or_else(|| n.clone())).collect();
-    let places = Places { vault, from, to, before: &before, after: &after };
+    let places = Places { vault, from, to, before: Index::new(before), after: Index::new(&after) };
     let mut plan = Vec::new();
-    for note in &before {
-        let Ok(read) = vault.read(note) else { continue };
+    for note in before {
+        let Ok(read) = listing.read(note) else { continue };
         let here = places.after_move(note);
         let mut content = String::with_capacity(read.content.len());
         let (mut at, mut links) = (0, 0);
@@ -421,13 +457,15 @@ fn file_exists(target: &str, from: &str, files: &[String]) -> bool {
 
 /// Every link in the vault that leads nowhere, note by note.
 pub fn broken(vault: &VaultFs) -> Result<Vec<BrokenLink>> {
-    let notes = vault.notes()?;
+    let listing = vault.listing()?;
+    let notes = listing.paths();
+    let index = Index::new(notes);
     let mut files = Vec::new();
     all_files(&vault.tree()?, &mut files);
     let attachments: Vec<String> = files.iter().filter(|f| !is_note_file(f)).cloned().collect();
     let mut out = Vec::new();
-    for note in &notes {
-        let Ok(read) = vault.read(note) else { continue };
+    for note in notes {
+        let Ok(read) = listing.read(note) else { continue };
         let content = &read.content;
         for link in find_links(content) {
             let raw = &content[link.start..link.end];
@@ -439,12 +477,12 @@ pub fn broken(vault: &VaultFs) -> Result<Vec<BrokenLink>> {
                 Kind::Markdown => is_note_file(raw),
             };
             let target = if link.kind == Kind::Markdown { raw.replace("%20", " ") } else { raw.to_string() };
-            let found = if to_note { resolve(&target, note, &notes).is_some() } else { file_exists(raw, note, &files) };
+            let found = if to_note { index.resolve(&target, note).is_some() } else { file_exists(raw, note, &files) };
             if found {
                 continue;
             }
             let suggestion = if to_note {
-                closest(&target, &notes)
+                closest(&target, notes)
             } else {
                 let same_kind: Vec<String> = attachments
                     .iter()
@@ -534,6 +572,20 @@ mod tests {
         assert_eq!(resolve("hola", "z.md", &notes).unwrap(), "Hola.md");
         assert_eq!(resolve("Fin", "z.md", &notes).unwrap(), "a/b/Fin.md");
         assert!(resolve("Nada", "z.md", &notes).is_none());
+    }
+
+    #[test]
+    fn the_index_resolves_as_resolve_does() {
+        let notes: Vec<String> =
+            ["Hola.md", "a/Hola.md", "a/b/Fin.md", "A/Otra.markdown", "x/Hola.html"].map(String::from).to_vec();
+        let index = Index::new(&notes);
+        for from in ["a/x.md", "z.md", "a/b/c.md", "A/q.md", "x/y.md"] {
+            for target in
+                ["Hola", "hola", "Fin", "b/Fin", "a/b/Fin.md", "./Hola", "/a/Hola", "otra", "Nada", "Hola.html"]
+            {
+                assert_eq!(index.resolve(target, from), resolve(target, from, &notes), "{target} from {from}");
+            }
+        }
     }
 
     #[test]

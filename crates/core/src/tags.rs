@@ -128,8 +128,9 @@ pub struct TagCount {
 /// Every tag in a vault, the most used first, then by name.
 pub fn vault_tags(vault: &crate::VaultFs) -> crate::Result<Vec<TagCount>> {
     let mut counts: std::collections::HashMap<String, TagCount> = std::collections::HashMap::new();
-    for path in vault.notes()? {
-        let Ok(note) = vault.read(&path) else { continue };
+    let listing = vault.listing()?;
+    for path in listing.paths() {
+        let Ok(note) = listing.read(path) else { continue };
         for tag in tags(&note.content) {
             counts.entry(fold(&tag)).or_insert(TagCount { tag, notes: 0 }).notes += 1;
         }

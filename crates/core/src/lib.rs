@@ -23,6 +23,6 @@ pub mod vault_themes;
 pub mod word_settings;
 
 pub use error::{Error, Result};
-pub use files::{Note, NoteStamp, TreeNode, Vault as VaultFs, WriteMode};
+pub use files::{Listing, Note, NoteStamp, TreeNode, Vault as VaultFs, WriteMode};
 pub use registry::{McpAccess, Registry, Vault};
 pub use search::SearchHit;

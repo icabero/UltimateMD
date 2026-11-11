@@ -2569,3 +2569,31 @@ test('a vault with its own template offers it first when exporting', async ({ pa
   await step(page, 'Aspecto');
   await expect(page.getByLabel('Plantilla')).toHaveValue(':vault');
 });
+
+// Numbers for #80; the limits are loose so that only a real slowdown fails.
+// Rows are found by their path: role queries over thousands of buttons time
+// the test tool rather than the app.
+test('a vault with 10 000 notes opens and its tree stays quick', async ({ page }) => {
+  test.setTimeout(60_000);
+  const row = (path: string) => page.locator(`aside [data-row][title="${path}"]`);
+  await page.evaluate(() => sessionStorage.setItem('bigVault', '10000'));
+  let start = Date.now();
+  await page.reload();
+  await expect(row('Grande')).toBeVisible();
+  const opened = Date.now() - start;
+
+  start = Date.now();
+  await row('Plano').click();
+  await expect(row('Plano/Nota 01999.md')).toBeAttached();
+  const flat = Date.now() - start;
+
+  start = Date.now();
+  await row('Plano/Nota 01999.md').click();
+  await expect(page.locator('main footer')).toContainText('Plano/Nota 01999.md');
+  const note = Date.now() - start;
+
+  console.log(`[bench] abrir ${opened} ms · carpeta de 2000 ${flat} ms · nota ${note} ms`);
+  expect(opened).toBeLessThan(10_000);
+  expect(flat).toBeLessThan(5_000);
+  expect(note).toBeLessThan(3_000);
+});

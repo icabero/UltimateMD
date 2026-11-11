@@ -6489,6 +6489,8 @@ dependencies = [
  "image",
  "imagesize 0.15.0",
  "pulldown-cmark",
+ "serde_json",
+ "tempfile",
  "typst",
  "typst-assets",
  "typst-layout",

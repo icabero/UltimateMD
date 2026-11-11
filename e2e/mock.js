@@ -18,6 +18,14 @@
       'Rara.md': '---\ntema: no-existe\n---\n# Rara\n',
     },
   };
+  // The performance test asks for a large vault: folders of 100 notes, and
+  // one flat folder with 2000, the worst case for the tree.
+  const big = Number(sessionStorage.getItem('bigVault') || 0);
+  for (let i = 0; i < big; i++) {
+    const n = String(i).padStart(5, '0');
+    files.a[`Grande/Area ${String(Math.floor(i / 100)).padStart(3, '0')}/Nota ${n}.md`] = `# Nota ${i}\n\nVer [[Nota ${String((i * 7) % big).padStart(5, '0')}]].\n`;
+    if (i < 2000) files.a[`Plano/Nota ${n}.md`] = `# Nota ${i}\n`;
+  }
   const vaults = [
     { id: 'a', name: 'Trabajo', path: '/v/Trabajo', open: true, mcp: 'read', allowScripts: false },
     { id: 'b', name: 'Personal', path: '/v/Personal', open: true, mcp: 'off', allowScripts: false },
@@ -224,7 +232,10 @@
     note_links: ({ id, path }) => {
       const stem = (p) => p.split('/').pop().replace(/\.md$/, '');
       const targets = (text) => [...text.matchAll(/\[\[([^\]|#]+)/g)].map((m) => m[1].trim());
-      const find = (name) => Object.keys(files[id]).find((p) => stem(p).toLowerCase() === name.toLowerCase());
+      // An index by name, as the backend keeps, so large vaults stay quick.
+      const byName = new Map();
+      for (const p of Object.keys(files[id])) if (!byName.has(stem(p).toLowerCase())) byName.set(stem(p).toLowerCase(), p);
+      const find = (name) => byName.get(name.toLowerCase());
       const mine = targets(files[id][path] ?? '');
       return {
         outgoing: [...new Set(mine.map(find).filter(Boolean))],

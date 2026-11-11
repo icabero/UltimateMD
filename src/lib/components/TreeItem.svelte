@@ -16,12 +16,14 @@
 
   let expanded = $state(false);
   let over = $state(false);
-  const active = $derived(store.active?.vaultId === vaultId && store.active.path === node.path);
+  // Only the active tab's key, not the tab itself: a large folder has thousands
+  // of rows, and each change to any open tab would otherwise reach every one.
+  const active = $derived(store.activeKey === `${vaultId}:${node.path}`);
   const icon = $derived(node.isDir ? 'folder' : { md: 'file', html: 'code', image: 'image', other: 'file' }[kindOf(node.path)]);
 
   // Reveals the note being edited, including one opened from a link or search.
   $effect(() => {
-    if (node.isDir && store.active?.vaultId === vaultId && store.active.path.startsWith(`${node.path}/`)) expanded = true;
+    if (node.isDir && store.activeKey?.startsWith(`${vaultId}:${node.path}/`)) expanded = true;
   });
 
   function onKey(e: KeyboardEvent) {
