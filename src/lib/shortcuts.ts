@@ -72,6 +72,8 @@ export const SHORTCUTS: { title: Key; items: Shortcut[] }[] = [
       { label: 'shortcuts.redo', keys: [['Ctrl', 'Shift', 'Z'], ['Ctrl', 'Y']] },
       { label: 'shortcuts.indent', keys: [['Tab'], ['Shift', 'Tab']] },
       { label: 'shortcuts.moveLine', keys: [['Alt', '↑'], ['Alt', '↓']] },
+      { label: 'shortcuts.moveTableRow', keys: [['Alt', '↑'], ['Alt', '↓']] },
+      { label: 'shortcuts.moveTableColumn', keys: [['Alt', '←'], ['Alt', '→']] },
       { label: 'shortcuts.selectNext', keys: [['Ctrl', 'D']] },
       { label: 'shortcuts.toggleTask', keys: [['Ctrl', 'Enter']] },
       { label: 'shortcuts.sortLines', keys: [['Alt', 'Shift', 'S']] },

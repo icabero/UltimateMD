@@ -2393,6 +2393,75 @@ test('a cell keeps pipes and backslashes intact', async ({ page }) => {
   await expect(page.locator('.cm-v-table td input').nth(1)).toHaveValue('2');
 });
 
+test('a table column can be aligned and the table shows it', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\nfin');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('fin');
+  await page.getByTitle('Visual', { exact: true }).click();
+  const second = page.locator('.cm-v-table td input').nth(1);
+  const right = page.getByRole('button', { name: 'Alinear la columna a la derecha' });
+  await page.locator('.cm-v-table').hover();
+  await expect(right).toBeDisabled();
+  await second.click();
+  await expect(right).toBeEnabled();
+  await right.click();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| A | B |\n| --- | ---: |\n| 1 | 2 |');
+  await expect(second).toHaveCSS('text-align', 'right');
+  await expect(page.locator('.cm-v-table th input').nth(1)).toHaveCSS('text-align', 'right');
+  await expect(right).toHaveAttribute('aria-pressed', 'true');
+  await expect(second).toBeFocused();
+  await page.getByRole('button', { name: 'Centrar la columna' }).click();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| --- | :---: |');
+  await page.getByRole('button', { name: 'Alinear la columna a la izquierda' }).click();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| --- | :--- |');
+  // Pressing the one that is on takes it back to the default.
+  await page.getByRole('button', { name: 'Alinear la columna a la izquierda' }).click();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| A | B |\n| --- | --- |\n| 1 | 2 |');
+  await expect(second).toHaveCSS('text-align', 'start');
+});
+
+test('table rows and columns move with buttons and with Alt and the arrows', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\n\n| A | B |\n| --- | ---: |\n| 1 | 2 |\n| 3 | a\\|b |\n\nfin');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('fin');
+  await page.getByTitle('Visual', { exact: true }).click();
+  const inputs = page.locator('.cm-v-table td input');
+  await inputs.first().click();
+  await expect(page.getByRole('button', { name: 'Subir la fila' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Bajar la fila' }).click();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| 3 | a\\|b |\n| 1 | 2 |');
+  // The cursor went down with the row.
+  await expect(inputs.nth(2)).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Bajar la fila' })).toBeDisabled();
+  await page.keyboard.press('Alt+ArrowUp');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| A | B |\n| --- | ---: |\n| 1 | 2 |\n| 3 | a\\|b |');
+  // Columns take their alignment with them.
+  await page.keyboard.press('Alt+ArrowRight');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| B | A |\n| ---: | --- |\n| 2 | 1 |\n| a\\|b | 3 |');
+  await expect(inputs.nth(1)).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Mover la columna a la derecha' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Mover la columna a la izquierda' }).click();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| A | B |\n| --- | ---: |\n| 1 | 2 |');
+  // The header cannot go down.
+  await page.locator('.cm-v-table th input').first().click();
+  await expect(page.getByRole('button', { name: 'Bajar la fila' })).toBeDisabled();
+});
+
+test('Alt and the arrows move the table row or column in the plain editor', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| 3 | 4 |');
+  await page.keyboard.press('Alt+ArrowUp');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| --- | --- |\n| 3 | 4 |\n| 1 | 2 |');
+  await page.keyboard.press('Alt+ArrowUp');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| --- | --- |\n| 3 | 4 |\n| 1 | 2 |');
+  await page.keyboard.press('Alt+ArrowLeft');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| B | A |\n| --- | --- |\n| 4 | 3 |\n| 2 | 1 |');
+  // One undo each.
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('| A | B |\n| --- | --- |\n| 3 | 4 |\n| 1 | 2 |');
+});
+
 test('text typed below a block at the end of a note stays out of it', async ({ page }) => {
   await open(page, 'Inicio');
   await typeInEditor(page, '\n\n| A | B |\n| --- | --- |\n| 1 | 2 |');

@@ -17,6 +17,7 @@
   import { findTerms } from '../fold';
   import { htmlToMarkdown } from '../paste';
   import { countSelection, fenceAt, insertBlock, insertLink, sortSelectedLines, toggleTask, wrap } from '../formatting';
+  import { moveInTable } from '../tables';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
   import { baseName } from '../paths';
@@ -122,6 +123,11 @@
     { key: 'Mod-i', run: command((v) => wrap(v, '*', tr('toolbar.text'))) },
     { key: 'Mod-k', run: command((v) => insertLink(v, tr('toolbar.linkText'))) },
     { key: 'Alt-Shift-s', run: (v: EditorView) => tab.kind === 'md' && (sortLines(v), true) },
+    // Inside a table these move its row or column; anywhere else the keys keep their other meaning (a line moves up or down).
+    { key: 'Alt-ArrowUp', run: (v: EditorView) => tab.kind === 'md' && moveInTable(v, 'row', -1) },
+    { key: 'Alt-ArrowDown', run: (v: EditorView) => tab.kind === 'md' && moveInTable(v, 'row', 1) },
+    { key: 'Alt-ArrowLeft', run: (v: EditorView) => tab.kind === 'md' && moveInTable(v, 'column', -1) },
+    { key: 'Alt-ArrowRight', run: (v: EditorView) => tab.kind === 'md' && moveInTable(v, 'column', 1) },
     // In a note only: elsewhere Ctrl+Enter keeps opening a line below, as CodeMirror does.
     { key: 'Mod-Enter', run: (v: EditorView) => tab.kind === 'md' && command(toggleTask)(v) },
   ];

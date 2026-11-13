@@ -10,8 +10,9 @@ import { findFormulas } from './mathSource';
 import { renderMath } from './math';
 import { diagramErrorBox, explainDiagramError } from './diagramErrors';
 import { renderDiagram } from './diagrams';
-import { tr } from './i18n.svelte';
+import { tr, type Key } from './i18n.svelte';
 import { store } from './store.svelte';
+import { alignColumn, delimiterRow, joinRow, moveColumn, moveRow, parseTable, type Align, type Table } from './tables';
 import { themeKey, type Theme } from './themes';
 import { WIKILINK, linkAt } from './wikilinks';
 
@@ -124,37 +125,37 @@ class DiagramWidget extends WidgetType {
 }
 
 const MIN_CELL_WIDTH = 8;
-const CELL_SEPARATOR = /(?<!\\)\|/;
-
-function splitRow(line: string) {
-  const inner = line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '');
-  return inner.split(CELL_SEPARATOR).map((cell) => cell.trim().replace(/\\([\\|])/g, '$1'));
-}
-
-const joinRow = (cells: string[]) => `| ${cells.map((cell) => cell.replace(/\s+/g, ' ').trim().replace(/[\\|]/g, '\\$&')).join(' | ')} |`;
-
-function tableRows(text: string) {
-  const lines = text.split('\n');
-  const head = splitRow(lines[0]);
-  return [head, ...lines.slice(2).map(splitRow)].map((row) => head.map((_, i) => row[i] ?? ''));
-}
 
 const cleanCell = (value: string) => value.replace(/\s+/g, ' ').trim();
 
 /** The Markdown each drawn table stands for, which outlives any one widget. */
 const tableText = new WeakMap<HTMLElement, string>();
+/** Brings what a table's buttons show up to date after it changed. */
+const tableRefresh = new WeakMap<HTMLElement, () => void>();
 
 /** Writes a table back. Its cells stay as they are, so typing never loses its place. */
-function writeTable(view: EditorView, wrap: HTMLElement, rows: string[][]) {
+function writeTable(view: EditorView, wrap: HTMLElement, rows: string[][], aligns: Align[]) {
   const text = tableText.get(wrap)!;
-  const lines = text.split('\n');
-  const divider = splitRow(lines[1]).length === rows[0].length ? lines[1] : joinRow(Array(rows[0].length).fill('---'));
+  const old = parseTable(text);
+  // A column added or taken away changes how many there are to align.
+  aligns = rows[0].map((_, i) => aligns[i] ?? null);
+  const same = old.aligns.length === aligns.length && old.aligns.every((a, i) => a === aligns[i]);
+  const divider = same ? text.split('\n')[1] : delimiterRow(aligns);
   const [head, ...body] = rows.map(joinRow);
   const next = [head, divider, ...body].join('\n');
   if (next === text) return;
   const from = view.posAtDOM(wrap);
   tableText.set(wrap, next);
   view.dispatch({ changes: { from, to: from + text.length, insert: next } });
+}
+
+/** Shows how each column is aligned, in the cells that are drawn. */
+function showAligns(table: HTMLTableElement, aligns: Align[]) {
+  for (const row of table.rows) {
+    [...row.cells].forEach((cell, c) => {
+      cell.querySelector('input')!.style.textAlign = aligns[c] ?? '';
+    });
+  }
 }
 
 /**
@@ -178,7 +179,7 @@ class TableWidget extends WidgetType {
 
   /** Keeps the table on screen through an edit, unless its shape changed. */
   updateDOM(dom: HTMLElement) {
-    const rows = tableRows(this.text);
+    const { rows, aligns } = parseTable(this.text);
     const table = dom.querySelector('table')!;
     if (table.rows.length !== rows.length || table.rows[0].cells.length !== rows[0].length) return false;
     tableText.set(dom, this.text);
@@ -186,6 +187,8 @@ class TableWidget extends WidgetType {
       const input = table.rows[r].cells[c].querySelector('input')!;
       if (cleanCell(input.value) !== value) input.value = value;
     }));
+    showAligns(table, aligns);
+    tableRefresh.get(dom)?.();
     return true;
   }
 
@@ -195,7 +198,38 @@ class TableWidget extends WidgetType {
     tableText.set(wrap, this.text);
     const table = wrap.appendChild(document.createElement('table'));
     const read = () => [...table.rows].map((row) => [...row.querySelectorAll('input')].map((input) => input.value));
-    tableRows(this.text).forEach((row, r) => {
+    const current = () => parseTable(tableText.get(wrap)!);
+    const updates: (() => void)[] = [];
+    const refresh = () => updates.forEach((update) => update());
+    tableRefresh.set(wrap, refresh);
+
+    /** The cell being edited, which the row, column and alignment actions act on. */
+    const focused = () => {
+      const input = document.activeElement;
+      const cell = input instanceof HTMLInputElement && table.contains(input) ? (input.parentElement as HTMLTableCellElement) : null;
+      return cell ? { r: (cell.parentElement as HTMLTableRowElement).rowIndex, c: cell.cellIndex } : null;
+    };
+    const move = (axis: 'row' | 'column', by: -1 | 1) => {
+      const at = focused();
+      if (!at) return;
+      const now = current();
+      const moved = axis === 'row' ? moveRow(now, at.r, by) : moveColumn(now, at.c, by);
+      if (!moved) return;
+      writeTable(view, wrap, moved.rows, moved.aligns);
+      // The cursor goes along with the cell.
+      table.rows[at.r + (axis === 'row' ? by : 0)]?.cells[at.c + (axis === 'column' ? by : 0)]?.querySelector('input')?.focus();
+      refresh();
+    };
+    const align = (to: Exclude<Align, null>) => {
+      const at = focused();
+      const changed = at && alignColumn(current(), at.c, to);
+      if (!changed) return;
+      writeTable(view, wrap, read(), changed.aligns);
+      refresh();
+    };
+
+    const parsed = current();
+    parsed.rows.forEach((row, r) => {
       const line = table.appendChild(document.createElement('tr'));
       for (const value of row) {
         const cell = line.appendChild(document.createElement(r === 0 ? 'th' : 'td'));
@@ -204,20 +238,31 @@ class TableWidget extends WidgetType {
         input.value = value;
         input.oninput = () => {
           fit();
-          writeTable(view, wrap, read());
+          writeTable(view, wrap, read(), current().aligns);
         };
+        input.onfocus = refresh;
         fit();
       }
     });
+    showAligns(table, parsed.aligns);
     wrap.addEventListener('keydown', (e) => {
       e.stopPropagation();
-      if (e.key !== 'Enter' || !(e.target instanceof HTMLInputElement)) return;
+      if (!(e.target instanceof HTMLInputElement)) return;
+      // Alt and an arrow move the row or column being edited, as Alt and an arrow move a line.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.startsWith('Arrow')) {
+        e.preventDefault();
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') move('row', e.key === 'ArrowUp' ? -1 : 1);
+        else move('column', e.key === 'ArrowLeft' ? -1 : 1);
+        return;
+      }
+      if (e.key !== 'Enter') return;
       e.preventDefault();
       const cell = e.target.parentElement as HTMLTableCellElement;
       const below = table.rows[(cell.parentElement as HTMLTableRowElement).rowIndex + 1];
       below?.cells[cell.cellIndex].querySelector('input')?.focus();
     });
     for (const type of ['beforeinput', 'input', 'paste', 'cut', 'copy']) wrap.addEventListener(type, (e) => e.stopPropagation());
+    wrap.addEventListener('focusout', () => queueMicrotask(refresh));
 
     const tools = wrap.appendChild(document.createElement('div'));
     tools.className = 'cm-v-table-tools';
@@ -227,13 +272,48 @@ class TableWidget extends WidgetType {
       button.onmousedown = (e) => e.preventDefault();
       button.onclick = () => {
         const changed = change(read());
-        if (changed) writeTable(view, wrap, changed);
+        if (changed) writeTable(view, wrap, changed, current().aligns);
       };
     };
     tool(tr('table.addRow'), (now) => [...now, now[0].map(() => '')]);
     tool(tr('table.addColumn'), (now) => now.map((row, i) => [...row, i === 0 ? `${tr('toolbar.column')} ${row.length + 1}` : '']));
     tool(tr('table.removeRow'), (now) => (now.length > 2 ? now.slice(0, -1) : null));
     tool(tr('table.removeColumn'), (now) => (now[0].length > 1 ? now.map((row) => row.slice(0, -1)) : null));
+
+    // These act on the cell being edited, so they stay off until one is.
+    const group = (label: string) => {
+      const box = tools.appendChild(document.createElement('div'));
+      box.className = 'cm-v-table-group';
+      box.setAttribute('role', 'group');
+      box.setAttribute('aria-label', label);
+      return box;
+    };
+    const cellTool = (box: HTMLElement, label: string, title: string, run: () => void, state: (at: { r: number; c: number }, t: Table) => { on?: boolean; off?: boolean }) => {
+      const button = box.appendChild(document.createElement('button'));
+      button.textContent = label;
+      button.onmousedown = (e) => e.preventDefault();
+      button.onclick = run;
+      button.setAttribute('aria-label', title);
+      updates.push(() => {
+        const at = focused();
+        const s = at ? state(at, current()) : { off: true };
+        button.disabled = !!s.off;
+        button.title = at ? title : `${title} (${tr('table.pickCell')})`;
+        button.setAttribute('aria-pressed', String(!!s.on));
+      });
+    };
+    const aligning = group(tr('table.align'));
+    for (const [to, label, key] of [['left', '⇤', 'table.alignLeft'], ['center', '↔', 'table.alignCenter'], ['right', '⇥', 'table.alignRight']] as const) {
+      cellTool(aligning, label, tr(key), () => align(to), (at, t) => ({ on: t.aligns[at.c] === to }));
+    }
+    const moving = group(tr('table.move'));
+    const moveTool = (label: string, key: Key, axis: 'row' | 'column', by: -1 | 1) =>
+      cellTool(moving, label, tr(key), () => move(axis, by), (at, t) => ({ off: !(axis === 'row' ? moveRow(t, at.r, by) : moveColumn(t, at.c, by)) }));
+    moveTool('↑', 'table.rowUp', 'row', -1);
+    moveTool('↓', 'table.rowDown', 'row', 1);
+    moveTool('←', 'table.columnLeft', 'column', -1);
+    moveTool('→', 'table.columnRight', 'column', 1);
+    refresh();
     return wrap;
   }
 }
@@ -418,12 +498,15 @@ const look = EditorView.theme({
   '.cm-v-table table': { borderCollapse: 'collapse', maxWidth: '100%' },
   '.cm-v-table th, .cm-v-table td': { padding: '0', border: '1px solid var(--line)' },
   '.cm-v-table th': { background: 'var(--panel)' },
-  '.cm-v-table input': { display: 'block', height: 'auto', padding: '6px 10px', border: '0', borderRadius: '0', background: 'transparent', color: 'inherit', font: 'inherit', outline: 'none' },
+  '.cm-v-table input': { display: 'block', width: '100%', boxSizing: 'border-box', height: 'auto', padding: '6px 10px', border: '0', borderRadius: '0', background: 'transparent', color: 'inherit', font: 'inherit', outline: 'none' },
   '.cm-v-table th input': { fontWeight: '600' },
   '.cm-v-table input:focus': { boxShadow: 'inset 0 0 0 2px var(--accent)' },
   '.cm-v-table ::selection': { background: 'transparent' },
   '.cm-v-table input:focus::selection': { background: 'var(--selection)' },
-  '.cm-v-table-tools': { display: 'flex', gap: '4px', marginTop: '4px', opacity: '0', transition: 'opacity 120ms' },
+  '.cm-v-table-tools': { display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px', opacity: '0', transition: 'opacity 120ms' },
+  '.cm-v-table-group': { display: 'flex', gap: '2px', marginLeft: '8px' },
+  '.cm-v-table-tools button[aria-pressed="true"]': { background: 'var(--accent-soft)', borderColor: 'var(--accent)', color: 'var(--text)' },
+  '.cm-v-table-tools button:disabled': { opacity: '.45' },
   '.cm-v-table:hover .cm-v-table-tools, .cm-v-table:focus-within .cm-v-table-tools': { opacity: '1' },
   '.cm-v-table-tools button': { padding: '2px 8px', border: '1px solid var(--line)', borderRadius: '5px', background: 'var(--raised)', color: 'var(--text-2)', fontFamily: 'var(--sans)', fontSize: '11.5px' },
   '.cm-v-math-block': { margin: '6px 0', overflowX: 'auto', overflowY: 'hidden', cursor: 'text' },
