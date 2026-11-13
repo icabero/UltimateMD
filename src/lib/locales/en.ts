@@ -989,4 +989,10 @@ export const en: Record<Key, string> = {
   'table.pickCell': 'click a cell first',
   'shortcuts.moveTableRow': 'Move the table row up or down',
   'shortcuts.moveTableColumn': 'Move the table column left or right',
+  'crumb.label': 'Note path',
+  'crumb.title': 'Contents of {name}',
+  'crumb.noteTitle': 'Other notes in this folder',
+  'crumb.more': 'Folders in between',
+  'crumb.empty': 'Empty folder',
+  'crumb.showInTree': 'Show in the tree',
 };

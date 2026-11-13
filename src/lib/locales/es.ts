@@ -988,4 +988,10 @@ export const es = {
   'table.pickCell': 'haz clic antes en una celda',
   'shortcuts.moveTableRow': 'Mover la fila de la tabla arriba o abajo',
   'shortcuts.moveTableColumn': 'Mover la columna de la tabla a izquierda o derecha',
+  'crumb.label': 'Ruta de la nota',
+  'crumb.title': 'Contenido de {name}',
+  'crumb.noteTitle': 'Otras notas de esta carpeta',
+  'crumb.more': 'Carpetas intermedias',
+  'crumb.empty': 'Carpeta vacía',
+  'crumb.showInTree': 'Mostrar en el árbol',
 };

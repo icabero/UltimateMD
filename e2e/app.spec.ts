@@ -3007,8 +3007,9 @@ test('the main screens pass an accessibility check', async ({ page }) => {
     const result = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'])
       .exclude('.scroll > div')
-      // The page's main heading is the note's own, inside what is left out.
-      .disableRules(['page-has-heading-one', ...skip])
+      // The page's main heading is the note's own, inside what is left out. The editor
+      // scrolls when the window is short, and the text inside it is what takes the keyboard.
+      .disableRules(['page-has-heading-one', 'scrollable-region-focusable', ...skip])
       .analyze();
     const found = result.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
     expect(found, screen).toEqual([]);
@@ -3352,4 +3353,36 @@ test('yesterday, tomorrow and the shortcut open their day', async ({ page }) => 
   await page.keyboard.press('Control+Shift+d');
   await expect(page.locator('main footer')).toContainText(`Diario/${today.y}-${today.m}-${today.d}.md`);
   expect(await disk(page, 'a', `Diario/${today.y}-${today.m}-${today.d}.md`)).toBe(`# ${today.title}\n\n`);
+});
+
+test('the path above a note opens the folders and shows the note in the tree', async ({ page }) => {
+  await open(page, 'Inicio');
+  const crumbs = page.getByRole('navigation', { name: 'Ruta de la nota' });
+  await expect(crumbs.getByRole('button')).toHaveText(['Trabajo', 'Inicio']);
+  // A folder lists its notes and folders; picking a folder goes into it.
+  await crumbs.getByRole('button', { name: 'Trabajo' }).click();
+  await expect(page.getByRole('menuitem')).toContainText(['dir', 'vacia', 'D2', 'Inicio', 'Mostrar en el árbol']);
+  await page.getByRole('menuitem', { name: 'dir', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Destino' }).click();
+  await expect(page.locator('[role=tab][aria-selected=true]')).toContainText('Destino');
+  await expect(crumbs.getByRole('button')).toHaveText(['Trabajo', 'dir', 'Destino']);
+  // The note's own menu has its neighbours and finds the note in the tree.
+  await crumbs.getByRole('button', { name: 'Destino' }).click();
+  await expect(page.getByRole('menuitem')).toContainText(['sub', 'Destino', 'Mostrar en el árbol']);
+  await page.getByRole('menuitem', { name: 'Mostrar en el árbol' }).click();
+  await expect(page.locator('aside').getByRole('button', { name: 'Destino', exact: true })).toBeFocused();
+  // Long paths keep the first and last folder, the rest behind "…".
+  await page.evaluate(() => ((window as any).__test.files.a['dir/sub/mas/Profundo.md'] = '# Profundo\n'));
+  await page.keyboard.press('Control+n');
+  await page.locator('input').fill('Nueva');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main footer')).toContainText('Nueva.md');
+  await crumbs.getByRole('button', { name: 'Nueva' }).click();
+  await page.getByRole('menuitem', { name: 'sub', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'mas', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Profundo' }).click();
+  await expect(crumbs.getByRole('button')).toHaveText(['Trabajo', 'dir', '…', 'mas', 'Profundo']);
+  await crumbs.getByRole('button', { name: 'Carpetas intermedias' }).click();
+  await expect(page.getByRole('menuitem')).toHaveText(['sub']);
+  await page.keyboard.press('Escape');
 });

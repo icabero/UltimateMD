@@ -74,7 +74,7 @@
 </div>
 
 <style>
-  .menu { position: fixed; z-index: var(--z-menu); min-width: 210px; max-width: 320px; padding: var(--space-1); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--raised); box-shadow: var(--shadow-lg); }
+  .menu { position: fixed; z-index: var(--z-menu); min-width: 210px; max-width: 320px; max-height: calc(100vh - 8px); overflow-y: auto; padding: var(--space-1); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--raised); box-shadow: var(--shadow-lg); }
   button { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-1-5) var(--space-2); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text); font-size: var(--font-md); text-align: left; }
   button:hover:not(:disabled), button:focus-visible { background: var(--hover); outline: none; }
   button:disabled { color: var(--text-3); }

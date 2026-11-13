@@ -989,4 +989,10 @@ export const eu: Record<Key, string> = {
   'table.pickCell': 'egin klik lehenago gelaxka batean',
   'shortcuts.moveTableRow': 'Mugitu taulako lerroa gora edo behera',
   'shortcuts.moveTableColumn': 'Mugitu taulako zutabea ezkerrera edo eskuinera',
+  'crumb.label': 'Oharraren bidea',
+  'crumb.title': '{name} karpetaren edukia',
+  'crumb.noteTitle': 'Karpeta honetako beste oharrak',
+  'crumb.more': 'Tarteko karpetak',
+  'crumb.empty': 'Karpeta hutsik dago',
+  'crumb.showInTree': 'Erakutsi zuhaitzean',
 };

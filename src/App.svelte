@@ -28,6 +28,7 @@
   import Reader from './lib/components/Reader.svelte';
   import GitScreen from './lib/components/GitScreen.svelte';
   import BrokenLinks from './lib/components/BrokenLinks.svelte';
+  import Breadcrumb from './lib/components/Breadcrumb.svelte';
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
   import { applyInstallerLanguage, tr } from './lib/i18n.svelte';
@@ -200,6 +201,7 @@
         <button class="dismiss" title={tr('common.close')} aria-label={tr('common.close')} onclick={() => (tab.outside = null)}>×</button>
       </div>
     {/if}
+    {#if tab && !tab.loose && !store.reader}<Breadcrumb {tab} />{/if}
     <div class="content" style:--text-scale={store.reading.textScale} style:--prose-width={LINE_WIDTHS[store.reading.lineWidth]} style:--leading={LEADINGS[store.reading.leading] ?? 0}>
       {#if store.reader}
         {#key `${store.reader?.vaultId}:${store.reader?.folder}`}<Reader vaultId={store.reader?.vaultId ?? ""} folder={store.reader?.folder ?? ""} />{/key}

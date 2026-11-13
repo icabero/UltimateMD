@@ -288,6 +288,8 @@ class Store {
   merging = $state(false);
   /** The context menu on screen, and where. */
   menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  /** A note or folder the side bar is being asked to show, for a moment. */
+  treeReveal = $state<{ vaultId: string; path: string } | null>(null);
   /** The tab shown beside the one being edited, for reference. */
   sideKey = $state<string | null>(null);
   /** Showing what changed outside the app in the note on screen. */
@@ -525,6 +527,14 @@ class Store {
     const short = stem(path);
     const unique = this.files(vaultId).filter((f) => stem(f) === short).length < 2;
     void this.copyText(`[[${unique ? short : path.slice(0, path.lastIndexOf('.'))}]]`, tr('menu.linkCopied'));
+  }
+
+  /** Shows a note or folder in the side bar: opens the bar and the folders above it, and puts the focus on it. */
+  showInTree(vaultId: string, path: string) {
+    this.toggleBar('left', true);
+    this.treeReveal = { vaultId, path };
+    // Rows that appear later, when the user opens folders again, must not react.
+    setTimeout(() => (this.treeReveal = null), 800);
   }
 
   revealInFolder(vaultId: string, path: string) {

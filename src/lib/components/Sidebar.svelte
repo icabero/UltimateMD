@@ -14,6 +14,12 @@
   let collapsed = $state<Record<string, boolean>>({});
   let dropVault = $state<string | null>(null);
 
+  // A vault folded away opens when something in it is to be shown.
+  $effect(() => {
+    const asked = store.treeReveal;
+    if (asked) collapsed[asked.vaultId] = false;
+  });
+
   const newNote = async (id: string, dir: string) => {
     const name = await store.prompt(tr('sidebar.noteName'), '', tr('common.create'));
     if (name?.trim()) await store.createNote(id, dir, name.trim());

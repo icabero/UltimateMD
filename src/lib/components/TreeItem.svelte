@@ -37,6 +37,18 @@
     if (node.isDir && store.activeKey?.startsWith(`${vaultId}:${node.path}/`)) expanded = true;
   });
 
+  let row = $state<HTMLButtonElement>();
+  // Asked to show a note or folder: opens the folders above it and takes the focus if it is this one.
+  const asked = $derived(store.treeReveal?.vaultId === vaultId ? store.treeReveal.path : null);
+  $effect(() => {
+    if (asked === null) return;
+    if (node.isDir && asked.startsWith(`${node.path}/`)) expanded = true;
+    else if (asked === node.path) {
+      row?.scrollIntoView({ block: 'nearest' });
+      row?.focus({ preventScroll: true });
+    }
+  });
+
   function onKey(e: KeyboardEvent) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'F2') void store.renamePrompt(vaultId, node.path);
@@ -98,6 +110,7 @@
 </script>
 
 <button
+  bind:this={row}
   class="row"
   class:active
   class:over
