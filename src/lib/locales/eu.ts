@@ -995,4 +995,10 @@ export const eu: Record<Key, string> = {
   'crumb.more': 'Tarteko karpetak',
   'crumb.empty': 'Karpeta hutsik dago',
   'crumb.showInTree': 'Erakutsi zuhaitzean',
+  'fold.fold': 'Tolestu',
+  'fold.unfold': 'Zabaldu',
+  'fold.folded': 'Tolestutako testua',
+  'shortcuts.fold': 'Tolestu / zabaldu atala',
+  'cmd.foldAll': 'Tolestu dena',
+  'cmd.unfoldAll': 'Zabaldu dena',
 };

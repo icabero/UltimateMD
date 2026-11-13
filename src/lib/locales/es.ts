@@ -994,4 +994,10 @@ export const es = {
   'crumb.more': 'Carpetas intermedias',
   'crumb.empty': 'Carpeta vacía',
   'crumb.showInTree': 'Mostrar en el árbol',
+  'fold.fold': 'Plegar',
+  'fold.unfold': 'Desplegar',
+  'fold.folded': 'Texto plegado',
+  'shortcuts.fold': 'Plegar / desplegar la sección',
+  'cmd.foldAll': 'Plegar todo',
+  'cmd.unfoldAll': 'Desplegar todo',
 };

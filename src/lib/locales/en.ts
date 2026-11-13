@@ -995,4 +995,10 @@ export const en: Record<Key, string> = {
   'crumb.more': 'Folders in between',
   'crumb.empty': 'Empty folder',
   'crumb.showInTree': 'Show in the tree',
+  'fold.fold': 'Fold',
+  'fold.unfold': 'Unfold',
+  'fold.folded': 'Folded text',
+  'shortcuts.fold': 'Fold / unfold the section',
+  'cmd.foldAll': 'Fold all',
+  'cmd.unfoldAll': 'Unfold all',
 };

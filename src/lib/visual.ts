@@ -472,9 +472,11 @@ const keepBlocksWhole = EditorView.inputHandler.of((view, from, to, text) => {
 });
 
 const look = EditorView.theme({
-  '.cm-gutters': { display: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--sans)', fontSize: 'calc(15px * var(--text-scale, 1))', lineHeight: 'calc(1.65 + var(--leading, 0))' },
-  '.cm-content': { maxWidth: 'var(--prose-width, 760px)', margin: '0 auto', width: '100%' },
+  // Only the fold arrows stay, next to the text, which is centred along with them.
+  '.cm-lineNumbers': { display: 'none !important' },
+  '.cm-activeLineGutter': { background: 'transparent' },
+  '.cm-scroller': { justifyContent: 'center', fontFamily: 'var(--sans)', fontSize: 'calc(15px * var(--text-scale, 1))', lineHeight: 'calc(1.65 + var(--leading, 0))' },
+  '.cm-content': { maxWidth: 'var(--prose-width, 760px)', margin: '0', width: '100%' },
   '.cm-activeLine': { background: 'transparent' },
   '.cm-v-h1': { fontSize: '1.9em', fontWeight: '700', lineHeight: '1.3' },
   '.cm-v-h2': { fontSize: '1.5em', fontWeight: '700', lineHeight: '1.3' },

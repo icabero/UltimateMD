@@ -3,7 +3,7 @@
   import { Annotation, Compartment, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
   import { Decoration, EditorView, drawSelection, highlightActiveLine, keymap, lineNumbers, type DecorationSet } from '@codemirror/view';
   import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-  import { HighlightStyle, indentOnInput, syntaxHighlighting, bracketMatching, ensureSyntaxTree, syntaxTree } from '@codemirror/language';
+  import { HighlightStyle, foldEffect, foldAll, unfoldAll, unfoldEffect, indentOnInput, syntaxHighlighting, bracketMatching, ensureSyntaxTree, syntaxTree } from '@codemirror/language';
   import { autocompletion } from '@codemirror/autocomplete';
   import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
   import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -15,6 +15,7 @@
   import { parseSource } from '../diagramBuilder';
   import { fenceLine, parseStyle, splitFence } from '../diagramStyle';
   import { findTerms } from '../fold';
+  import { FOLD_ALL, UNFOLD_ALL, folding, rememberFolds, restoreFolds } from '../folding';
   import { htmlToMarkdown } from '../paste';
   import { countSelection, fenceAt, insertBlock, insertLink, sortSelectedLines, toggleTask, wrap } from '../formatting';
   import { moveInTable } from '../tables';
@@ -198,7 +199,7 @@
     return EditorState.create({
       doc: current.content,
       extensions: [
-        lineNumbers(), history(), drawSelection(), highlightActiveLine(), indentOnInput(), bracketMatching(),
+        lineNumbers(), folding(current.kind), history(), drawSelection(), highlightActiveLine(), indentOnInput(), bracketMatching(),
         highlightSelectionMatches(), search({ top: true }),
         // Screen readers announce the text box by the note it holds.
         EditorView.contentAttributes.of({ 'aria-label': tr('editor.label', { name: baseName(current.path) }) }),
@@ -212,6 +213,7 @@
         ...(current.kind === 'md' ? [wikilinks, tagMarks, mathMarks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions, tagCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
+          if (u.docChanged || u.selectionSet || u.transactions.some((x) => x.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)))) rememberFolds(tab.key, u.state);
           if (u.docChanged || u.selectionSet) {
             publishPosition(u.state);
             publishSelection(u.state);
@@ -225,7 +227,7 @@
     if (!view) return;
     if (shownKey !== current.key) {
       if (shownKey) states.set(shownKey, view.state);
-      view.setState(states.get(current.key) ?? makeState(current));
+      view.setState(states.get(current.key) ?? restoreFolds(current.key, makeState(current)));
       shownKey = current.key;
       shownRevision = current.revision;
       publishPosition(view.state);
@@ -345,6 +347,8 @@
     view = new EditorView({ parent: host });
     view.dom.addEventListener(EDIT_DIAGRAM, openBuilder);
     view.dom.addEventListener(TOGGLE_TASK, () => view && tab.kind === 'md' && toggleTask(view));
+    view.dom.addEventListener(FOLD_ALL, () => view && foldAll(view));
+    view.dom.addEventListener(UNFOLD_ALL, () => view && unfoldAll(view));
     view.dom.addEventListener(SORT_LINES, () => view && tab.kind === 'md' && sortLines(view));
     const scroller = view.scrollDOM;
     scroller.addEventListener('scroll', () => {

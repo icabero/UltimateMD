@@ -2090,7 +2090,7 @@ test('visual mode reads like a document, not like code', async ({ page }) => {
   const line = page.locator('.cm-line', { hasText: 'Ver' });
   await line.click();
   await expect(page.locator('.cm-scroller')).toHaveCSS('font-family', /Inter/);
-  await expect(page.locator('.cm-gutters')).toBeHidden();
+  await expect(page.locator('.cm-lineNumbers')).toBeHidden();
   await expect(line).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 });
 
@@ -3385,4 +3385,99 @@ test('the path above a note opens the folders and shows the note in the tree', a
   await crumbs.getByRole('button', { name: 'Carpetas intermedias' }).click();
   await expect(page.getByRole('menuitem')).toHaveText(['sub']);
   await page.keyboard.press('Escape');
+});
+
+/** A short note with sections, all in view, so that what is folded is what is missing. */
+async function foldable(page: Page) {
+  await page.evaluate(() => (window as any).__test.externalWrite('a', 'Plegable.md', '---\ntema: claro\n---\n# Uno\n\nTexto uno.\n\n## Dos\n\nTexto dos.\n\n### Tres\n\nFin.\n'));
+  await open(page, 'Plegable');
+  await expect(page.locator('main footer')).toContainText('Plegable.md');
+}
+
+test('a section folds under its heading, with the keys and the arrow in the gutter', async ({ page }) => {
+  await foldable(page);
+  const text = editorText(page);
+  await page.keyboard.press('Control+Shift+o');
+  await notePanel(page).getByRole('navigation', { name: 'Esquema' }).getByRole('button', { name: 'Dos' }).click();
+  await expect(text).toContainText('Fin.');
+  await page.keyboard.press('Control+Shift+BracketLeft');
+  await expect(text).not.toContainText('Fin.');
+  await expect(text).toContainText('## Dos');
+  await expect(page.locator('.cm-foldPlaceholder')).toBeVisible();
+  // The arrow of a folded line stays on; clicking it opens the section again.
+  await expect(page.locator('.cm-fold-mark.folded:visible')).toHaveCSS('opacity', '1');
+  await page.locator('.cm-fold-mark.folded:visible').click();
+  await expect(text).toContainText('Fin.');
+  // The arrows of open sections are quiet until the pointer is over the gutter.
+  const open = page.locator('.cm-fold-mark:not(.folded):visible').first();
+  await page.mouse.move(600, 600);
+  await expect(open).toHaveCSS('opacity', '0');
+  await page.locator('.cm-gutters').hover();
+  await expect(open).toHaveCSS('opacity', '1');
+});
+
+test('the frontmatter folds, and everything folds from the palette', async ({ page }) => {
+  await foldable(page);
+  const text = editorText(page);
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+Home');
+  await expect(text).toContainText('tema: claro');
+  await page.keyboard.press('Control+Shift+BracketLeft');
+  await expect(text).not.toContainText('tema: claro');
+  await page.keyboard.press('Control+Shift+BracketRight');
+  await expect(text).toContainText('tema: claro');
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('plegar todo');
+  await page.keyboard.press('Enter');
+  await expect(text).not.toContainText('Fin.');
+  await expect(text).not.toContainText('tema: claro');
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('desplegar todo');
+  await page.keyboard.press('Enter');
+  await expect(text).toContainText('Fin.');
+  await expect(text).toContainText('tema: claro');
+  // AltGr arrives as Ctrl+Alt on Windows and types [ on Spanish keyboards: it must never fold.
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('Control+Alt+BracketLeft');
+  await page.keyboard.press('Control+Alt+BracketRight');
+  await expect(page.locator('.cm-foldPlaceholder')).toHaveCount(0);
+  await expect(text).toContainText('Fin.');
+});
+
+test('folds survive changing tabs and reopening, and the outline opens a folded section', async ({ page }) => {
+  await foldable(page);
+  const text = editorText(page);
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('plegar todo');
+  await page.keyboard.press('Enter');
+  await expect(text).not.toContainText('Fin.');
+  await open(page, 'Inicio');
+  await expect(text).toContainText('Ver');
+  await page.getByRole('tab', { name: /Plegable/ }).click();
+  await expect(text).not.toContainText('Fin.');
+  await expect(text).toContainText('# Uno');
+  // Closed and opened again in the same session.
+  await page.keyboard.press('Control+w');
+  await expect(page.getByRole('tab', { name: /Plegable/ })).toHaveCount(0);
+  await open(page, 'Plegable');
+  await expect(text).toContainText('# Uno');
+  await expect(text).not.toContainText('Fin.');
+  // The outline goes into the folded section and opens it.
+  await page.keyboard.press('Control+Shift+o');
+  await notePanel(page).getByRole('navigation', { name: 'Esquema' }).getByRole('button', { name: 'Tres' }).click();
+  await expect(page.locator('.cm-activeLine')).toContainText('### Tres');
+  await expect(text).toContainText('Fin.');
+});
+
+test('in visual mode the headings fold too', async ({ page }) => {
+  await foldable(page);
+  await page.getByTitle('Visual', { exact: true }).click();
+  const text = editorText(page);
+  await expect(page.locator('.cm-lineNumbers')).toBeHidden();
+  await page.locator('.cm-v-h2').click();
+  await page.keyboard.press('Control+Shift+BracketLeft');
+  await expect(text).not.toContainText('Fin.');
+  await expect(page.locator('.cm-v-h2')).toBeVisible();
+  await page.locator('.cm-fold-mark.folded:visible').click();
+  await expect(text).toContainText('Fin.');
 });

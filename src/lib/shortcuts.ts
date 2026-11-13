@@ -77,6 +77,7 @@ export const SHORTCUTS: { title: Key; items: Shortcut[] }[] = [
       { label: 'shortcuts.selectNext', keys: [['Ctrl', 'D']] },
       { label: 'shortcuts.toggleTask', keys: [['Ctrl', 'Enter']] },
       { label: 'shortcuts.sortLines', keys: [['Alt', 'Shift', 'S']] },
+      { label: 'shortcuts.fold', keys: [['Ctrl', 'Shift', '['], ['Ctrl', 'Shift', ']']] },
     ],
   },
   {

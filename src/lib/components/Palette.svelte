@@ -8,6 +8,7 @@
   import { THEMES } from '../themes';
   import { EDIT_DIAGRAM, SORT_LINES, TOGGLE_TASK } from '../visual';
   import { keyLabel } from '../shortcuts';
+  import { FOLD_ALL, UNFOLD_ALL } from '../folding';
 
   let { initial = '' }: { initial?: string } = $props();
 
@@ -95,6 +96,8 @@
       { id: 'note.diagram', label: tr('cmd.diagram'), when: md, run: () => document.querySelector('.cm-editor')?.dispatchEvent(new CustomEvent(EDIT_DIAGRAM)) },
       { id: 'edit.task', label: tr('cmd.toggleTask'), keys: ['Ctrl', 'Enter'], when: editing, run: () => document.querySelector('.cm-editor')?.dispatchEvent(new CustomEvent(TOGGLE_TASK)) },
       { id: 'edit.sort', label: tr('cmd.sortLines'), keys: ['Alt', 'Shift', 'S'], when: editing, run: () => document.querySelector('.cm-editor')?.dispatchEvent(new CustomEvent(SORT_LINES)) },
+      { id: 'edit.foldAll', label: tr('cmd.foldAll'), when: editing, run: () => document.querySelector('.cm-editor')?.dispatchEvent(new CustomEvent(FOLD_ALL)) },
+      { id: 'edit.unfoldAll', label: tr('cmd.unfoldAll'), when: editing, run: () => document.querySelector('.cm-editor')?.dispatchEvent(new CustomEvent(UNFOLD_ALL)) },
       view('visual', 'tabs.visual'),
       view('edit', 'tabs.edit'),
       view('split', 'tabs.split'),
