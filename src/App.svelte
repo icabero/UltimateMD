@@ -34,6 +34,7 @@
   import { LEADINGS, LINE_WIDTHS, ZOOM, store, type ViewMode } from './lib/store.svelte';
   import { applyTheme } from './lib/themes';
   import { api } from './lib/api';
+  import { countText } from './lib/formatting';
   import { dictionaryOf, spellLanguage } from './lib/spellcheck';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
@@ -46,7 +47,9 @@
   const side = $derived(store.sideTab);
   const panel = $derived(store.showRight && tab?.kind === 'md');
   const columns = $derived(`${store.showLeft ? `${sidebarWidth}px ` : ''}minmax(0, 1fr)${panel ? ` ${store.layout.rightWidth}px` : ''}`);
-  const words = $derived(tab?.content.trim() ? tab.content.trim().split(/\s+/).length : 0);
+  const count = $derived(countText(tab?.content ?? ''));
+  // The editor's selection, unless the editor is hidden behind the preview.
+  const picked = $derived(store.selection && tab && store.selection.key === tab.key && tab.view !== 'preview' ? store.selection : null);
   const status = $derived(
     !tab ? '' : tr(tab.missing ? 'app.statusDeleted' : tab.conflict ? 'app.statusConflict' : tab.saving ? 'app.statusSaving' : tab.dirty ? 'app.statusUnsaved' : 'app.statusSaved'),
   );
@@ -229,7 +232,9 @@
           <button class="adopt" onclick={() => store.adoptFolder(tab)}>{tr('app.adoptFolder')}</button>
         {/if}
         <span class="spacer"></span>
-        {#if tab.kind === 'md' || tab.kind === 'html'}<span>{tr('app.words', { n: words })}</span>{/if}
+        {#if tab.kind === 'md' || tab.kind === 'html'}
+          <span class="count">{picked ? tr('app.countSelected', { words: picked.words, total: count.words, chars: picked.chars }) : tr('app.count', { words: count.words, chars: count.chars })}</span>
+        {/if}
         {#key status}<span class="status" in:swap>{status}</span>{/key}
       {/if}
       {#if store.update}

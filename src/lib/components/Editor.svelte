@@ -16,7 +16,7 @@
   import { fenceLine, parseStyle, splitFence } from '../diagramStyle';
   import { findTerms } from '../fold';
   import { htmlToMarkdown } from '../paste';
-  import { fenceAt, insertBlock, insertLink, wrap } from '../formatting';
+  import { countSelection, fenceAt, insertBlock, insertLink, wrap } from '../formatting';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
   import { baseName } from '../paths';
@@ -197,7 +197,10 @@
         ...(current.kind === 'md' ? [wikilinks, tagMarks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions, tagCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
-          if (u.docChanged || u.selectionSet) publishPosition(u.state);
+          if (u.docChanged || u.selectionSet) {
+            publishPosition(u.state);
+            publishSelection(u.state);
+          }
         }),
       ],
     });
@@ -211,6 +214,7 @@
       shownKey = current.key;
       shownRevision = current.revision;
       publishPosition(view.state);
+      publishSelection(view.state);
     }
     // An edit made outside this editor stays undoable. Only the part that
     // differs is replaced, so the cursor and the scroll stay where they were.
@@ -334,7 +338,21 @@
     view.focus();
   });
 
-  onDestroy(() => view?.destroy());
+  onDestroy(() => {
+    store.selection = null;
+    view?.destroy();
+  });
+
+  /** Tells the status bar what is selected. */
+  function publishSelection(state: EditorState) {
+    const count = countSelection(state);
+    const now = store.selection;
+    if (!count) {
+      if (now) store.selection = null;
+    } else if (now?.key !== tab.key || now.words !== count.words || now.chars !== count.chars) {
+      store.selection = { key: tab.key, ...count };
+    }
+  }
 
   /** Tells the note panel which line has the cursor. */
   function publishPosition(state: EditorState) {

@@ -51,7 +51,6 @@ export const eu: Record<Key, string> = {
   'diff.added': 'Gehitua',
   'diff.removed': 'Kendua',
   'app.adoptFolder': 'Ireki karpeta vault gisa',
-  'app.words': '{n} hitz',
 
   'store.invalidThemes': 'Gai baliogabeak, baztertuta: {list}',
   'store.openFailed': 'Ezin izan da {path} ireki: {error}',
@@ -934,4 +933,6 @@ export const eu: Record<Key, string> = {
   'sort.moveDown': 'Jaitsi',
   'vaultSettings.order': 'Oharren ordena',
   'vaultSettings.orderHint': 'Oharrak eta karpetak zuhaitzean, irakurtzean eta esportatzean nola ordenatzen diren. Karpetak beti lehenengo doaz. Eskuzko ordenan, arrastatu ohar edo karpeta bat bere karpetako besteen artean, edo erabili Igo eta Jaitsi bere menuan. Ez da fitxategirik berrizendatzen.',
+  'app.count': '{words} hitz · {chars} karaktere',
+  'app.countSelected': '{total} hitzetik {words} · {chars} karaktere',
 };

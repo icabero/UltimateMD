@@ -51,7 +51,6 @@ export const en: Record<Key, string> = {
   'diff.added': 'Added',
   'diff.removed': 'Removed',
   'app.adoptFolder': 'Open the folder as a vault',
-  'app.words': '{n} words',
 
   'store.invalidThemes': 'Invalid themes ignored: {list}',
   'store.openFailed': 'Could not open {path}: {error}',
@@ -934,4 +933,6 @@ export const en: Record<Key, string> = {
   'sort.moveDown': 'Move down',
   'vaultSettings.order': 'Order of notes',
   'vaultSettings.orderHint': 'How notes and folders are ordered in the tree, when reading and when exporting. Folders always come first. With a hand order, drag a note or folder among those in its own folder, or use Move up and Move down in its menu. No file is renamed.',
+  'app.count': '{words} words · {chars} characters',
+  'app.countSelected': '{words} of {total} words · {chars} characters',
 };

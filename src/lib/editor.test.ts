@@ -4,7 +4,7 @@ import { EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { describe, expect, it } from 'vitest';
 import { parseSource, toSource, type Diagram } from './diagramBuilder';
-import { fenceAt, insertBlock, insertLink, prefixLines, wrap } from './formatting';
+import { countSelection, countText, fenceAt, insertBlock, insertLink, prefixLines, wrap } from './formatting';
 import { htmlToMarkdown } from './paste';
 import { TAG } from './tags';
 import { WIKILINK, linkAt } from './wikilinks';
@@ -120,5 +120,23 @@ describe('pasting', () => {
   it('turns pasted HTML into Markdown', () => {
     expect(htmlToMarkdown('<h2>Título</h2><p>Un <strong>texto</strong> con <a href="https://ejemplo.org">enlace</a>.</p>')).toBe('## Título\n\nUn **texto** con [enlace](https://ejemplo.org).');
     expect(htmlToMarkdown('<ul><li>uno</li><li>dos</li></ul>')).toMatch(/^[-*]\s+uno\n[-*]\s+dos$/);
+  });
+});
+
+describe('counting the selection', () => {
+  it('counts words and characters of what is selected, and adds the selections up', () => {
+    expect(countSelection(editor('una ¦dos tres¦ cuatro').state)).toEqual({ words: 2, chars: 8 });
+    const state = EditorState.create({
+      doc: 'uno dos tres cuatro',
+      selection: EditorSelection.create([EditorSelection.range(0, 7), EditorSelection.range(12, 19)]),
+      extensions: EditorState.allowMultipleSelections.of(true),
+    });
+    expect(countSelection(state)).toEqual({ words: 3, chars: 14 });
+  });
+
+  it('counts nothing without a selection and counts accents and emoji as one character', () => {
+    expect(countSelection(editor('uno ¦dos').state)).toBeNull();
+    expect(countSelection(editor('¦ña 🙂¦').state)).toEqual({ words: 2, chars: 4 });
+    expect(countText('  ')).toEqual({ words: 0, chars: 2 });
   });
 });

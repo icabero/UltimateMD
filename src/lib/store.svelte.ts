@@ -323,6 +323,8 @@ class Store {
   editDiagram = $state<{ key: string; index: number } | null>(null);
   /** The line with the cursor, or the top of the preview when it shows alone. */
   position = $state<{ key: string; line: number } | null>(null);
+  /** The words and characters the editor has selected; null when nothing is. */
+  selection = $state<{ key: string; words: number; chars: number } | null>(null);
   /** Tags of each vault, the most used first. Dropped when the vault changes, read again when needed. */
   tags = $state<Record<string, { tag: string; notes: number }[]>>({});
   /** Vaults whose changes made outside the app are not followed, with why. */

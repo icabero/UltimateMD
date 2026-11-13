@@ -50,7 +50,6 @@ export const es = {
   'diff.added': 'Añadida',
   'diff.removed': 'Quitada',
   'app.adoptFolder': 'Abrir la carpeta como vault',
-  'app.words': '{n} palabras',
 
   'store.invalidThemes': 'Temas no válidos, ignorados: {list}',
   'store.openFailed': 'No se pudo abrir {path}: {error}',
@@ -933,4 +932,6 @@ export const es = {
   'sort.moveDown': 'Bajar',
   'vaultSettings.order': 'Orden de las notas',
   'vaultSettings.orderHint': 'Cómo se ordenan las notas y carpetas en el árbol, en la lectura y al exportar. Las carpetas van siempre primero. En orden a mano, arrastra una nota o carpeta entre las de su misma carpeta, o usa Subir y Bajar en su menú. Ningún archivo cambia de nombre.',
+  'app.count': '{words} palabras · {chars} caracteres',
+  'app.countSelected': '{words} de {total} palabras · {chars} caracteres',
 };

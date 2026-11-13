@@ -100,3 +100,22 @@ export function fenceAt(state: EditorState) {
     source: last.number > first.number ? state.sliceDoc(first.to + 1, last.from) : '',
   };
 }
+
+/** Words and characters as the status bar counts them: words are what whitespace separates. */
+export function countText(text: string) {
+  const trimmed = text.trim();
+  return { words: trimmed ? trimmed.split(/\s+/).length : 0, chars: [...text].length };
+}
+
+/** What the selection holds, the ranges added up; null when nothing is selected. */
+export function countSelection(state: EditorState) {
+  let words = 0;
+  let chars = 0;
+  for (const range of state.selection.ranges) {
+    if (range.empty) continue;
+    const count = countText(state.sliceDoc(range.from, range.to));
+    words += count.words;
+    chars += count.chars;
+  }
+  return chars ? { words, chars } : null;
+}

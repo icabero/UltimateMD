@@ -3038,3 +3038,18 @@ test('a manual order is set by dragging or from the menu, and reading follows it
   await page.getByRole('menuitem', { name: 'Leer el vault de arriba abajo' }).click();
   await expect(page.getByRole('navigation', { name: 'Índice de la lectura' }).getByRole('button')).toHaveText(['Rara', 'Propia', 'Otra']);
 });
+
+test('the status bar counts the selection, and all of the note when there is none', async ({ page }) => {
+  await open(page, 'Inicio');
+  const footer = page.locator('main footer');
+  await expect(footer).toContainText(/\d+ palabras · \d+ caracteres/);
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await expect(footer).toContainText(/\d+ de \d+ palabras · \d+ caracteres/);
+  await page.keyboard.press('ControlOrMeta+End');
+  await expect(footer).not.toContainText(' de ');
+  await page.keyboard.type('\nuno dos tres');
+  for (let i = 0; i < 4; i++) await page.keyboard.press('Shift+ArrowLeft');
+  await expect(footer).toContainText(/(^|\s)1 de \d+ palabras/);
+  await expect(footer).toContainText('· 4 caracteres');
+});
