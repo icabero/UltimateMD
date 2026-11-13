@@ -940,4 +940,5 @@ export const en: Record<Key, string> = {
   'cmd.toggleTask': 'Tick or untick the lines as a task',
   'cmd.sortLines': 'Sort the selected lines (A→Z)',
   'editor.sortHint': 'Select several lines to sort them.',
+  'toolbar.formula': 'Math formula ($x^2$)',
 };

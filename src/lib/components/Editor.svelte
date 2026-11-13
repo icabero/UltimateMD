@@ -24,6 +24,7 @@
   import { headingCompletions, linkAt, noteCompletions, wikilinks } from '../wikilinks';
   import { spellLanguage } from '../spellcheck';
   import { tagCompletions, tagMarks } from '../tags';
+  import { mathMarks } from '../mathSource';
 
   let { tab, onscroll }: { tab: Tab; onscroll?: (ratio: number) => void } = $props();
 
@@ -202,7 +203,7 @@
         spelling.of(spellAttributes(null)),
         found,
         outside,
-        ...(current.kind === 'md' ? [wikilinks, tagMarks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions, tagCompletions], icons: false })] : []),
+        ...(current.kind === 'md' ? [wikilinks, tagMarks, mathMarks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions, tagCompletions], icons: false })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
           if (u.docChanged || u.selectionSet) {

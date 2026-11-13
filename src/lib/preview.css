@@ -89,3 +89,8 @@ hr::after { content: '\00b7\2002\00b7\2002\00b7'; font-size: 1.3em; letter-spaci
 .note-embed .embed-source { display: inline-block; margin-bottom: .2em; color: var(--text-2); font: 600 .78em/1.4 var(--sans); text-decoration: none; }
 .note-embed .embed-body > :first-child { margin-top: .3em; }
 .note-embed .embed-body > :last-child { margin-bottom: 0; }
+/* Formulas: a block scrolls sideways instead of widening the note. One that does not parse shows as written. */
+.math-block { margin: 1em 0; overflow-x: auto; overflow-y: hidden; }
+.math-block .katex-display { margin: .2em 0; }
+.math-error { padding: 0 .3em; border-radius: 4px; background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); text-decoration: underline wavy; text-underline-offset: 3px; cursor: help; }
+.math-error.math-display { display: block; margin: 1em 0; padding: .5em .8em; white-space: pre-wrap; }

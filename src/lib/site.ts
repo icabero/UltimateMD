@@ -8,6 +8,7 @@ import { documentCss, planSections, printLook, readNotes, rootOf, type ExportOpt
 import { fold } from './fold';
 import { language, tr } from './i18n.svelte';
 import { renderMarkdown } from './markdown';
+import { mathFontCss } from './math';
 import { dirName, linkFrom, stem } from './paths';
 import { store, type Tab } from './store.svelte';
 
@@ -63,11 +64,11 @@ const LAYOUT = `
 .site>main .prose{max-width:780px;margin:0 auto}
 @media (max-width:720px){.site{grid-template-columns:1fr}.site>nav{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}}`;
 
-function page(title: string, siteName: string, nav: string, body: string, home: string) {
+function page(title: string, siteName: string, nav: string, body: string, home: string, fonts = '') {
   return `<!doctype html>
 <html lang="${language()}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)} · ${escapeHtml(siteName)}</title>
-<style>${documentCss()}${LAYOUT}</style></head>
+<style>${documentCss()}${LAYOUT}${fonts}</style></head>
 <body><div class="site"><nav aria-label="${escapeHtml(tr('site.menu'))}"><a class="home" href="${home}">${escapeHtml(siteName)}</a>${nav}</nav>
 <main><article class="prose">${body}</article></main></div></body></html>
 `;
@@ -118,7 +119,9 @@ export async function exportSite(tab: Tab, options: ExportOptions, onProgress?: 
       img.src = linkFrom(path, `assets/${img.dataset.path}`);
     }
     for (const el of article.querySelectorAll<HTMLElement>('[data-lines]')) el.removeAttribute('data-lines');
-    out.push({ path, html: page(stem(note), siteName, menu(pages, path), article.innerHTML, linkFrom(path, 'index.html')) });
+    const body = article.innerHTML;
+    // Fonts for the formulas go in the pages that have them: the site is only pages and images.
+    out.push({ path, html: page(stem(note), siteName, menu(pages, path), body, linkFrom(path, 'index.html'), await mathFontCss(body)) });
   }
   // The home page: the site's notes, in order.
   const list = pages.map(({ note, page: p }) => `<li><a href="${linkFrom('index.html', p)}">${escapeHtml(stem(note))}</a></li>`).join('');

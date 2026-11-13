@@ -17,7 +17,7 @@
   import { readingOrder, readingText, savePlace, savedPlace } from '../reading';
   import { store, type Tab } from '../store.svelte';
   import { themeVariables } from '../themes';
-  import previewCss from '../preview.css?inline';
+  import previewCss from '../previewCss';
 
   let { vaultId, folder }: { vaultId: string; folder: string } = $props();
 

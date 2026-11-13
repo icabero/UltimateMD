@@ -7,7 +7,7 @@ mod detect;
 
 use crate::word_settings::WordSettings;
 use crate::{Error, Result};
-use pulldown_cmark::{BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Parser, Tag, TagEnd};
+use pulldown_cmark::{BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Tag, TagEnd};
 use regex::{Captures, Regex};
 use std::collections::{BTreeMap, HashMap};
 use std::io::{Cursor, Read, Write};
@@ -654,6 +654,22 @@ impl Writer<'_> {
         id
     }
 
+    /// A formula as a Word equation. One that cannot be read goes in as written, in the code font.
+    fn math(&mut self, latex: &str, display: bool) {
+        match crate::math::to_omml(latex, display) {
+            Some(equation) => {
+                if let Some(h) = &mut self.heading {
+                    h.text.push_str(latex);
+                }
+                self.push_raw(&equation);
+            }
+            None => {
+                let marks = if display { "$$" } else { "$" };
+                self.push_text(&format!("{marks}{latex}{marks}"), true);
+            }
+        }
+    }
+
     fn event(&mut self, event: Event, saved: &mut Vec<String>) {
         match event {
             Event::Start(tag) => self.start(tag, saved),
@@ -666,6 +682,8 @@ impl Writer<'_> {
             Event::Text(_) if self.in_image => {}
             Event::Text(text) => self.push_text(&text, false),
             Event::Code(text) => self.push_text(&text, true),
+            Event::InlineMath(latex) => self.math(&latex, false),
+            Event::DisplayMath(latex) => self.math(&latex, true),
             Event::SoftBreak => self.push_text(" ", false),
             Event::HardBreak => self.push_raw("<w:r><w:br/></w:r>"),
             Event::Rule => {
@@ -1214,7 +1232,7 @@ pub fn render(input: &Input) -> Result<Vec<u8>> {
                 writer.pending_bookmark = Some(crate::export_links::note_anchor(index));
                 writer.shift = *shift;
                 writer.page_break = *page_break;
-                for event in Parser::new_ext(&bodies[index], crate::export_links::OPTIONS) {
+                for event in crate::math::events(&bodies[index]) {
                     writer.event(event, &mut saved);
                 }
                 writer.flush();

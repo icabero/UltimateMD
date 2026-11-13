@@ -940,4 +940,5 @@ export const eu: Record<Key, string> = {
   'cmd.toggleTask': 'Markatu edo desmarkatu lerroak zeregin gisa',
   'cmd.sortLines': 'Ordenatu hautatutako lerroak (A→Z)',
   'editor.sortHint': 'Hautatu hainbat lerro ordenatzeko.',
+  'toolbar.formula': 'Formula matematikoa ($x^2$)',
 };

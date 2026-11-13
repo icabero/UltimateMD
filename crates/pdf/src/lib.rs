@@ -92,7 +92,13 @@ impl World for Document {
 }
 
 fn compile(input: &Input) -> Result<PagedDocument> {
-    let (source, images) = markup::build(input);
+    // If Typst cannot lay out a formula, the document is built again with the
+    // formulas as typed: a note's math never costs the export.
+    compile_with(input, true).or_else(|first| compile_with(input, false).map_err(|_| first))
+}
+
+fn compile_with(input: &Input, formulas: bool) -> Result<PagedDocument> {
+    let (source, images) = markup::build(input, formulas);
     let files = images.into_iter().map(|(name, bytes)| (name, Bytes::new(bytes))).collect();
     let world = Document { main: Source::new(file_id("/main.typ"), source), files };
     typst::compile::<PagedDocument>(&world).output.map_err(|errors| {

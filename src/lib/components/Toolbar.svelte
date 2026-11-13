@@ -24,6 +24,7 @@
       { title: 'toolbar.italic', text: 'I', run: (v) => wrap(v, '*', placeholder()) },
       { title: 'toolbar.strike', text: 'S', run: (v) => wrap(v, '~~', placeholder()) },
       { title: 'toolbar.inlineCode', icon: 'code', run: (v) => wrap(v, '`', placeholder()) },
+      { title: 'toolbar.formula', text: 'Σ', run: (v) => wrap(v, '$', 'x^2') },
     ],
     [
       { title: 'toolbar.bullets', icon: 'list', run: (v) => prefixLines(v, '- ') },

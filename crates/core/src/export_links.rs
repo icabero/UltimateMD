@@ -11,7 +11,7 @@
 use crate::docx::{Section, normalize_wikilinks, split_frontmatter};
 use crate::links::Index;
 use crate::search::fold;
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, Options, Tag, TagEnd};
 use regex::{Captures, Regex};
 use std::sync::LazyLock;
 
@@ -20,6 +20,7 @@ pub const OPTIONS: Options = Options::ENABLE_TABLES
     .union(Options::ENABLE_FOOTNOTES)
     .union(Options::ENABLE_STRIKETHROUGH)
     .union(Options::ENABLE_TASKLISTS)
+    .union(Options::ENABLE_MATH)
     .union(Options::ENABLE_GFM);
 
 const PREFIX: &str = "umd";
@@ -116,11 +117,11 @@ fn stem(path: &str) -> &str {
 fn headings(body: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut current: Option<String> = None;
-    for event in Parser::new_ext(body, OPTIONS) {
+    for event in crate::math::events(body) {
         match event {
             Event::Start(Tag::Heading { .. }) => current = Some(String::new()),
             Event::End(TagEnd::Heading(_)) => out.extend(current.take().map(|t| t.trim().to_string())),
-            Event::Text(t) | Event::Code(t) => {
+            Event::Text(t) | Event::Code(t) | Event::InlineMath(t) | Event::DisplayMath(t) => {
                 if let Some(c) = &mut current {
                     c.push_str(&t);
                 }

@@ -5,9 +5,10 @@ import { hasStyle, parseStyle, withColors } from './diagramStyle';
 import { explainDiagramError } from './diagramErrors';
 import { renderDiagram, toPng } from './diagrams';
 import { language, tr } from './i18n.svelte';
+import { mathFontCss } from './math';
 import { diagramFences, outline, renderMarkdown } from './markdown';
 import { baseName, extOf, kindOf, stem } from './paths';
-import previewCss from './preview.css?inline';
+import previewCss from './previewCss';
 import { store, type Tab } from './store.svelte';
 import { frontmatterValue, themeById, themeKey, themeVariables, type Theme } from './themes';
 
@@ -351,7 +352,7 @@ export async function exportHtml(tab: Tab, options: ExportOptions, onProgress?: 
   const page = document.implementation.createHTMLDocument(title);
   page.documentElement.lang = language();
   const style = page.createElement('style');
-  style.textContent = documentCss();
+  style.textContent = documentCss() + (await mathFontCss(root.innerHTML));
   page.head.append(style);
   page.body.append(page.importNode(root, true));
   const html = `<!doctype html>\n${page.documentElement.outerHTML}\n`;

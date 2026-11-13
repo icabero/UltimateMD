@@ -12,7 +12,7 @@
   import { outline, renderMarkdown, type Heading } from '../markdown';
   import { store, type Tab } from '../store.svelte';
   import { themeKey, themeVariables } from '../themes';
-  import previewCss from '../preview.css?inline';
+  import previewCss from '../previewCss';
 
   let { tab }: { tab: Tab } = $props();
 

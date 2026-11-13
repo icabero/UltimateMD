@@ -205,7 +205,33 @@ test('mermaid diagrams render to SVG', async ({ page }) => {
   await expect(prose(page).locator('.diagram > svg')).toBeVisible();
 });
 
-test('several D2 diagrams in a note all finish, even with a bad one', async ({ page }) => {
+// A note with formulas, a price that is not one, and a formula that does not parse.
+const MATH = 'Sea $x^2$ y cuesta 5$ y 10$.\n\n$$\n\\frac{a}{b}\n$$\n\nMala $\\noexiste{x}$ aquí.\n';
+const mathNote = (page: Page) => page.evaluate((text) => (window as any).__test.externalWrite('a', 'D2.md', text), MATH);
+
+test('formulas are drawn offline, prices stay text and a bad formula shows as written', async ({ page }) => {
+  await mathNote(page);
+  await open(page, 'D2');
+  await expect(prose(page).locator('p .katex')).toHaveCount(1);
+  await expect(prose(page).locator('.math-block .katex-display')).toBeVisible();
+  await expect(prose(page)).toContainText('cuesta 5$ y 10$.');
+  const bad = prose(page).locator('.math-error');
+  await expect(bad).toHaveText('\\noexiste{x}');
+  await expect(bad).toHaveAttribute('title', /noexiste/);
+  // The fonts are the app's own, loaded into the page.
+  await expect.poll(() => page.evaluate(() => document.fonts.load('1em KaTeX_Main').then((f) => f.length))).toBeGreaterThan(0);
+});
+
+test('in visual mode a formula is drawn and its source returns under the cursor', async ({ page }) => {
+  await mathNote(page);
+  await open(page, 'D2');
+  await page.getByTitle('Visual', { exact: true }).click();
+  await expect(page.locator('.cm-v-math-block .katex-display')).toBeVisible();
+  await page.locator('.cm-content').getByText('cuesta').click();
+  await expect(page.locator('.cm-math').first()).toBeVisible();
+});
+
+test('several D2 diagrams in a note all finish, even with a bad one',async ({ page }) => {
   await open(page, 'D2');
   // Direct children only: a D2 diagram nests one svg inside another.
   await expect(prose(page).locator('.diagram > svg')).toHaveCount(2, { timeout: 15_000 });

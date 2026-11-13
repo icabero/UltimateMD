@@ -14,6 +14,7 @@ pub mod git;
 pub mod history;
 pub mod links;
 pub mod marks;
+pub mod math;
 pub mod note_templates;
 pub mod paths;
 pub mod registry;

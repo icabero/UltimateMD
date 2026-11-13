@@ -84,12 +84,12 @@ fn the_first_author_goes_to_the_metadata_and_the_cover() {
     sections.extend(note(SAMPLE));
     sections.extend(note("---\nauthor: Otra\n---\nx\n"));
     let image = |_: &str, _: &str| None;
-    let (source, _) = markup::build(&input(&sections, true, &[], &image));
+    let (source, _) = markup::build(&input(&sections, true, &[], &image), true);
     assert!(source.starts_with("#set document(title: \"Título \\\"raro\\\"\", author: \"Ane\")"), "{source}");
     assert!(source.contains("#text(14pt, \"Ane\")"));
     assert!(!source.contains("Otra\")"));
 
-    let (source, _) = markup::build(&input(&note("x"), true, &[], &image));
+    let (source, _) = markup::build(&input(&note("x"), true, &[], &image), true);
     assert!(!source.contains("author:"));
 }
 
@@ -170,7 +170,7 @@ fn callouts_are_coloured_boxes_with_a_title() {
     let sections = note("> [!danger] Grietas\n> Ir encordados.\n\n> [!note]\n> Texto.\n\n> Cita.\n");
     let image = |_: &str, _: &str| None;
     let input = input(&sections, false, &[], &image);
-    let (source, _) = crate::markup::build(&input);
+    let (source, _) = crate::markup::build(&input, true);
     assert!(!source.contains("[!"), "{source}");
     assert!(source.contains(r##"fill: rgb("#FEF2F2")"##) && source.contains(r##"fill: rgb("#EFF6FF")"##), "{source}");
     assert!(source.contains("Grietas") && source.contains("Nota"), "{source}");
@@ -196,9 +196,46 @@ fn links_to_notes_in_the_document_jump_to_them() {
         },
     ];
     let image = |_: &str, _: &str| None;
-    let (source, _) = crate::markup::build(&input(&sections, false, &[], &image));
+    let (source, _) = crate::markup::build(&input(&sections, false, &[], &image), true);
     for wanted in ["#link(<umd2_1>)[#\"Riesgos\"]", "#link(<umd2>)[#\"Plan\"]", "#link(<umd1>)[#\"a\"]", "<umd2_1>\n"] {
         assert!(source.contains(wanted), "{wanted} in {source}");
     }
     assert!(render(&input(&sections, false, &[], &image)).unwrap().starts_with(b"%PDF-"));
+}
+
+#[test]
+fn typst_lays_out_every_common_formula() {
+    // The converter's output is Typst source: it has to compile, not only look right.
+    let image = |_: &str, _: &str| None;
+    for latex in ultimatemd_core::math::SAMPLES {
+        for marks in ["$", "$$\n"] {
+            let sections = note(&format!("Antes {marks}{latex}{marks} después\n"));
+            let input = input(&sections, false, &[], &image);
+            compile_with(&input, true).unwrap_or_else(|e| panic!("{marks}{latex}{marks}: {e:?}"));
+        }
+    }
+}
+
+#[test]
+fn formulas_are_math_in_the_pdf_and_prices_stay_text() {
+    let sections = note("Sea $x^2$ y cuesta 5$ y 10$.\n\n$$\n\\frac{a}{b}\n$$\n\nRota $\\left( x$ aquí.\n");
+    let image = |_: &str, _: &str| None;
+    let input = input(&sections, false, &[], &image);
+    let (source, _) = crate::markup::build(&input, true);
+    assert!(source.contains("$attach(x, t: 2)$"), "{source}");
+    assert!(source.contains("$ frac(a, b) $"), "{source}");
+    assert!(source.contains(r##"#" y cuesta 5"#"$"#" y 10"#"$"#"."##), "a price is text: {source}");
+    assert!(source.contains("#raw(\"$\\\\left( x$\")"), "a formula that cannot be read is shown as typed: {source}");
+    assert!(render(&input).unwrap().starts_with(b"%PDF-"));
+}
+
+#[test]
+fn without_formulas_the_document_is_still_laid_out() {
+    // The way out when Typst refuses a formula: they are written as typed.
+    let sections = note("Texto $x$ normal.\n");
+    let image = |_: &str, _: &str| None;
+    let input = input(&sections, false, &[], &image);
+    assert!(compile_with(&input, false).is_ok());
+    let (source, _) = crate::markup::build(&input, false);
+    assert!(source.contains("#raw(\"$x$\")"), "{source}");
 }

@@ -118,6 +118,7 @@ Abre la carpeta del vault como cualquier otra. UltimateMD no toca `.obsidian` ni
 | Etiquetas `#etiqueta`, `#anidada/etiqueta` y `tags:` del frontmatter | Se cuentan, se sugieren y se buscan |
 | Callouts `> [!tipo]`, también plegables con `-` y `+` | Con su color e icono |
 | `==resaltado==` y `%%comentarios%%` | El comentario no se ve ni sale al exportar. En Word y PDF el resaltado queda como texto normal |
+| Fórmulas `$x^2$` y bloques `$$ ... $$` (LaTeX) | Se dibujan en la vista previa y el modo visual, sin conexión; en Word son ecuaciones editables y en PDF, matemáticas de Typst. Un precio como `5$ y 10$` no cuenta como fórmula, y `\$` escribe un dólar. Lo que no se entiende sale tal cual, sin romper la nota |
 | Tareas `- [ ]` y `- [x]` | Se marcan con un clic en el modo visual |
 | `aliases:` del frontmatter | `[[Otro nombre]]` lleva a la nota, se sugiere al escribir `[[` y sigue funcionando al renombrarla o moverla |
 | `![[otra nota]]`, `![[nota#Título]]` y `![[nota#^bloque]]` | Se ve su texto dentro de la nota, en la lectura de arriba abajo y al exportar |

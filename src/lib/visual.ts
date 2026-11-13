@@ -6,6 +6,8 @@ import { Prec, StateField, Transaction, type EditorState, type Range } from '@co
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet } from '@codemirror/view';
 import { CALLOUT_START, describeCallout } from './callouts';
 import { parseStyle, type DiagramStyle } from './diagramStyle';
+import { findFormulas } from './mathSource';
+import { renderMath } from './math';
 import { diagramErrorBox, explainDiagramError } from './diagramErrors';
 import { renderDiagram } from './diagrams';
 import { tr } from './i18n.svelte';
@@ -15,6 +17,7 @@ import { WIKILINK, linkAt } from './wikilinks';
 
 const PARSE_BUDGET_MS = 100;
 const DIAGRAM_HEIGHT = 220;
+const MATH_HEIGHT = 60;
 const FRONTMATTER_LIMIT = 20_000;
 const DIAGRAM_FENCE = /^(`{3,}|~{3,})\s*(mermaid|d2)(?:\s+(.*))?$/i;
 
@@ -59,6 +62,28 @@ class CheckboxWidget extends WidgetType {
       view.dispatch({ changes: { from, to: from + 3, insert: this.checked ? '[ ]' : '[x]' } });
     };
     return box;
+  }
+  ignoreEvent() {
+    return false;
+  }
+}
+
+/** A formula drawn, in the line or as a block of its own. A click puts the cursor in it and brings its source back. */
+class MathWidget extends WidgetType {
+  constructor(readonly tex: string, readonly block: boolean, readonly display: boolean) {
+    super();
+  }
+  eq(other: MathWidget) {
+    return other.tex === this.tex && other.block === this.block && other.display === this.display;
+  }
+  get estimatedHeight() {
+    return this.block ? MATH_HEIGHT : -1;
+  }
+  toDOM() {
+    const el = document.createElement(this.block ? 'div' : 'span');
+    el.className = this.block ? 'cm-v-math-block' : 'cm-v-math';
+    el.innerHTML = renderMath(this.tex, this.display);
+    return el;
   }
   ignoreEvent() {
     return false;
@@ -260,6 +285,10 @@ function decorate(state: EditorState, typing: boolean) {
     out.push(hidden.range(from, textStart), hidden.range(to - 2, to));
   }
 
+  // The marks inside a formula stay as they are: `a_1 * b_2` is not emphasis.
+  const formulas = findFormulas(state, bodyStart);
+  for (const f of formulas) links.push({ from: f.from, to: f.to });
+
   tree.iterate({
     enter(node) {
       const { name, from, to } = node;
@@ -321,6 +350,12 @@ function decorate(state: EditorState, typing: boolean) {
       }
     },
   });
+  // Drawn when the cursor is elsewhere. Not inside a table or diagram, which draw themselves.
+  for (const f of formulas) {
+    if (touchesCursor(state, f.from, f.to) || blocks.some((b) => b.from < f.to && b.to > f.from)) continue;
+    const widget = new MathWidget(f.content, f.block, f.display);
+    out.push(f.block ? Decoration.replace({ widget, block: true }).range(f.from, f.to) : Decoration.replace({ widget }).range(f.from, f.to));
+  }
   return { all: Decoration.set(out, true), blocks: Decoration.set(blocks, true) };
 }
 
@@ -391,6 +426,8 @@ const look = EditorView.theme({
   '.cm-v-table-tools': { display: 'flex', gap: '4px', marginTop: '4px', opacity: '0', transition: 'opacity 120ms' },
   '.cm-v-table:hover .cm-v-table-tools, .cm-v-table:focus-within .cm-v-table-tools': { opacity: '1' },
   '.cm-v-table-tools button': { padding: '2px 8px', border: '1px solid var(--line)', borderRadius: '5px', background: 'var(--raised)', color: 'var(--text-2)', fontFamily: 'var(--sans)', fontSize: '11.5px' },
+  '.cm-v-math-block': { margin: '6px 0', overflowX: 'auto', overflowY: 'hidden', cursor: 'text' },
+  '.cm-v-math': { cursor: 'text' },
   '.cm-v-diagram': { display: 'flex', justifyContent: 'center', minHeight: '40px', padding: '8px 0', cursor: 'pointer' },
   '.cm-v-diagram svg': { maxWidth: '100%', height: 'auto' },
   '.cm-v-diagram .diagram-error': { width: '100%', padding: '10px 14px', border: '1px solid var(--line)', borderRadius: '8px', fontFamily: 'var(--sans)', fontSize: '13px', lineHeight: '1.5', cursor: 'default' },

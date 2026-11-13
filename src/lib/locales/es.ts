@@ -939,4 +939,5 @@ export const es = {
   'cmd.toggleTask': 'Marcar o desmarcar las líneas como tarea',
   'cmd.sortLines': 'Ordenar las líneas seleccionadas (A→Z)',
   'editor.sortHint': 'Selecciona varias líneas para ordenarlas.',
+  'toolbar.formula': 'Fórmula matemática ($x^2$)',
 };
