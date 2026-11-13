@@ -6,6 +6,7 @@
   import { tr } from '../i18n.svelte';
   import { baseName, dirName, join, kindOf } from '../paths';
   import { store, type MenuItem } from '../store.svelte';
+  import { ORDERS } from '../treeOrder';
   import { vaultColor } from '../vaultColor';
 
   const colorOf = vaultColor;
@@ -36,8 +37,14 @@
       items.push({ label: tr(favorite ? 'sidebar.removeFavorite' : 'sidebar.addFavorite'), icon: 'star', separator: kindOf(node.path) === 'other', run: () => store.toggleFavorite(id, node.path) });
       if (kindOf(node.path) === 'md') items.push({ label: tr('menu.copyLink'), icon: 'link', run: () => store.copyLink(id, node.path) });
     }
+    if (store.order(id) === 'manual') {
+      items.push(
+        { label: tr('sort.moveUp'), icon: 'sort', separator: true, disabled: !store.neighbour(id, node.path, -1), run: () => void store.nudge(id, node.path, -1) },
+        { label: tr('sort.moveDown'), icon: 'sort', disabled: !store.neighbour(id, node.path, 1), run: () => void store.nudge(id, node.path, 1) },
+      );
+    }
     items.push(
-      { label: tr('menu.copyPath'), icon: 'copy', separator: node.isDir, run: () => void store.copyText(store.absolutePath({ vaultId: id, path: node.path }), tr('menu.pathCopied')) },
+      { label: tr('menu.copyPath'), icon: 'copy', separator: node.isDir || store.order(id) === 'manual', run: () => void store.copyText(store.absolutePath({ vaultId: id, path: node.path }), tr('menu.pathCopied')) },
       { label: tr('menu.reveal'), icon: 'folder', run: () => store.revealInFolder(id, node.path) },
       { label: tr('common.rename'), icon: 'edit', keys: ['F2'], separator: true, run: () => void store.renamePrompt(id, node.path) },
       { label: tr('sidebar.trash'), icon: 'trash', keys: ['Del'], danger: true, run: () => void store.trash(id, node.path) },
@@ -45,8 +52,22 @@
     store.openMenu(e, items);
   }
 
+  /** The ways to order a vault's notes, the current one ticked. */
+  function sortItems(id: string): MenuItem[] {
+    return ORDERS.map((o) => ({
+      label: tr(o.label),
+      icon: store.order(id) === o.value ? 'check' : undefined,
+      run: () => void store.setOrder(id, o.value),
+    }));
+  }
+
+  function sortMenu(e: MouseEvent, id: string) {
+    store.openMenu(e, sortItems(id));
+  }
+
   function vaultMenu(e: MouseEvent, vault: Vault) {
     store.openMenu(e, [
+      { label: tr('sort.open'), icon: 'sort', run: () => setTimeout(() => (store.menu = { x: e.clientX, y: e.clientY, items: sortItems(vault.id) })) },
       { label: tr('sidebar.newNote'), icon: 'plus', run: () => void newNote(vault.id, '') },
       { label: tr('cmd.fromTemplate'), icon: 'tasks', run: () => store.newNoteFromTemplate(vault.id, '') },
       { label: tr('sidebar.newFolder'), icon: 'folderPlus', run: () => void newFolder(vault.id, '') },
@@ -170,6 +191,7 @@
             {/if}
             <button class="icon small" title={tr('sidebar.newNote')} onclick={() => newNote(vault.id, '')}><Icon name="plus" size={14} /></button>
             <button class="icon small" title={tr('sidebar.newFolder')} onclick={() => newFolder(vault.id, '')}><Icon name="folderPlus" size={14} /></button>
+            <button class="icon small" title={tr('sort.title')} aria-label={tr('sort.title')} onclick={(e) => sortMenu(e, vault.id)}><Icon name="sort" size={14} /></button>
             <button class="icon small" title={tr('reader.readVault')} onclick={() => (store.reader = { vaultId: vault.id, folder: '' })}><Icon name="eye" size={14} /></button>
             <button class="icon small" title={tr('vaultSettings.open')} onclick={() => store.openVaultSettings(vault.id)}><Icon name="settings" size={14} /></button>
             {#if store.git[vault.id]}

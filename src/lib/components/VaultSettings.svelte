@@ -6,7 +6,8 @@
   import Icon from './Icon.svelte';
   import ThemeEditor from './ThemeEditor.svelte';
   import WordScreen from './WordScreen.svelte';
-  import { api, type McpAccess } from '../api';
+  import { api, type McpAccess, type SortMode } from '../api';
+  import { ORDERS } from '../treeOrder';
   import { tr, type Key } from '../i18n.svelte';
   import { store, type VaultSection } from '../store.svelte';
 
@@ -113,6 +114,17 @@
           <p class="path">{vault.path}</p>
           <button class="plain" onclick={() => store.revealInFolder(vaultId, '')}><Icon name="folder" size={14} /> {tr('menu.reveal')}</button>
         </section>
+        {#if vault.open}
+          <section>
+            <label class="field">
+              <span>{tr('vaultSettings.order')}</span>
+              <select value={store.order(vaultId)} onchange={(e) => store.setOrder(vaultId, e.currentTarget.value as SortMode)}>
+                {#each ORDERS as o (o.value)}<option value={o.value}>{tr(o.label)}</option>{/each}
+              </select>
+            </label>
+            <p class="hint">{tr('vaultSettings.orderHint')}</p>
+          </section>
+        {/if}
         <section>
           <h3>{tr('vaultSettings.safety')}</h3>
           <label class="check">
@@ -176,7 +188,7 @@
   section { max-width: 620px; }
   section + section { margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--line); }
   .field { display: flex; flex-direction: column; gap: var(--space-1); color: var(--text); font-size: var(--font-md); font-weight: 650; }
-  .field input { max-width: 360px; height: 30px; padding: 0 var(--space-2); font-weight: 400; }
+  .field input, .field select { max-width: 360px; height: 30px; padding: 0 var(--space-2); font-weight: 400; }
   .hint { margin: var(--space-1-5) 0 0; color: var(--text-2); font-size: var(--font-sm); line-height: 1.5; }
   .hint.lead { margin: 0 0 var(--space-2-5); }
   .path { margin: 0 0 var(--space-2); overflow-wrap: anywhere; color: var(--text-2); font: var(--font-sm)/1.5 var(--mono); }

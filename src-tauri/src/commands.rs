@@ -13,6 +13,7 @@ use tauri_plugin_opener::OpenerExt;
 use ultimatemd_core::docx::Section;
 use ultimatemd_core::links::{self, LinkInfo};
 use ultimatemd_core::paths::{is_image, join_relative};
+use ultimatemd_core::tree_order::{self, SortMode};
 use ultimatemd_core::vault_themes::{self, ThemeFile, VaultThemes};
 use ultimatemd_core::word_settings::{self, WordSettings};
 use ultimatemd_core::{
@@ -681,6 +682,23 @@ pub fn diagram_guide(id: String) -> Result<Option<String>> {
 #[tauri::command(async)]
 pub fn save_diagram_guide(id: String, text: String) -> Result<()> {
     ultimatemd_core::diagram_guide::save(fs(&id)?.root(), &text)
+}
+
+/// How the vault's tree is ordered.
+#[tauri::command(async)]
+pub fn tree_order(id: String) -> Result<SortMode> {
+    Ok(tree_order::load(fs(&id)?.root()).mode)
+}
+
+#[tauri::command(async)]
+pub fn set_tree_order(id: String, mode: SortMode) -> Result<()> {
+    tree_order::set_mode(fs(&id)?.root(), mode)
+}
+
+/// Places a note or folder before or after a sibling, for the manual order.
+#[tauri::command(async)]
+pub fn place_in_tree(id: String, path: String, target: String, after: bool) -> Result<()> {
+    fs(&id)?.place(&path, &target, after)
 }
 
 #[tauri::command(async)]

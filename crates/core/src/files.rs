@@ -1,6 +1,7 @@
 //! File operations inside one vault.
 
 use crate::paths::{check_new_name, check_new_path, is_image, is_note, normalize, resolve, to_rel};
+use crate::tree_order::{self, Order, SortMode};
 use crate::{Error, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -73,7 +74,30 @@ impl Vault {
 
     pub fn tree(&self) -> Result<Vec<TreeNode>> {
         let root = self.root.canonicalize()?;
-        read_tree(&root, &root)
+        let order = tree_order::load(&root);
+        Ok(read_tree(&root, &root, &order)?.0)
+    }
+
+    /// Puts a note or folder before or after another in the same folder, as the
+    /// manual order. Only what the tree shows is touched; no file moves.
+    pub fn place(&self, rel: &str, target: &str, after: bool) -> Result<()> {
+        let rel = normalize(rel)?;
+        let dir = rel.rsplit_once('/').map(|(d, _)| d).unwrap_or_default();
+        let tree = self.tree()?;
+        let mut level = &tree;
+        let mut here = String::new();
+        for part in dir.split('/').filter(|p| !p.is_empty()) {
+            if !here.is_empty() {
+                here.push('/');
+            }
+            here.push_str(part);
+            level = &level
+                .iter()
+                .find(|n| n.is_dir && n.path == here)
+                .ok_or_else(|| Error::NotFound(dir.to_string()))?
+                .children;
+        }
+        tree_order::place(&self.root, level, &rel, target, after)
     }
 
     /// Relative paths of every note, sorted.
@@ -188,6 +212,7 @@ impl Vault {
             std::fs::create_dir_all(dir)?;
         }
         retry_locked(|| std::fs::rename(&src, &dst))?;
+        tree_order::renamed(&self.root, &normalize(from)?, &to_norm);
         Ok(())
     }
 
@@ -202,7 +227,9 @@ impl Vault {
         }
         // Canonical Windows paths are `\\?\C:\...`; the shell API behind the
         // trash expects the ordinary form.
-        trash::delete(dunce::simplified(&path)).map_err(|e| Error::Trash(e.to_string()))
+        trash::delete(dunce::simplified(&path)).map_err(|e| Error::Trash(e.to_string()))?;
+        tree_order::removed(&self.root, &normalize(rel)?);
+        Ok(())
     }
 
     /// Saves an image pasted or dropped into a note, in `dir`, under `name` or a
@@ -306,6 +333,7 @@ impl Vault {
         };
         trash::delete(dunce::simplified(&target)).map_err(|e| Error::Trash(e.to_string()))?;
         std::fs::remove_dir_all(dir)?;
+        tree_order::removed(&self.root, &origin);
         Ok(())
     }
 
@@ -378,8 +406,12 @@ fn visible(e: &DirEntry) -> bool {
     e.depth() == 0 || !e.file_name().to_string_lossy().starts_with('.')
 }
 
-fn read_tree(root: &Path, dir: &Path) -> Result<Vec<TreeNode>> {
-    let mut nodes = Vec::new();
+/// The entries of `dir` in the vault's order, and when anything in it last changed
+/// (only looked up when the order needs it).
+fn read_tree(root: &Path, dir: &Path, order: &Order) -> Result<(Vec<TreeNode>, u64)> {
+    let by_date = matches!(order.mode, SortMode::ModifiedNew | SortMode::ModifiedOld);
+    let mut entries = Vec::new();
+    let mut newest = 0;
     for entry in std::fs::read_dir(dir)?.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
         if name.starts_with('.') {
@@ -392,11 +424,19 @@ fn read_tree(root: &Path, dir: &Path) -> Result<Vec<TreeNode>> {
             continue;
         }
         let Some(rel) = to_rel(root, &path) else { continue };
-        let children = if kind.is_dir() { read_tree(root, &path)? } else { Vec::new() };
-        nodes.push(TreeNode { name, path: rel, is_dir: kind.is_dir(), children });
+        let (children, stamp) = if kind.is_dir() {
+            read_tree(root, &path, order)?
+        } else {
+            let modified = by_date.then(|| entry.metadata().ok()?.modified().ok()).flatten();
+            let ms =
+                modified.and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis() as u64);
+            (Vec::new(), ms)
+        };
+        newest = newest.max(stamp);
+        entries.push((TreeNode { name, path: rel, is_dir: kind.is_dir(), children }, stamp));
     }
-    nodes.sort_by_key(|n| (!n.is_dir, n.name.to_lowercase()));
-    Ok(nodes)
+    let here = to_rel(root, dir).unwrap_or_default();
+    Ok((tree_order::sort(entries, &here, order), newest))
 }
 
 pub fn version_of(bytes: &[u8]) -> String {
@@ -549,6 +589,30 @@ mod tests {
         assert_eq!(t.iter().map(|n| n.name.as_str()).collect::<Vec<_>>(), ["z", "b.md"]);
         assert_eq!(t[0].children[0].path, "z/c.md");
         assert_eq!(v.notes().unwrap(), ["b.md", "z/c.md"]);
+    }
+
+    #[test]
+    fn the_tree_follows_the_vault_order_and_keeps_it_through_renames() {
+        let (d, v) = vault();
+        for name in ["a.md", "b.md", "c.md", "d/x.md", "d/y.md"] {
+            v.write(name, "", WriteMode::Create).unwrap();
+        }
+        let first = |v: &Vault| v.tree().unwrap().iter().map(|n| n.name.clone()).collect::<Vec<_>>();
+        assert_eq!(first(&v), ["d", "a.md", "b.md", "c.md"]);
+        tree_order::set_mode(d.path(), SortMode::NameDesc).unwrap();
+        assert_eq!(first(&v), ["d", "c.md", "b.md", "a.md"]);
+        tree_order::set_mode(d.path(), SortMode::Manual).unwrap();
+        v.place("c.md", "a.md", false).unwrap();
+        v.place("d/y.md", "d/x.md", false).unwrap();
+        assert_eq!(first(&v), ["d", "c.md", "a.md", "b.md"]);
+        v.rename("a.md", "k.md").unwrap();
+        assert_eq!(first(&v), ["d", "c.md", "k.md", "b.md"]);
+        v.rename("d", "e").unwrap();
+        let t = v.tree().unwrap();
+        assert_eq!(t[0].children.iter().map(|n| n.name.as_str()).collect::<Vec<_>>(), ["y.md", "x.md"]);
+        // Nothing on disk was renamed to get an order.
+        assert!(d.path().join("c.md").exists() && d.path().join("e/y.md").exists());
+        assert!(v.place("c.md", "e", false).is_err(), "a note does not go among folders");
     }
 
     #[test]

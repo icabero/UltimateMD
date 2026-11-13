@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { anchorLabel, findAnchor, parseAnchor } from './anchors';
-import { api, type GitStatus, type ReplaceOptions, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
+import { api, type GitStatus, type ReplaceOptions, type SortMode, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
 import { fold } from './fold';
 import { fillTemplate } from './noteTemplates';
 import { withColors, type DiagramStyle } from './diagramStyle';
@@ -257,6 +257,8 @@ function imageName(file: File) {
 class Store {
   vaults = $state<Vault[]>([]);
   trees = $state<Record<string, TreeNode[]>>({});
+  /** How each vault's tree is ordered. */
+  orders = $state<Record<string, SortMode>>({});
   /** Each vault's Git status, or null when it is not in a repository. */
   git = $state<Record<string, GitStatus | null>>({});
   /** The vault whose Git changes are on screen. */
@@ -860,11 +862,59 @@ class Store {
 
   async refreshTree(id: string) {
     try {
-      this.trees[id] = await api.tree(id);
+      const [tree, order] = await Promise.all([api.tree(id), api.treeOrder(id)]);
+      this.trees[id] = tree;
+      this.orders[id] = order;
     } catch (e) {
       this.trees[id] = [];
       this.fail(e);
     }
+  }
+
+  /** How the vault's tree is ordered. */
+  order(id: string): SortMode {
+    return this.orders[id] ?? 'nameAsc';
+  }
+
+  async setOrder(id: string, mode: SortMode) {
+    if (mode === this.order(id)) return;
+    try {
+      await api.setTreeOrder(id, mode);
+    } catch (e) {
+      return this.fail(e);
+    }
+    await this.refreshTree(id);
+  }
+
+  /** The entries beside `path`, in the order the tree shows them. */
+  #siblings(id: string, path: string) {
+    const dir = dirName(path);
+    let level = this.trees[id] ?? [];
+    for (const part of dir ? dir.split('/') : []) level = level.find((n) => n.isDir && baseName(n.path) === part)?.children ?? [];
+    return level;
+  }
+
+  /** Puts `path` before or after `target`, a note or folder of the same kind in the same folder. Manual order only. */
+  async place(id: string, path: string, target: string, after: boolean) {
+    try {
+      await api.placeInTree(id, path, target, after);
+    } catch (e) {
+      return this.fail(e);
+    }
+    await this.refreshTree(id);
+  }
+
+  /** The neighbour of `path` of the same kind, above (-1) or below (1), if any. */
+  neighbour(id: string, path: string, step: -1 | 1) {
+    const list = this.#siblings(id, path);
+    const at = list.findIndex((n) => n.path === path);
+    const next = list[at + step];
+    return at >= 0 && next && next.isDir === list[at].isDir ? next : undefined;
+  }
+
+  async nudge(id: string, path: string, step: -1 | 1) {
+    const next = this.neighbour(id, path, step);
+    if (next) await this.place(id, path, next.path, step === 1);
   }
 
   /** Asks where and how to call a new vault, then creates it. */

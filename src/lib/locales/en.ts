@@ -922,4 +922,16 @@ export const en: Record<Key, string> = {
   'noteLook.own': 'Set by this note',
   'noteLook.back': 'Go back to the vault’s',
   'noteLook.preview': 'How the diagrams of this note are drawn',
+
+  'sort.title': 'Sort',
+  'sort.open': 'Sort notes',
+  'sort.nameAsc': 'Name (A → Z)',
+  'sort.nameDesc': 'Name (Z → A)',
+  'sort.modifiedNew': 'Modified (newest first)',
+  'sort.modifiedOld': 'Modified (oldest first)',
+  'sort.manual': 'By hand (drag)',
+  'sort.moveUp': 'Move up',
+  'sort.moveDown': 'Move down',
+  'vaultSettings.order': 'Order of notes',
+  'vaultSettings.orderHint': 'How notes and folders are ordered in the tree, when reading and when exporting. Folders always come first. With a hand order, drag a note or folder among those in its own folder, or use Move up and Move down in its menu. No file is renamed.',
 };

@@ -922,4 +922,16 @@ export const eu: Record<Key, string> = {
   'noteLook.own': 'Ohar honena',
   'noteLook.back': 'Itzuli vaultekoara',
   'noteLook.preview': 'Ohar honetako diagramak horrela marrazten dira',
+
+  'sort.title': 'Ordenatu',
+  'sort.open': 'Ordenatu oharrak',
+  'sort.nameAsc': 'Izena (A → Z)',
+  'sort.nameDesc': 'Izena (Z → A)',
+  'sort.modifiedNew': 'Aldatuak (berrienak lehenengo)',
+  'sort.modifiedOld': 'Aldatuak (zaharrenak lehenengo)',
+  'sort.manual': 'Eskuz (arrastatuz)',
+  'sort.moveUp': 'Igo',
+  'sort.moveDown': 'Jaitsi',
+  'vaultSettings.order': 'Oharren ordena',
+  'vaultSettings.orderHint': 'Oharrak eta karpetak zuhaitzean, irakurtzean eta esportatzean nola ordenatzen diren. Karpetak beti lehenengo doaz. Eskuzko ordenan, arrastatu ohar edo karpeta bat bere karpetako besteen artean, edo erabili Igo eta Jaitsi bere menuan. Ez da fitxategirik berrizendatzen.',
 };

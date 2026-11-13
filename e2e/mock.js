@@ -74,7 +74,29 @@
         level = node.children;
       });
     }
+    const order = orders[id];
+    if (order && order.mode !== 'nameAsc') arrange(id, root, '', order);
     return root;
+  }
+
+  // The order of each vault's tree, as the backend keeps it: a mode, and for the
+  // manual one a list of names per folder.
+  const orders = {};
+  const orderOf = (id) => (orders[id] ??= { mode: 'nameAsc', manual: {} });
+  const natural = (a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' });
+  function arrange(id, nodes, dir, order) {
+    const stamp = (n) => (n.isDir ? Math.max(0, ...n.children.map(stamp)) : changedAt(id, n.path));
+    const list = order.manual[dir] ?? [];
+    const rank = (n) => (list.includes(n.name) ? list.indexOf(n.name) : Infinity);
+    nodes.sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      if (order.mode === 'nameDesc') return natural(b.name, a.name);
+      if (order.mode === 'modifiedNew') return stamp(b) - stamp(a) || natural(a.name, b.name);
+      if (order.mode === 'modifiedOld') return stamp(a) - stamp(b) || natural(a.name, b.name);
+      if (order.mode === 'manual') return (rank(a) === rank(b) ? 0 : rank(a) < rank(b) ? -1 : 1) || natural(a.name, b.name);
+      return natural(a.name, b.name);
+    });
+    for (const n of nodes) if (n.isDir) arrange(id, n.children, n.path, order);
   }
 
   const past = { log: [], blobs: {}, versions: {} };
@@ -99,6 +121,19 @@
   const commands = {
     list_vaults: () => vaults,
     vault_tree: ({ id }) => tree(id),
+    tree_order: ({ id }) => orderOf(id).mode,
+    set_tree_order: ({ id, mode }) => {
+      orderOf(id).mode = mode;
+    },
+    place_in_tree: ({ id, path, target, after }) => {
+      const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+      const base = (p) => p.split('/').pop();
+      const level = (dir ? dir.split('/').reduce((nodes, _, i, all) => nodes.find((n) => n.path === all.slice(0, i + 1).join('/')).children, tree(id)) : tree(id));
+      const names = level.map((n) => n.name).filter((n) => n !== base(path));
+      const at = names.indexOf(base(target)) + (after ? 1 : 0);
+      names.splice(at, 0, base(path));
+      orderOf(id).manual[dir] = names;
+    },
     read_note: ({ id, path }) => ({ path, content: files[id][path], version: versionOf(id, path) }),
     write_note: ({ id, path, content, expected }) => {
       if (expected && expected !== versionOf(id, path)) throw 'the file changed since it was read: ' + path;
@@ -112,6 +147,9 @@
     // Moves a note or folder and, like the backend, rewrites [[name]] links to a renamed note.
     rename_path: ({ id, from, to }) => {
       const notes = files[id];
+      const [dir, name] = [from.slice(0, Math.max(0, from.lastIndexOf('/'))), from.split('/').pop()];
+      const list = orderOf(id).manual[dir];
+      if (list && dir === to.slice(0, Math.max(0, to.lastIndexOf('/')))) list[list.indexOf(name)] = to.split('/').pop();
       for (const path of Object.keys(notes)) {
         if (path !== from && !path.startsWith(`${from}/`)) continue;
         notes[to + path.slice(from.length)] = notes[path];

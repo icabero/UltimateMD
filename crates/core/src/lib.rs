@@ -23,6 +23,7 @@ pub mod sections;
 pub mod svg;
 pub mod tags;
 pub mod templates;
+pub mod tree_order;
 pub mod vault_themes;
 pub mod word_settings;
 

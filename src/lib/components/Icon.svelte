@@ -1,6 +1,7 @@
 <script lang="ts">
   const PATHS: Record<string, string> = {
     plus: 'M12 5v14M5 12h14',
+    sort:'M7 4v16M4 17l3 3 3-3M17 20V4M14 7l3-3 3 3',
     close: 'M6 6l12 12M18 6L6 18',
     check: 'M5 12.5l4.5 4.5L19 7.5',
     chevron: 'M9 6l6 6-6 6',

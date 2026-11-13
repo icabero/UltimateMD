@@ -11,6 +11,9 @@ export interface Vault {
   allowScripts: boolean;
 }
 
+/** How a vault's tree is ordered; folders always come first. */
+export type SortMode = 'nameAsc' | 'nameDesc' | 'modifiedNew' | 'modifiedOld' | 'manual';
+
 export interface TreeNode {
   name: string;
   path: string;
@@ -211,6 +214,9 @@ export const api = {
   setVaultAccess: (id: string, mcp: McpAccess) => invoke<void>('set_vault_access', { id, mcp }),
   setVaultScripts: (id: string, allow: boolean) => invoke<void>('set_vault_scripts', { id, allow }),
   tree: (id: string) => invoke<TreeNode[]>('vault_tree', { id }),
+  treeOrder: (id: string) => invoke<SortMode>('tree_order', { id }),
+  setTreeOrder: (id: string, mode: SortMode) => invoke<void>('set_tree_order', { id, mode }),
+  placeInTree: (id: string, path: string, target: string, after: boolean) => invoke<void>('place_in_tree', { id, path, target, after }),
   read: (id: string, path: string) => invoke<Note>('read_note', { id, path }),
   write: (id: string, path: string, content: string, expected: string | null) =>
     invoke<string>('write_note', { id, path, content, expected }),

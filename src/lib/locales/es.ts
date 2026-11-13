@@ -921,4 +921,16 @@ export const es = {
   'noteLook.own': 'Propio de esta nota',
   'noteLook.back': 'Volver al del vault',
   'noteLook.preview': 'Así se dibujan los diagramas de esta nota',
+
+  'sort.title': 'Ordenar',
+  'sort.open': 'Ordenar las notas',
+  'sort.nameAsc': 'Nombre (A → Z)',
+  'sort.nameDesc': 'Nombre (Z → A)',
+  'sort.modifiedNew': 'Modificadas (las más recientes primero)',
+  'sort.modifiedOld': 'Modificadas (las más antiguas primero)',
+  'sort.manual': 'A mano (arrastrando)',
+  'sort.moveUp': 'Subir',
+  'sort.moveDown': 'Bajar',
+  'vaultSettings.order': 'Orden de las notas',
+  'vaultSettings.orderHint': 'Cómo se ordenan las notas y carpetas en el árbol, en la lectura y al exportar. Las carpetas van siempre primero. En orden a mano, arrastra una nota o carpeta entre las de su misma carpeta, o usa Subir y Bajar en su menú. Ningún archivo cambia de nombre.',
 };

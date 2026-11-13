@@ -41,7 +41,6 @@ export interface ExportOptions {
   template: string | null;
 }
 
-export const byName = (a: TreeNode, b: TreeNode) => a.name.localeCompare(b.name, language(), { numeric: true });
 export const isNote = (n: TreeNode) => !n.isDir && kindOf(n.path) === 'md';
 export const hasNotes = (n: TreeNode): boolean => (n.isDir ? n.children.some(hasNotes) : isNote(n));
 
@@ -80,7 +79,7 @@ export function levelExamples(tab: Tab, options: ExportOptions) {
   const examples = [root.name];
   let nodes = root.children;
   for (;;) {
-    const next = [...nodes].sort(byName).find((n) => n.isDir && hasNotes(n));
+    const next = nodes.find((n) => n.isDir && hasNotes(n));
     if (!next) return examples;
     examples.push(next.name);
     nodes = next.children;
@@ -102,14 +101,14 @@ export function planSections(tab: Tab, options: ExportOptions): PlanSection[] {
   };
 
   const walk = (nodes: TreeNode[], depth: number, parent: number) => {
-    for (const note of nodes.filter(isNote).sort(byName)) {
+    for (const note of nodes.filter(isNote)) {
       if (options.noteTitles) {
         sections.push({ kind: 'heading', text: stem(note.path), style: null, level: Math.min(parent + 1, MAX_LEVEL), pageBreak: options.noteBreak && sections.length > 0 });
       }
       const pageBreak = !options.noteTitles && options.noteBreak && sections.length > 0;
       sections.push({ kind: 'note', path: note.path, shift: parent + (options.noteTitles ? 1 : 0), pageBreak });
     }
-    for (const folder of nodes.filter((n) => n.isDir && hasNotes(n)).sort(byName)) {
+    for (const folder of nodes.filter((n) => n.isDir && hasNotes(n))) {
       walk(folder.children, depth + 1, title(folder.name, depth, parent));
     }
   };

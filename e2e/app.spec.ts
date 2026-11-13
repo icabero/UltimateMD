@@ -1844,8 +1844,8 @@ async function vaultSettings(page: Page, vault: string, section?: string) {
 
 test('a vault is renamed, closed and opened again from its settings', async ({ page }) => {
   const screen = await vaultSettings(page, 'Personal');
-  await screen.getByLabel('Nombre').fill('Casa');
-  await screen.getByLabel('Nombre').press('Enter');
+  await screen.getByLabel('Nombre', { exact: true }).fill('Casa');
+  await screen.getByLabel('Nombre', { exact: true }).press('Enter');
   const renamed = page.getByRole('dialog', { name: 'Ajustes de Casa' });
   await expect(renamed).toBeVisible();
   await expect(renamed).toContainText('/v/Personal');
@@ -2980,4 +2980,61 @@ test('closing several tabs with unsaved changes asks once', async ({ page }) => 
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await expect(tabNames(page)).toHaveCount(0);
   await expect(ask).toHaveCount(0);
+});
+
+// The order of the tree (#45).
+const personalRows = (page: Page) => page.locator('aside section.vault[aria-label="Personal"] [data-row][data-depth="1"]');
+const sortPersonal = async (page: Page, name: string) => {
+  await page.locator('aside section.vault[aria-label="Personal"]').getByRole('button', { name: 'Ordenar', exact: true }).click();
+  await page.getByRole('menuitem', { name }).click();
+};
+
+test('the tree can be ordered by name or by date, from the vault header', async ({ page }) => {
+  await expect(personalRows(page)).toHaveText(['Otra', 'Propia', 'Rara']);
+  await sortPersonal(page, 'Nombre (Z → A)');
+  await expect(personalRows(page)).toHaveText(['Rara', 'Propia', 'Otra']);
+  // The mock dates notes by when they were last written: Otra, now.
+  await open(page, 'Otra');
+  await typeInEditor(page, 'x');
+  await expect(page.locator('main footer')).toContainText('Guardado');
+  await sortPersonal(page, 'Modificadas (las más recientes primero)');
+  await expect(personalRows(page).first()).toHaveText('Otra');
+  await sortPersonal(page, 'Modificadas (las más antiguas primero)');
+  await expect(personalRows(page).last()).toHaveText('Otra');
+});
+
+test('the order is also chosen from the vault menu and in the vault settings', async ({ page }) => {
+  await page.locator('aside').getByRole('button', { name: 'Personal', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Ordenar las notas' }).click();
+  await page.getByRole('menuitem', { name: 'Nombre (Z → A)' }).click();
+  await expect(personalRows(page)).toHaveText(['Rara', 'Propia', 'Otra']);
+
+  await page.locator('aside').getByRole('button', { name: 'Personal', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Ajustes del vault' }).click();
+  const screen = page.getByRole('dialog', { name: 'Ajustes de Personal' });
+  const choice = screen.getByLabel('Orden de las notas');
+  await expect(choice).toHaveValue('nameDesc');
+  await expect(screen).toContainText('Ningún archivo cambia de nombre');
+  await choice.selectOption('nameAsc');
+  await expect(personalRows(page)).toHaveText(['Otra', 'Propia', 'Rara']);
+});
+
+test('a manual order is set by dragging or from the menu, and reading follows it', async ({ page }) => {
+  await sortPersonal(page, 'A mano (arrastrando)');
+  await expect(personalRows(page)).toHaveText(['Otra', 'Propia', 'Rara']);
+  const row = (name: string) => personalRows(page).filter({ hasText: name });
+
+  await row('Rara').dragTo(row('Otra'), { targetPosition: { x: 40, y: 2 } });
+  await expect(personalRows(page)).toHaveText(['Rara', 'Otra', 'Propia']);
+
+  await row('Propia').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Subir' }).click();
+  await expect(personalRows(page)).toHaveText(['Rara', 'Propia', 'Otra']);
+  await row('Rara').click({ button: 'right' });
+  await expect(page.getByRole('menuitem', { name: 'Subir' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+
+  await page.locator('aside').getByRole('button', { name: 'Personal', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Leer el vault de arriba abajo' }).click();
+  await expect(page.getByRole('navigation', { name: 'Índice de la lectura' }).getByRole('button')).toHaveText(['Rara', 'Propia', 'Otra']);
 });

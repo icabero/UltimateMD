@@ -6,15 +6,15 @@ const file = (path: string): TreeNode => ({ name: path.split('/').pop()!, path, 
 const dir = (path: string, children: TreeNode[]): TreeNode => ({ name: path.split('/').pop()!, path, isDir: true, children });
 
 const tree = [
-  dir('B', [file('B/2.md'), file('B/10.md'), dir('B/Vacía', [file('B/Vacía/foto.png')])]),
   dir('A', [dir('A/Sub', [file('A/Sub/Hondo.md')]), file('A/Uno.md')]),
-  file('Zeta.md'),
+  dir('B', [dir('B/Vacía', [file('B/Vacía/foto.png')]), file('B/2.md'), file('B/10.md')]),
   file('Inicio.md'),
+  file('Zeta.md'),
   file('imagen.png'),
 ];
 
 describe('reading order', () => {
-  it('reads a folder’s own notes first, then its subfolders, in natural order', () => {
+  it('reads a folder’s own notes first, then its subfolders, as the tree shows them', () => {
     expect(readingOrder(tree, '').map((n) => [n.path, n.folder, n.depth])).toEqual([
       ['Inicio.md', '', 0],
       ['Zeta.md', '', 0],
@@ -23,6 +23,11 @@ describe('reading order', () => {
       ['B/2.md', 'B', 1],
       ['B/10.md', 'B', 1],
     ]);
+  });
+
+  it('follows a manual order instead of sorting again', () => {
+    const placed = [dir('B', [file('B/z.md'), file('B/a.md')]), dir('A', [file('A/u.md')]), file('Zeta.md'), file('Inicio.md')];
+    expect(readingOrder(placed, '').map((n) => n.path)).toEqual(['Zeta.md', 'Inicio.md', 'B/z.md', 'B/a.md', 'A/u.md']);
   });
 
   it('reads one folder, named from itself', () => {
