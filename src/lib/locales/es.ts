@@ -913,4 +913,10 @@ export const es = {
   'settings.vaultClosed': 'Cerrado',
   'settings.vaultAi': 'IA: {access}',
   'settings.vaultSettings': 'Ajustes',
+  'store.closeConflicts': 'Hay {count} pestañas que cambiaron en disco y tienen ediciones sin guardar ({names}). ¿Cerrarlas y perder esas ediciones?',
+  'tabs.closeRight': 'Cerrar las de la derecha',
+  'tabs.closeLeft': 'Cerrar las de la izquierda',
+  'cmd.closeAllTabs': 'Cerrar todas las pestañas',
+  'cmd.closeRightTabs': 'Cerrar las pestañas de la derecha',
+  'cmd.closeLeftTabs': 'Cerrar las pestañas de la izquierda',
 };

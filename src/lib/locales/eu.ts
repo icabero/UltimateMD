@@ -914,4 +914,10 @@ export const eu: Record<Key, string> = {
   'settings.vaultClosed': 'Itxita',
   'settings.vaultAi': 'IA: {access}',
   'settings.vaultSettings': 'Ezarpenak',
+  'store.closeConflicts': '{count} fitxak diskoan aldatu dira eta gorde gabeko aldaketak dituzte ({names}). Itxi eta aldaketa horiek galdu?',
+  'tabs.closeRight': 'Itxi eskuinekoak',
+  'tabs.closeLeft': 'Itxi ezkerrekoak',
+  'cmd.closeAllTabs': 'Itxi fitxa guztiak',
+  'cmd.closeRightTabs': 'Itxi eskuineko fitxak',
+  'cmd.closeLeftTabs': 'Itxi ezkerreko fitxak',
 };

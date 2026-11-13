@@ -29,6 +29,8 @@
     const items: MenuItem[] = [
       { label: tr('common.close'), icon: 'close', keys: ['Ctrl', 'W'], run: () => void store.close(tab) },
       { label: tr('tabs.closeOthers'), disabled: !others, run: () => void store.closeOthers(tab) },
+      { label: tr('tabs.closeRight'), disabled: !store.tabsBeside(tab, 'right').length, run: () => void store.closeBeside(tab, 'right') },
+      { label: tr('tabs.closeLeft'), disabled: !store.tabsBeside(tab, 'left').length, run: () => void store.closeBeside(tab, 'left') },
       { label: tr('tabs.closeAll'), run: () => void store.closeAll() },
       { label: tr(tab.pinned ? 'tabs.unpin' : 'tabs.pin'), icon: 'pin', separator: true, run: () => store.togglePin(tab) },
     ];
@@ -98,7 +100,8 @@
         ondragleave={() => (over = null)}
         ondrop={drop}
         ondragend={() => (dragged = over = null)}
-        onauxclick={(e) => { if (e.button === 1) store.close(tab); }}
+        onmousedown={(e) => { if (e.button === 1) e.preventDefault(); }}
+        onauxclick={(e) => { if (e.button === 1) { e.preventDefault(); void store.close(tab); } }}
         oncontextmenu={(e) => menu(e, tab)}
         title="{store.location(tab)} · {tab.path}">
         <!-- The close button sits beside the tab, not inside it: a control

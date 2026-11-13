@@ -578,13 +578,22 @@ class Store {
 
   /** Closes every tab but this one and the pinned ones. */
   async closeOthers(keep: Tab) {
-    for (const tab of this.tabs.filter((t) => t.key !== keep.key && !t.pinned)) await this.close(tab);
-    this.activeKey = keep.key;
-    this.persist();
+    await this.closeMany(this.tabs.filter((t) => t.key !== keep.key && !t.pinned), keep);
   }
 
   async closeAll() {
-    for (const tab of this.tabs.filter((t) => !t.pinned)) await this.close(tab);
+    await this.closeMany(this.tabs.filter((t) => !t.pinned));
+  }
+
+  /** The tabs after (or before) this one that a "close to the right/left" would close: pinned ones never. */
+  tabsBeside(anchor: Tab, side: 'right' | 'left') {
+    const i = this.tabs.findIndex((t) => t.key === anchor.key);
+    if (i < 0) return [];
+    return (side === 'right' ? this.tabs.slice(i + 1) : this.tabs.slice(0, i)).filter((t) => !t.pinned);
+  }
+
+  async closeBeside(anchor: Tab, side: 'right' | 'left') {
+    await this.closeMany(this.tabsBeside(anchor, side), anchor);
   }
 
   get active() {
@@ -1220,17 +1229,31 @@ class Store {
   }
 
   async close(tab: Tab) {
-    await this.save(tab);
+    await this.closeMany([tab]);
+  }
+
+  /**
+   * Closes several tabs at once. Everything is saved first; the only edits that can still be lost are those
+   * of tabs in conflict with the disk, and those are asked about once for the whole batch. If the user says
+   * no, nothing is closed. `keep` is the tab to leave active when the active one is among those closed.
+   */
+  async closeMany(tabs: Tab[], keep?: Tab) {
+    await Promise.all(tabs.map((tab) => this.save(tab)));
     // What was written in this sitting stays as a version.
-    if (tab.touched && !tab.loose && isText(tab.kind) && !tab.conflict && !tab.missing) void api.historyKeep(tab.vaultId, tab.path, false).catch(() => false);
-    const name = baseName(tab.path);
-    if (tab.conflict && !(await this.confirm(tr('store.closeConflict', { name }), tr('common.close'), true))) return;
-    const i = this.tabs.findIndex((t) => t.key === tab.key);
-    if (i < 0) return;
-    this.tabs.splice(i, 1);
-    if (tab.loose) await api.closeLoose(tab.vaultId);
-    if (this.sideKey === tab.key) this.sideKey = null;
-    if (this.activeKey === tab.key) this.activeKey = this.tabs[Math.min(i, this.tabs.length - 1)]?.key ?? null;
+    for (const tab of tabs) if (tab.touched && !tab.loose && isText(tab.kind) && !tab.conflict && !tab.missing) void api.historyKeep(tab.vaultId, tab.path, false).catch(() => false);
+    const risky = tabs.filter((t) => t.conflict).map((t) => baseName(t.path));
+    if (risky.length) {
+      const text = risky.length === 1 ? tr('store.closeConflict', { name: risky[0] }) : tr('store.closeConflicts', { count: risky.length, names: risky.join(', ') });
+      if (!(await this.confirm(text, tr('common.close'), true))) return;
+    }
+    for (const tab of tabs) {
+      const i = this.tabs.findIndex((t) => t.key === tab.key);
+      if (i < 0) continue;
+      this.tabs.splice(i, 1);
+      if (tab.loose) await api.closeLoose(tab.vaultId);
+      if (this.sideKey === tab.key) this.sideKey = null;
+      if (this.activeKey === tab.key) this.activeKey = keep && this.tabs.some((t) => t.key === keep.key) ? keep.key : (this.tabs[Math.min(i, this.tabs.length - 1)]?.key ?? null);
+    }
     this.persist();
   }
 

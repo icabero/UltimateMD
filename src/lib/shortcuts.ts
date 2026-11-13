@@ -38,6 +38,7 @@ export const SHORTCUTS: { title: Key; items: Shortcut[] }[] = [
       { label: 'cmd.nextTab', keys: [['Ctrl', 'Tab']] },
       { label: 'shortcuts.previousTab', keys: [['Ctrl', 'Shift', 'Tab']] },
       { label: 'cmd.closeTab', keys: [['Ctrl', 'W']] },
+      { label: 'cmd.closeAllTabs', keys: [['Ctrl', 'Shift', 'W']] },
       { label: 'shortcuts.nextView', keys: [['Ctrl', '\\']] },
       { label: 'cmd.toggleSidebar', keys: [['Ctrl', 'Shift', 'E']] },
       { label: 'cmd.togglePanel', keys: [['Ctrl', 'Shift', 'O']] },

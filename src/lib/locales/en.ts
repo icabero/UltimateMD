@@ -914,4 +914,10 @@ export const en: Record<Key, string> = {
   'settings.vaultClosed': 'Closed',
   'settings.vaultAi': 'AI: {access}',
   'settings.vaultSettings': 'Settings',
+  'store.closeConflicts': '{count} tabs changed on disk and have unsaved edits ({names}). Close them and lose those edits?',
+  'tabs.closeRight': 'Close the ones to the right',
+  'tabs.closeLeft': 'Close the ones to the left',
+  'cmd.closeAllTabs': 'Close all tabs',
+  'cmd.closeRightTabs': 'Close the tabs to the right',
+  'cmd.closeLeftTabs': 'Close the tabs to the left',
 };

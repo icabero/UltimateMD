@@ -2865,3 +2865,84 @@ test('the main screens pass an accessibility check', async ({ page }) => {
   await expect(page.getByRole('navigation', { name: 'Índice de la lectura' })).toBeVisible();
   await check('reader');
 });
+
+test('tabs close to the right and to the left of one, keeping the pinned ones', async ({ page }) => {
+  for (const name of ['Inicio', 'D2', 'Otra', 'Propia', 'Rara']) await open(page, name);
+  const tab = (name: string) => page.getByRole('tab', { name, exact: true });
+  await tab('D2').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Fijar la pestaña' }).click();
+  await expect(tabNames(page)).toHaveText(['D2', 'Inicio', 'Otra', 'Propia', 'Rara']);
+
+  // Nothing to the right of the last tab, and only a pinned one to the left of the first loose one.
+  await tab('Rara').click({ button: 'right' });
+  await expect(page.getByRole('menuitem', { name: 'Cerrar las de la derecha' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await tab('Inicio').click({ button: 'right' });
+  await expect(page.getByRole('menuitem', { name: 'Cerrar las de la izquierda' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+
+  await tab('Propia').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Cerrar las de la izquierda' }).click();
+  await expect(tabNames(page)).toHaveText(['D2', 'Propia', 'Rara']);
+  await tab('Rara').click();
+  await tab('D2').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Cerrar las de la derecha' }).click();
+  // The active tab was closed: the one the menu was opened on takes its place.
+  await expect(tabNames(page)).toHaveText(['D2']);
+  await expect(tab('D2')).toHaveAttribute('aria-selected', 'true');
+});
+
+test('the actions to close tabs are in the palette, with a shortcut to close them all', async ({ page }) => {
+  for (const name of ['Inicio', 'Otra', 'Propia']) await open(page, name);
+  await page.getByRole('tab', { name: 'Otra', exact: true }).click();
+  await page.keyboard.press('ControlOrMeta+Shift+P');
+  await page.keyboard.type('pestañas de la derecha');
+  await page.keyboard.press('Enter');
+  await expect(tabNames(page)).toHaveText(['Inicio', 'Otra']);
+  await page.keyboard.press('ControlOrMeta+Shift+P');
+  await page.keyboard.type('pestañas de la izquierda');
+  await page.keyboard.press('Enter');
+  await expect(tabNames(page)).toHaveText(['Otra']);
+  await open(page, 'Propia');
+  await page.keyboard.press('ControlOrMeta+Shift+W');
+  await expect(tabNames(page)).toHaveCount(0);
+});
+
+test('the wheel button closes a tab and does not start autoscroll', async ({ page }) => {
+  await open(page, 'Inicio');
+  await open(page, 'Otra');
+  const mousedown = await page.evaluate(() => {
+    const el = document.querySelector('[role=tab]')!;
+    const ev = new MouseEvent('mousedown', { button: 1, bubbles: true, cancelable: true });
+    el.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  });
+  // WebView2 starts autoscroll on this event and may never send the auxclick.
+  expect(mousedown).toBe(true);
+  await page.getByRole('tab', { name: 'Inicio', exact: true }).click({ button: 'middle' });
+  await expect(tabNames(page)).toHaveText(['Otra']);
+});
+
+test('closing several tabs with unsaved changes asks once', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, 'uno');
+  await page.evaluate(() => (window as any).__test.externalWrite('a', 'Inicio.md', 'de fuera'));
+  await open(page, 'Otra');
+  await typeInEditor(page, 'dos');
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', 'de fuera'));
+  await open(page, 'Propia');
+
+  await page.getByRole('tab', { name: 'Propia', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Cerrar todas' }).click();
+  const ask = page.getByText(/Hay 2 pestañas que cambiaron en disco/);
+  await expect(ask).toContainText('Inicio.md, Otra.md');
+  await page.getByText('Cancelar', { exact: true }).click();
+  // Saying no closes none, not even the clean one.
+  await expect(tabNames(page)).toHaveCount(3);
+
+  await page.getByRole('tab', { name: 'Propia', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Cerrar todas' }).click();
+  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await expect(tabNames(page)).toHaveCount(0);
+  await expect(ask).toHaveCount(0);
+});

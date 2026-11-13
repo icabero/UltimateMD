@@ -120,6 +120,7 @@
         store.toggleBar('left', true);
       },
       p: () => (store.palette = '>'),
+      w: () => void store.closeAll(),
       e: () => store.toggleBar('left'),
       o: () => {
         if (tab?.kind === 'md') store.toggleBar('right');
