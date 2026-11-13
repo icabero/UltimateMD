@@ -25,6 +25,7 @@ export const SHORTCUTS: { title: Key; items: Shortcut[] }[] = [
       { label: 'cmd.openNote', keys: [['Ctrl', 'P']] },
       { label: 'shortcuts.actions', keys: [['Ctrl', 'Shift', 'P']] },
       { label: 'cmd.newNote', keys: [['Ctrl', 'N']] },
+      { label: 'daily.open', keys: [['Ctrl', 'Shift', 'D']] },
       { label: 'cmd.searchAll', keys: [['Ctrl', 'Shift', 'F']] },
       { label: 'cmd.saveAll', keys: [['Ctrl', 'S']] },
       { label: 'cmd.export', keys: [['Ctrl', 'E']] },

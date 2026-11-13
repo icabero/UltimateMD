@@ -205,6 +205,8 @@ fn main() {
             commands::template_styles,
             commands::word_config,
             commands::save_word_settings,
+            commands::daily_notes,
+            commands::save_daily_notes,
             commands::tree_order,
             commands::set_tree_order,
             commands::place_in_tree,

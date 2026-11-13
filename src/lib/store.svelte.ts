@@ -5,6 +5,7 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { anchorLabel, findAnchor, parseAnchor } from './anchors';
 import { api, type GitStatus, type ReplaceOptions, type SortMode, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
 import { fold } from './fold';
+import { addDays, dailyPath, dailyTitle } from './daily';
 import { fillTemplate } from './noteTemplates';
 import { withColors, type DiagramStyle } from './diagramStyle';
 import { language, tr } from './i18n.svelte';
@@ -66,7 +67,7 @@ export interface Reveal {
 
 export type PanelTab = 'outline' | 'links' | 'properties' | 'history';
 /** The parts of a vault's settings screen. */
-export type VaultSection = 'general' | 'look' | 'diagrams' | 'word' | 'ai';
+export type VaultSection = 'general' | 'look' | 'diagrams' | 'word' | 'daily' | 'ai';
 
 /** Which side bars someone wants. A narrow window hides them anyway. */
 interface Layout {
@@ -1179,6 +1180,41 @@ class Store {
       }
     }
     await this.createNote(vaultId, dir, name, content);
+  }
+
+  /**
+   * Opens the note of a day (today by default, `offset` days away otherwise) in the
+   * vault of the note open or the first one, making it first if it isn't there. It
+   * never replaces a note that exists.
+   */
+  async openDaily(offset = 0, vaultId?: string) {
+    const tab = this.active;
+    const id = vaultId ?? (tab && !tab.loose ? tab.vaultId : this.openVaults[0]?.id);
+    if (!id) return this.notify(tr('app.openVaultFirst'));
+    const date = addDays(new Date(), offset);
+    try {
+      const settings = await api.dailyNotes(id);
+      const path = dailyPath(date, settings);
+      if (!this.files(id).includes(path)) {
+        const title = dailyTitle(date);
+        let content = `# ${title}\n\n`;
+        if (settings.template) {
+          try {
+            content = fillTemplate(await api.noteTemplate(id, settings.template), { titulo: title, vault: this.vault(id)?.name ?? '' }, date);
+          } catch {
+            this.notify(tr('daily.noTemplate', { name: settings.template }));
+          }
+        }
+        // Creating fails if the note is already there, even if the tree didn't show it yet.
+        await api.create(id, path, content).catch(async (e) => {
+          if (!(await api.read(id, path).then(() => true, () => false))) throw e;
+        });
+        await this.refreshTree(id);
+      }
+      await this.openFile(id, path);
+    } catch (e) {
+      this.fail(e);
+    }
   }
 
   /** Keeps the note open as a template of its vault. */

@@ -125,6 +125,7 @@
         store.toggleBar('left', true);
       },
       p: () => (store.palette = '>'),
+      d: () => void store.openDaily(0),
       w: () => void store.closeAll(),
       e: () => store.toggleBar('left'),
       o: () => {

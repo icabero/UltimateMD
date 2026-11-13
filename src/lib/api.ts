@@ -13,6 +13,12 @@ export interface Vault {
 
 /** How a vault's tree is ordered; folders always come first. */
 export type SortMode = 'nameAsc' | 'nameDesc' | 'modifiedNew' | 'modifiedOld' | 'manual';
+export type DailyFormat = 'iso' | 'yearMonth' | 'dayFirst';
+export interface DailySettings {
+  folder: string;
+  format: DailyFormat;
+  template: string | null;
+}
 
 export interface TreeNode {
   name: string;
@@ -214,6 +220,8 @@ export const api = {
   setVaultAccess: (id: string, mcp: McpAccess) => invoke<void>('set_vault_access', { id, mcp }),
   setVaultScripts: (id: string, allow: boolean) => invoke<void>('set_vault_scripts', { id, allow }),
   tree: (id: string) => invoke<TreeNode[]>('vault_tree', { id }),
+  dailyNotes: (id: string) => invoke<DailySettings>('daily_notes', { id }),
+  saveDailyNotes: (id: string, settings: DailySettings) => invoke<void>('save_daily_notes', { id, settings }),
   treeOrder: (id: string) => invoke<SortMode>('tree_order', { id }),
   setTreeOrder: (id: string, mode: SortMode) => invoke<void>('set_tree_order', { id, mode }),
   placeInTree: (id: string, path: string, target: string, after: boolean) => invoke<void>('place_in_tree', { id, path, target, after }),

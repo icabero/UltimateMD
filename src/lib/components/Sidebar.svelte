@@ -70,6 +70,7 @@
       { label: tr('sort.open'), icon: 'sort', run: () => setTimeout(() => (store.menu = { x: e.clientX, y: e.clientY, items: sortItems(vault.id) })) },
       { label: tr('sidebar.newNote'), icon: 'plus', run: () => void newNote(vault.id, '') },
       { label: tr('cmd.fromTemplate'), icon: 'tasks', run: () => store.newNoteFromTemplate(vault.id, '') },
+      { label: tr('daily.today'), icon: 'calendar', run: () => void store.openDaily(0, vault.id) },
       { label: tr('sidebar.newFolder'), icon: 'folderPlus', run: () => void newFolder(vault.id, '') },
       { label: tr('reader.readVault'), icon: 'eye', separator: true, run: () => (store.reader = { vaultId: vault.id, folder: '' }) },
       { label: tr('broken.open'), icon: 'link', run: () => (store.brokenLinks = vault.id) },
@@ -190,6 +191,7 @@
               <button class="icon small warn" title={tr('watch.badge')} onclick={() => store.reread(vault.id)}><Icon name="refresh" size={14} /></button>
             {/if}
             <button class="icon small" title={tr('sidebar.newNote')} onclick={() => newNote(vault.id, '')}><Icon name="plus" size={14} /></button>
+            <button class="icon small" title={tr('daily.today')} aria-label={tr('daily.today')} onclick={() => void store.openDaily(0, vault.id)}><Icon name="calendar" size={14} /></button>
             <button class="icon small" title={tr('sidebar.newFolder')} onclick={() => newFolder(vault.id, '')}><Icon name="folderPlus" size={14} /></button>
             <button class="icon small" title={tr('sort.title')} aria-label={tr('sort.title')} onclick={(e) => sortMenu(e, vault.id)}><Icon name="sort" size={14} /></button>
             <button class="icon small" title={tr('reader.readVault')} onclick={() => (store.reader = { vaultId: vault.id, folder: '' })}><Icon name="eye" size={14} /></button>

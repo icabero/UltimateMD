@@ -3218,3 +3218,69 @@ test('picking an app theme applies at once', async ({ page }) => {
   await settings.locator('.swatch[aria-pressed="false"]').first().click();
   await expect.poll(bg).not.toBe(before);
 });
+
+/** Today moved by some days, as the daily notes name it and write its title. */
+const dayOf = (page: Page, offset = 0) =>
+  page.evaluate((n) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    const two = (x: number) => String(x).padStart(2, '0');
+    return {
+      y: String(d.getFullYear()),
+      m: two(d.getMonth() + 1),
+      d: two(d.getDate()),
+      title: d.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' }),
+    };
+  }, offset);
+
+test('Hoy opens the note of the day, makes it once and never replaces it', async ({ page }) => {
+  const day = await dayOf(page);
+  const path = `Diario/${day.y}-${day.m}-${day.d}.md`;
+  const region = page.getByRole('region', { name: 'Trabajo' });
+  await region.hover();
+  await region.getByTitle('Hoy: abrir la nota de hoy').click();
+  await expect(page.locator('main footer')).toContainText(`Trabajo / ${path}`);
+  expect(await disk(page, 'a', path)).toBe(`# ${day.title}\n\n`);
+  // The tree shows the new note under its folder.
+  await expect(page.locator('aside').getByRole('button', { name: `${day.y}-${day.m}-${day.d}`, exact: true })).toBeVisible();
+  // What the user wrote stays when Hoy is pressed again.
+  await page.evaluate(([p]) => (window as any).__test.externalWrite('a', p, '# Mi día\n\nEscrito a mano\n'), [path]);
+  await region.hover();
+  await region.getByTitle('Hoy: abrir la nota de hoy').click();
+  await expect(page.locator('main footer')).toContainText(path);
+  expect(await disk(page, 'a', path)).toBe('# Mi día\n\nEscrito a mano\n');
+});
+
+test('the daily note follows the settings of its vault, with a template', async ({ page }) => {
+  await page.evaluate(() => (window as any).__TAURI_INTERNALS__.invoke('save_note_template', { id: 'a', name: 'Jornada', content: '# {{titulo}}\n\n## Tareas\n\n- [ ] \n' }));
+  const screen = await vaultSettings(page, 'Trabajo', 'Notas diarias');
+  await expect(screen.getByLabel('Carpeta')).toHaveValue('Diario');
+  await expect(screen.getByLabel('Nombre de la nota')).toHaveValue('iso');
+  await screen.getByLabel('Carpeta').fill('Bitácora/Diaria');
+  await screen.getByLabel('Carpeta').press('Enter');
+  await screen.getByLabel('Nombre de la nota').selectOption('yearMonth');
+  await screen.getByLabel('Plantilla').selectOption('Jornada');
+  await screen.getByRole('button', { name: 'Cerrar' }).click();
+
+  const day = await dayOf(page);
+  await runAction(page, 'nota de hoy');
+  const path = `Bitácora/Diaria/${day.y}/${day.m}/${day.y}-${day.m}-${day.d}.md`;
+  await expect(page.locator('main footer')).toContainText(path);
+  expect(await disk(page, 'a', path)).toBe(`# ${day.title}\n\n## Tareas\n\n- [ ] \n`);
+
+  // The other vault keeps its own defaults.
+  const other = await vaultSettings(page, 'Personal', 'Notas diarias');
+  await expect(other.getByLabel('Carpeta')).toHaveValue('Diario');
+  await expect(other.getByLabel('Plantilla')).toHaveValue('');
+});
+
+test('yesterday, tomorrow and the shortcut open their day', async ({ page }) => {
+  const [yesterday, tomorrow, today] = await Promise.all([dayOf(page, -1), dayOf(page, 1), dayOf(page)]);
+  await runAction(page, 'nota de ayer');
+  await expect(page.locator('main footer')).toContainText(`Diario/${yesterday.y}-${yesterday.m}-${yesterday.d}.md`);
+  await runAction(page, 'nota de mañana');
+  await expect(page.locator('main footer')).toContainText(`Diario/${tomorrow.y}-${tomorrow.m}-${tomorrow.d}.md`);
+  await page.keyboard.press('Control+Shift+d');
+  await expect(page.locator('main footer')).toContainText(`Diario/${today.y}-${today.m}-${today.d}.md`);
+  expect(await disk(page, 'a', `Diario/${today.y}-${today.m}-${today.d}.md`)).toBe(`# ${today.title}\n\n`);
+});

@@ -84,6 +84,9 @@
     [
       { id: 'note.new', label: tr('cmd.newNote'), keys: ['Ctrl', 'N'], run: () => void store.newNote() },
       { id: 'note.template', label: tr('cmd.fromTemplate'), when: store.openVaults.length > 0, run: () => store.newNoteFromTemplate() },
+      { id: 'note.today', label: tr('daily.open'), keys: ['Ctrl', 'Shift', 'D'], when: store.openVaults.length > 0, run: () => void store.openDaily(0) },
+      { id: 'note.yesterday', label: tr('daily.yesterday'), when: store.openVaults.length > 0, run: () => void store.openDaily(-1) },
+      { id: 'note.tomorrow', label: tr('daily.tomorrow'), when: store.openVaults.length > 0, run: () => void store.openDaily(1) },
       { id: 'note.saveTemplate', label: tr('cmd.saveAsTemplate'), when: md && !tab?.loose, run: () => tab && void store.saveAsTemplate(tab) },
       { id: 'note.open', label: tr('cmd.openNote'), keys: ['Ctrl', 'P'], run: () => switchTo('') },
       { id: 'note.heading', label: tr('cmd.goToHeading'), when: md, run: () => switchTo('#') },

@@ -33,6 +33,7 @@ export const VAULT_SECTION_LABEL: Record<VaultSection, Key> = {
   look: 'vaultSettings.look',
   diagrams: 'vaultSettings.diagrams',
   word: 'vaultSettings.word',
+  daily: 'vaultSettings.daily',
   ai: 'vaultSettings.ai',
 };
 export const NOTE_GROUP_LABEL: Record<NoteGroup, Key> = { look: 'noteLook.title', props: 'find.noteProps' };
@@ -65,6 +66,7 @@ export const VAULT_SETTINGS: SettingEntry[] = [
   { id: 'vault.diagrams', scope: 'vault', section: 'diagrams', label: 'vaultSettings.diagrams', hint: 'find.vaultDiagramsHint', keywords: 'diagramas mermaid guia estilo ia diagrams guide style diagramak' },
   { id: 'vault.word', scope: 'vault', section: 'word', label: 'vaultSettings.word', hint: 'find.vaultWordHint', keywords: 'word docx exportar export documento estilos titulos tablas imagenes codigo styles headings tables' },
   { id: 'vault.word.template', scope: 'vault', section: 'word', label: 'export.template', hint: 'find.templateHint', keywords: 'plantilla template dotx docx word modelo txantiloia' },
+  { id: 'vault.daily', scope: 'vault', section: 'daily', label: 'vaultSettings.daily', hint: 'daily.folderHint', keywords: 'diario diaria hoy today daily journal fecha date carpeta nombre plantilla egunkaria gaur' },
   { id: 'vault.ai', scope: 'vault', section: 'ai', label: 'vaultSettings.ai', hint: 'vaultSettings.aiIntro', keywords: 'ia ai mcp acceso access leer escribir read write claude permisos permissions sarbidea' },
   { id: 'vault.aiLog', scope: 'vault', section: 'ai', label: 'aiLog.open', hint: 'vaultSettings.aiLogHint', keywords: 'registro historial ia ai log history cambios changes mcp erregistroa' },
   { id: 'vault.connect', scope: 'vault', section: 'ai', label: 'vaultSettings.connect', hint: 'vaultSettings.connectHint', keywords: 'conectar mcp ia ai claude cursor connect konektatu' },

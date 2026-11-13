@@ -5,6 +5,7 @@
 
 pub mod aliases;
 pub mod callouts;
+pub mod daily_notes;
 pub mod diagram_guide;
 pub mod docx;
 pub mod error;

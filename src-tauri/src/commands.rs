@@ -10,6 +10,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
+use ultimatemd_core::daily_notes::{self, DailySettings};
 use ultimatemd_core::docx::Section;
 use ultimatemd_core::links::{self, LinkInfo};
 use ultimatemd_core::paths::{is_image, join_relative};
@@ -682,6 +683,17 @@ pub fn diagram_guide(id: String) -> Result<Option<String>> {
 #[tauri::command(async)]
 pub fn save_diagram_guide(id: String, text: String) -> Result<()> {
     ultimatemd_core::diagram_guide::save(fs(&id)?.root(), &text)
+}
+
+/// How the vault makes its daily notes.
+#[tauri::command(async)]
+pub fn daily_notes(id: String) -> Result<DailySettings> {
+    Ok(daily_notes::load(fs(&id)?.root()))
+}
+
+#[tauri::command(async)]
+pub fn save_daily_notes(id: String, settings: DailySettings) -> Result<()> {
+    daily_notes::save(fs(&id)?.root(), &settings)
 }
 
 /// How the vault's tree is ordered.

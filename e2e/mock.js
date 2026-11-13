@@ -121,6 +121,10 @@
   const commands = {
     list_vaults: () => vaults,
     vault_tree: ({ id }) => tree(id),
+    daily_notes: ({ id }) => window.__daily?.[id] ?? { folder: 'Diario', format: 'iso', template: null },
+    save_daily_notes: ({ id, settings }) => {
+      (window.__daily ??= {})[id] = settings;
+    },
     tree_order: ({ id }) => orderOf(id).mode,
     set_tree_order: ({ id, mode }) => {
       orderOf(id).mode = mode;

@@ -6,7 +6,8 @@
   import Icon from './Icon.svelte';
   import ThemeEditor from './ThemeEditor.svelte';
   import WordScreen from './WordScreen.svelte';
-  import { api, type McpAccess, type SortMode } from '../api';
+  import { api, type DailyFormat, type DailySettings, type McpAccess, type SortMode } from '../api';
+  import { FORMATS, dailyName } from '../daily';
   import { ORDERS } from '../treeOrder';
   import { tr, type Key } from '../i18n.svelte';
   import { store, type VaultSection } from '../store.svelte';
@@ -18,6 +19,7 @@
     { id: 'look', label: 'vaultSettings.look' },
     { id: 'diagrams', label: 'vaultSettings.diagrams' },
     { id: 'word', label: 'vaultSettings.word' },
+    { id: 'daily', label: 'vaultSettings.daily' },
     { id: 'ai', label: 'vaultSettings.ai' },
   ];
   const ACCESS: { value: McpAccess; label: Key; hint: Key }[] = [
@@ -26,7 +28,8 @@
     { value: 'write', label: 'settings.accessWrite', hint: 'vaultSettings.accessWriteHint' },
   ];
   /** These read the vault's files, so they need it open. */
-  const NEEDS_OPEN: VaultSection[] = ['look', 'diagrams', 'word'];
+  const NEEDS_OPEN: VaultSection[] = ['look', 'diagrams', 'word', 'daily'];
+  const FORMAT_LABEL: Record<DailyFormat, Key> = { iso: 'daily.formatIso', yearMonth: 'daily.formatYearMonth', dayFirst: 'daily.formatDayFirst' };
 
   const vault = $derived(store.vault(vaultId));
   const name = $derived(vault?.name ?? '');
@@ -58,6 +61,30 @@
   async function setScripts(allow: boolean) {
     await api.setVaultScripts(vaultId, allow).catch((e) => store.fail(e));
     await store.loadVaults();
+  }
+
+  // Daily notes: read when the section opens, saved at each change.
+  let daily = $state<DailySettings | null>(null);
+  let templates = $state<string[]>([]);
+  const today = new Date();
+
+  $effect(() => {
+    if (section !== 'daily' || !vault?.open) return;
+    daily = null;
+    void api.dailyNotes(vaultId).then((s) => (daily = s), (e) => store.fail(e));
+    void api.noteTemplates(vaultId).then((t) => (templates = t), () => (templates = []));
+  });
+
+  async function saveDaily(change: Partial<DailySettings>) {
+    if (!daily) return;
+    const next = { ...daily, ...change, folder: (change.folder ?? daily.folder).trim().replace(/^\/+|\/+$/g, '') };
+    try {
+      await api.saveDailyNotes(vaultId, next);
+      daily = next;
+    } catch (e) {
+      store.fail(e);
+      daily = { ...daily };
+    }
   }
 
   async function remove() {
@@ -147,6 +174,37 @@
         <DiagramGuide {vaultId} />
       {:else if section === 'word'}
         <WordScreen {vaultId} />
+      {:else if section === 'daily'}
+        {#if daily}
+          <section>
+            <p class="hint lead">{tr('daily.intro')}</p>
+            <label class="field">
+              <span>{tr('daily.folder')}</span>
+              <input type="text" value={daily.folder} onchange={(e) => saveDaily({ folder: e.currentTarget.value })} onkeydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+            </label>
+            <p class="hint">{tr('daily.folderHint')}</p>
+          </section>
+          <section>
+            <label class="field">
+              <span>{tr('daily.format')}</span>
+              <select value={daily.format} onchange={(e) => saveDaily({ format: e.currentTarget.value as DailyFormat })}>
+                {#each FORMATS as f (f)}<option value={f}>{dailyName(today, f)}</option>{/each}
+              </select>
+            </label>
+            <p class="hint">{tr(FORMAT_LABEL[daily.format])}</p>
+          </section>
+          <section>
+            <label class="field">
+              <span>{tr('daily.template')}</span>
+              <select value={daily.template ?? ''} onchange={(e) => saveDaily({ template: e.currentTarget.value || null })}>
+                <option value="">{tr('daily.noTemplateOption')}</option>
+                {#each templates as t (t)}<option value={t}>{t}</option>{/each}
+                {#if daily.template && !templates.includes(daily.template)}<option value={daily.template}>{daily.template}</option>{/if}
+              </select>
+            </label>
+            <p class="hint">{tr('daily.templateHint')}</p>
+          </section>
+        {/if}
       {:else}
         <section data-setting="vault.ai">
           <p class="hint lead">{tr('vaultSettings.aiIntro')}</p>
