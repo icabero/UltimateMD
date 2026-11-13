@@ -9,6 +9,7 @@
   import { renderDiagram, toPng, toSvgBytes } from '../diagrams';
   import { findTerms } from '../fold';
   import { hideLinkCard, watchLinks } from '../linkCard';
+  import { coverPath, noteLook } from '../look';
   import { tr } from '../i18n.svelte';
   import { outline, renderMarkdown, type Heading } from '../markdown';
   import { store, type Tab } from '../store.svelte';
@@ -169,6 +170,30 @@
     }));
   }
 
+  /** The banner and emoji the note's frontmatter asks for, above everything else. Only on screen, never in an export. */
+  function noteHead(files: string[]) {
+    if (tab.kind !== 'md') return null;
+    const { icon, cover } = noteLook(tab.content);
+    const image = cover ? coverPath(cover, tab.path, files) : null;
+    if (!icon && !image) return null;
+    const head = document.createElement('header');
+    head.className = 'note-head';
+    if (image) {
+      const img = document.createElement('img');
+      img.className = 'note-cover';
+      img.alt = '';
+      img.src = fileUrl(tab.vaultId, image);
+      head.append(img);
+    }
+    if (icon) {
+      const emoji = document.createElement('div');
+      emoji.className = 'note-icon';
+      emoji.textContent = icon;
+      head.append(emoji);
+    }
+    return head;
+  }
+
   function render() {
     const id = ++run;
     const context = { vaultId: tab.vaultId, path: tab.path, files: store.files(tab.vaultId), aliases: store.aliasMap(tab.vaultId) };
@@ -184,6 +209,8 @@
       if (previous) el.innerHTML = previous.innerHTML;
     }
     if ('highlights' in CSS) CSS.highlights.delete(FOUND);
+    const head = noteHead(context.files);
+    if (head) fragment.prepend(head);
     body.replaceChildren(fragment);
     markOutside();
     codeTools();

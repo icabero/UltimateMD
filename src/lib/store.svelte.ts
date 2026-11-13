@@ -11,6 +11,8 @@ import { withColors, type DiagramStyle } from './diagramStyle';
 import { language, tr } from './i18n.svelte';
 import { sampleVault } from './sampleVault';
 import { baseName, dirName, join, kindOf, linkFrom, resolveLink, stem, type FileKind } from './paths';
+import { lookKey, noteLook } from './look';
+import { setProperty } from './frontmatter';
 import { checksAtStart, isNewer, latestVersion } from './updates';
 import { newsFor, unseenNews } from './news';
 import { changedLines } from './diff';
@@ -110,12 +112,13 @@ const TOAST_SHORT = 140;
 
 /** A small chooser: a colour and emoji for a folder, or an emoji for a note. */
 export interface Picker {
-  kind: 'look' | 'emoji';
+  kind: 'look' | 'emoji' | 'image';
   title: string;
   color: string | null;
   emoji: string | null;
+  vaultId: string;
   /** Null when closed without choosing; a null colour or emoji is one taken away. */
-  resolve: (value: { color: string | null; emoji: string | null } | null) => void;
+  resolve: (value: { color: string | null; emoji: string | null; image: string | null } | null) => void;
 }
 
 export interface Dialog {
@@ -345,6 +348,8 @@ class Store {
   picker = $state<Picker | null>(null);
   /** Each vault's folders with a colour or emoji, by path. */
   looks = $state<Record<string, Record<string, FolderLook>>>({});
+  /** The emoji each vault's notes declare, by path. */
+  noteIcons = $state<Record<string, Record<string, string>>>({});
   vaultThemes = $state<Record<string, VaultThemes>>({});
   /** The vault whose settings are open, and at which part. */
   vaultSettings = $state<{ vaultId: string; section: VaultSection } | null>(null);
@@ -724,9 +729,17 @@ class Store {
     try {
       const found = await api.aliases(vaultId, paths);
       const next = paths ? { ...(this.aliases[vaultId] ?? {}) } : {};
-      for (const path of paths ?? []) delete next[path];
-      for (const note of found) next[note.path] = note.aliases;
+      const icons = paths ? { ...(this.noteIcons[vaultId] ?? {}) } : {};
+      for (const path of paths ?? []) {
+        delete next[path];
+        delete icons[path];
+      }
+      for (const note of found) {
+        if (note.aliases.length) next[note.path] = note.aliases;
+        if (note.icon) icons[note.path] = note.icon;
+      }
       this.aliases[vaultId] = next;
+      this.noteIcons[vaultId] = icons;
     } catch {
       // Links by alias stay unresolved until the next change.
     }
@@ -802,10 +815,16 @@ class Store {
     });
   }
 
+  /** The emoji of a note: from its text if it is open, else as the vault's notes declare it. */
+  noteIcon(vaultId: string, path: string) {
+    const tab = this.tabs.find((t) => t.vaultId === vaultId && t.path === path && t.kind === 'md');
+    return tab ? noteLook(tab.content).icon : (this.noteIcons[vaultId]?.[path] ?? null);
+  }
+
   /** Asks for the colour and emoji of a folder and keeps them in the vault. */
   async chooseFolderLook(vaultId: string, folder: string) {
     const now = this.looks[vaultId]?.[folder];
-    const result = await this.#pick({ kind: 'look', title: tr('look.folderTitle', { name: baseName(folder) }), color: now?.color ?? null, emoji: now?.emoji ?? null });
+    const result = await this.#pick({ kind: 'look', title: tr('look.folderTitle', { name: baseName(folder) }), color: now?.color ?? null, emoji: now?.emoji ?? null, vaultId });
     if (!result) return;
     try {
       await api.setFolderLook(vaultId, folder, result.color || result.emoji ? { color: result.color, emoji: result.emoji } : null);
@@ -813,6 +832,23 @@ class Store {
     } catch (e) {
       this.fail(e);
     }
+  }
+
+  /** Sets or removes a note's icon or cover in its frontmatter. */
+  setNoteLook(tab: Tab, which: 'icon' | 'cover', value: string) {
+    this.edit(tab, setProperty(tab.content, lookKey(tab.content, which), value));
+  }
+
+  async chooseNoteIcon(tab: Tab) {
+    const result = await this.#pick({ kind: 'emoji', title: tr('look.iconTitle'), color: null, emoji: noteLook(tab.content).icon, vaultId: tab.vaultId });
+    if (result) this.setNoteLook(tab, 'icon', result.emoji ?? '');
+  }
+
+  async chooseNoteCover(tab: Tab) {
+    const result = await this.#pick({ kind: 'image', title: tr('look.coverTitle'), color: null, emoji: null, vaultId: tab.vaultId });
+    if (!result?.image) return;
+    // As images are written in notes: by name when it is beside the note, else from the vault's root.
+    this.setNoteLook(tab, 'cover', dirName(result.image) === dirName(tab.path) ? baseName(result.image) : result.image);
   }
 
   prompt(title: string, value = '', action = tr('common.accept')) {

@@ -1053,4 +1053,18 @@ export const es = {
   'look.remove': 'Quitar',
   'look.folderHint': 'El color tiñe la carpeta; un emoji la sustituye en el árbol. Se guarda en el almacén, no en la carpeta.',
   'look.iconHint': 'Aparece junto al nombre de la nota.',
+
+  'look.icon': 'Icono',
+  'look.cover': 'Portada',
+  'look.choose': 'Elegir…',
+  'look.change': 'Cambiar',
+  'look.iconTitle': 'Icono de la nota',
+  'look.coverTitle': 'Portada de la nota',
+  'look.changeCover': 'Cambiar portada',
+  'look.removeCover': 'Quitar',
+  'look.findImage': 'Buscar una imagen del almacén',
+  'look.noImages': 'No hay imágenes que coincidan en este almacén.',
+  'look.coverHint': 'Se muestra arriba de la nota. En el texto queda como «portada:» al principio.',
+  'look.coverFieldHint': 'Una imagen del almacén, como banner arriba de la nota.',
+  'look.needsVault': 'Disponible en notas de un almacén.',
 };

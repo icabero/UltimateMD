@@ -318,8 +318,8 @@ export const api = {
   gitCommitted: (id: string, path: string) => invoke<string | null>('git_committed', { id, path }),
   /** Commits every change in the vault and returns the commit's short id. */
   gitCommit: (id: string, message: string) => invoke<string>('git_commit', { id, message }),
-  /** The other names notes answer to: of the whole vault, or of `paths` only. */
-  aliases: (id: string, paths?: string[]) => invoke<{ path: string; aliases: string[] }[]>('vault_aliases', { id, paths: paths ?? null }),
+  /** The other names notes answer to and the emoji they declare: of the whole vault, or of `paths` only. */
+  aliases: (id: string, paths?: string[]) => invoke<{ path: string; aliases: string[]; icon: string | null }[]>('vault_aliases', { id, paths: paths ?? null }),
   /** The vault's guide for the diagrams an AI draws, or null. */
   diagramGuide: (id: string) => invoke<string | null>('diagram_guide', { id }),
   /** Saves the guide; an empty text removes it. */

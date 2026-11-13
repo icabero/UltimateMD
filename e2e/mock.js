@@ -499,9 +499,10 @@
         .map((path) => {
           const meta = /^---\n([\s\S]*?)\n---/.exec(files[id][path])?.[1] ?? '';
           const list = /^aliases:\s*\[(.*)\]/m.exec(meta)?.[1] ?? '';
-          return { path, aliases: list.split(',').map((a) => a.trim()).filter(Boolean) };
+          const icon = /^icon[o]?:\s*(\S{1,16})\s*$/m.exec(meta)?.[1]?.replace(/^["']|["']$/g, '') ?? null;
+          return { path, aliases: list.split(',').map((a) => a.trim()).filter(Boolean), icon };
         })
-        .filter((n) => n.aliases.length),
+        .filter((n) => n.aliases.length || n.icon),
     export_site: ({ name, pages, assets }) => {
       window.__site = { name, pages, assets };
       return `/exportado/${name}/index.html`;

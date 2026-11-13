@@ -3,7 +3,9 @@
   import { untrack } from 'svelte';
   import { dim, pop } from '../motion';
   import { tr } from '../i18n.svelte';
+  import { fileUrl } from '../api';
   import { EMOJIS, FOLDER_COLORS, validEmoji } from '../look';
+  import { kindOf } from '../paths';
   import { store, type Picker } from '../store.svelte';
 
   let { picker }: { picker: Picker } = $props();
@@ -14,10 +16,18 @@
   const typed = $derived(emoji.trim());
   const valid = $derived(!typed || validEmoji(typed));
   const empty = $derived(!color && !typed);
+  const images = $derived(picker.kind === 'image');
+  let query = $state('');
+  /** The vault's images that match what is typed, the first few hundred. */
+  const found = $derived(
+    images
+      ? store.files(picker.vaultId).filter((f) => kindOf(f) === 'image' && f.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 200)
+      : [],
+  );
 
   function onsubmit(e: SubmitEvent) {
     e.preventDefault();
-    if (valid) picker.resolve({ color, emoji: typed || null });
+    if (valid && !images) picker.resolve({ color, emoji: typed || null, image: null });
   }
 
   const focus = (el: HTMLElement) => el.focus();
@@ -28,6 +38,24 @@
 <button in:dim class="scrim top" aria-label={tr('common.cancel')} onclick={() => picker.resolve(null)}></button>
 <form in:pop class="dialog" aria-label={picker.title} {onsubmit}>
   <p class="title">{picker.title}</p>
+  {#if images}
+    <input class="query" bind:value={query} use:focus placeholder={tr('look.findImage')} aria-label={tr('look.findImage')} />
+    <div class="images" role="listbox" aria-label={tr('look.coverTitle')}>
+      {#each found as path (path)}
+        <button type="button" class="image" role="option" aria-selected="false" title={path} onclick={() => picker.resolve({ color: null, emoji: null, image: path })}>
+          <img src={fileUrl(picker.vaultId, path)} alt="" loading="lazy" />
+          <span>{path.split('/').pop()}</span>
+        </button>
+      {:else}
+        <p class="hint none">{tr('look.noImages')}</p>
+      {/each}
+    </div>
+    <p class="hint">{tr('look.coverHint')}</p>
+    <div class="buttons">
+      <span class="grow"></span>
+      <button type="button" onclick={() => picker.resolve(null)}>{tr('common.cancel')}</button>
+    </div>
+  {:else}
   {#if withColor}
     <div class="colors" role="radiogroup" aria-label={tr('look.colors')}>
       <button type="button" class="swatch none" role="radio" aria-checked={!color} aria-label={tr('look.noColor')} title={tr('look.noColor')} onclick={() => (color = null)}></button>
@@ -47,11 +75,12 @@
   </label>
   <p class="hint">{tr(withColor ? 'look.folderHint' : 'look.iconHint')}</p>
   <div class="buttons">
-    <button type="button" class="remove" disabled={empty && !picker.color && !picker.emoji} onclick={() => picker.resolve({ color: null, emoji: null })}>{tr('look.remove')}</button>
+    <button type="button" class="remove" disabled={empty && !picker.color && !picker.emoji} onclick={() => picker.resolve({ color: null, emoji: null, image: null })}>{tr('look.remove')}</button>
     <span class="grow"></span>
     <button type="button" onclick={() => picker.resolve(null)}>{tr('common.cancel')}</button>
     <button type="submit" class="main" disabled={!valid}>{tr('common.accept')}</button>
   </div>
+  {/if}
 </form>
 
 <style>
@@ -62,6 +91,12 @@
   .swatch { width: 24px; height: 24px; padding: 0; border: 2px solid transparent; border-radius: 50%; background: var(--swatch); }
   .swatch.none { border: 1.5px dashed var(--text-3); background: none; }
   .swatch[aria-checked='true'] { outline: 2px solid var(--text); outline-offset: 2px; }
+  .images { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); max-height: 280px; overflow-y: auto; }
+  .image { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; padding: var(--space-1); border: 1px solid var(--line); border-radius: var(--radius-md); background: none; color: var(--text-2); font-size: var(--font-xs); }
+  .image:hover, .image:focus-visible { background: var(--hover); }
+  .image img { width: 100%; height: 56px; border-radius: var(--radius-sm); object-fit: cover; }
+  .image span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .none { grid-column: 1 / -1; }
   .emojis { display: grid; grid-template-columns: repeat(8, 1fr); gap: var(--space-0-5); }
   .emoji { height: 34px; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; font-size: var(--font-lg); }
   .emoji:hover { background: var(--hover); }

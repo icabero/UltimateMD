@@ -1054,4 +1054,18 @@ export const eu: Record<Key, string> = {
   'look.remove': 'Kendu',
   'look.folderHint': 'Koloreak karpeta tindatzen du; emoji batek zuhaitzean ordezkatzen du. Biltegian gordetzen da, ez karpetan.',
   'look.iconHint': 'Oharraren izenaren ondoan agertzen da.',
+
+  'look.icon': 'Ikonoa',
+  'look.cover': 'Azala',
+  'look.choose': 'Aukeratu…',
+  'look.change': 'Aldatu',
+  'look.iconTitle': 'Oharraren ikonoa',
+  'look.coverTitle': 'Oharraren azala',
+  'look.changeCover': 'Aldatu azala',
+  'look.removeCover': 'Kendu',
+  'look.findImage': 'Bilatu biltegiko irudi bat',
+  'look.noImages': 'Biltegi honetan ez dago bat datorren irudirik.',
+  'look.coverHint': 'Oharraren goiko aldean erakusten da. Testuan «portada:» gisa gelditzen da hasieran.',
+  'look.coverFieldHint': 'Biltegiko irudi bat, oharraren goiko aldeko banner gisa.',
+  'look.needsVault': 'Biltegi bateko oharretan eskuragarri.',
 };

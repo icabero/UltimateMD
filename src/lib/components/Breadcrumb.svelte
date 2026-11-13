@@ -16,7 +16,8 @@
   const folders = $derived(dirName(tab.path) ? dirName(tab.path).split('/') : []);
   const vaultName = $derived(store.vault(tab.vaultId)?.name ?? '');
   const note = $derived(baseName(tab.path).replace(/\.(md|markdown|html|htm)$/i, ''));
-  const pathTo = (count: number) => folders.slice(0, count).join('/');
+  const emoji = $derived(tab.kind === 'md' ? store.noteIcon(tab.vaultId, tab.path) : null);
+  const pathTo =(count: number) => folders.slice(0, count).join('/');
   // With a long path only the first and the last folder stay; the rest are behind "…".
   const folded = $derived(folders.length > MAX_FOLDERS);
   const shown = $derived(
@@ -86,7 +87,7 @@
     <button class="crumb" aria-haspopup="menu" title={tr('crumb.title', { name: f.name })} onclick={(e) => show(e, f.path)}>{f.name}</button>
   {/each}
   <span class="sep" aria-hidden="true"><Icon name="chevron" size={10} /></span>
-  <button class="crumb note" aria-current="page" aria-haspopup="menu" title={tr('crumb.noteTitle')} onclick={noteMenu}>{note}</button>
+  <button class="crumb note" aria-current="page" aria-haspopup="menu" title={tr('crumb.noteTitle')} onclick={noteMenu}>{#if emoji}<span aria-hidden="true">{emoji} </span>{/if}{note}</button>
 </nav>
 
 <style>

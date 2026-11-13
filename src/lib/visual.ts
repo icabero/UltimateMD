@@ -10,8 +10,10 @@ import { findFormulas } from './mathSource';
 import { renderMath } from './math';
 import { diagramErrorBox, explainDiagramError } from './diagramErrors';
 import { renderDiagram } from './diagrams';
+import { fileUrl } from './api';
 import { tr, type Key } from './i18n.svelte';
-import { store } from './store.svelte';
+import { coverPath, noteLook } from './look';
+import { store, type Tab } from './store.svelte';
 import { alignColumn, delimiterRow, joinRow, moveColumn, moveRow, parseTable, type Align, type Table } from './tables';
 import { themeKey, type Theme } from './themes';
 import { WIKILINK, linkAt } from './wikilinks';
@@ -19,6 +21,7 @@ import { WIKILINK, linkAt } from './wikilinks';
 const PARSE_BUDGET_MS = 100;
 const DIAGRAM_HEIGHT = 220;
 const MATH_HEIGHT = 60;
+const COVER_HEIGHT = 180;
 const FRONTMATTER_LIMIT = 20_000;
 const DIAGRAM_FENCE = /^(`{3,}|~{3,})\s*(mermaid|d2)(?:\s+(.*))?$/i;
 
@@ -88,6 +91,59 @@ class MathWidget extends WidgetType {
   }
   ignoreEvent() {
     return false;
+  }
+}
+
+/** The note's banner and emoji above its text. Hovering the banner offers to change or remove it. */
+class HeadWidget extends WidgetType {
+  constructor(readonly icon: string | null, readonly image: string | null, readonly vaultId: string) {
+    super();
+  }
+  eq(other: HeadWidget) {
+    return other.icon === this.icon && other.image === this.image && other.vaultId === this.vaultId;
+  }
+  get estimatedHeight() {
+    return (this.image ? COVER_HEIGHT : 0) + (this.icon ? 56 : 0);
+  }
+  toDOM() {
+    const el = document.createElement('div');
+    el.className = 'cm-v-head';
+    if (this.image) {
+      const cover = document.createElement('div');
+      cover.className = 'cm-v-cover';
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = fileUrl(this.vaultId, this.image);
+      const tools = document.createElement('div');
+      tools.className = 'cm-v-cover-tools';
+      const button = (label: string, run: (tab: Tab) => void) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = label;
+        b.onmousedown = (e) => e.preventDefault();
+        b.onclick = () => {
+          const tab = store.active;
+          if (tab) run(tab);
+        };
+        return b;
+      };
+      tools.append(
+        button(tr('look.changeCover'), (tab) => void store.chooseNoteCover(tab)),
+        button(tr('look.removeCover'), (tab) => store.setNoteLook(tab, 'cover', '')),
+      );
+      cover.append(img, tools);
+      el.append(cover);
+    }
+    if (this.icon) {
+      const emoji = document.createElement('div');
+      emoji.className = 'cm-v-icon';
+      emoji.textContent = this.icon;
+      el.append(emoji);
+    }
+    return el;
+  }
+  ignoreEvent() {
+    return true;
   }
 }
 
@@ -348,6 +404,12 @@ function decorate(state: EditorState, typing: boolean) {
   const tree = ensureSyntaxTree(state, size, PARSE_BUDGET_MS) ?? syntaxTree(state);
   const head = FRONTMATTER.exec(state.sliceDoc(0, Math.min(size, FRONTMATTER_LIMIT)));
   const bodyStart = head?.[0].length ?? 0;
+  const tab = store.active;
+  if (head && tab) {
+    const { icon, cover } = noteLook(head[0]);
+    const image = cover ? coverPath(cover, tab.path, store.files(tab.vaultId)) : null;
+    if (icon || image) out.push(Decoration.widget({ widget: new HeadWidget(icon, image, tab.vaultId), block: true, side: -1 }).range(0));
+  }
   for (let pos = 0; pos < bodyStart; ) {
     const line = state.doc.lineAt(pos);
     out.push(lineClass('cm-v-meta').range(line.from));
@@ -490,6 +552,13 @@ const look = EditorView.theme({
   '.cm-v-callout-caution': { '--callout': '#dc2626' },
   '.cm-v-callout-title': { color: 'color-mix(in srgb, var(--callout) 70%, var(--text))', fontWeight: '650' },
   '.cm-v-code': { background: 'var(--panel)', fontFamily: 'var(--mono)', fontSize: 'calc(13px * var(--text-scale, 1))' },
+  '.cm-v-head': { margin: '0 0 8px' },
+  '.cm-v-cover': { position: 'relative', height: `${COVER_HEIGHT}px`, overflow: 'hidden', borderRadius: '8px', background: 'var(--panel)' },
+  '.cm-v-cover img': { display: 'block', width: '100%', height: '100%', objectFit: 'cover' },
+  '.cm-v-cover-tools': { position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '6px', opacity: '0', transition: 'opacity 120ms' },
+  '.cm-v-cover:hover .cm-v-cover-tools, .cm-v-cover:focus-within .cm-v-cover-tools': { opacity: '1' },
+  '.cm-v-cover-tools button': { padding: '3px 10px', border: '1px solid var(--line)', borderRadius: '5px', background: 'var(--raised)', color: 'var(--text)', fontFamily: 'var(--sans)', fontSize: '12px', cursor: 'pointer' },
+  '.cm-v-icon': { marginTop: '6px', fontSize: '2.6em', lineHeight: '1.1' },
   '.cm-v-meta': { color: 'var(--text-3)', fontFamily: 'var(--mono)', fontSize: 'calc(12.5px * var(--text-scale, 1))' },
   '.cm-v-inline-code': { padding: '1px 4px', borderRadius: '4px', background: 'var(--panel)', fontFamily: 'var(--mono)', fontSize: '.9em' },
   '.cm-v-link': { color: 'var(--accent-text)', textDecoration: 'underline' },

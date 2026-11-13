@@ -110,6 +110,7 @@
           onclick={() => select(tab)} onkeydown={(e) => onKey(e, tab, index)}>
           {#if tab.pinned}<span class="mark" title={tr('tabs.pinned')}><Icon name="pin" size={12} /></span>{/if}
           {#if tab.loose}<span class="mark" title={tr('tabs.looseFile')}><Icon name="file" size={12} /></span>{/if}
+          {#if tab.kind === 'md' && store.noteIcon(tab.vaultId, tab.path)}<span class="emoji" aria-hidden="true">{store.noteIcon(tab.vaultId, tab.path)}</span>{/if}
           <span class="name">{baseName(tab.path).replace(/\.(md|markdown)$/i, '')}</span>
           {#if tab.dirty}<span class="dirty" title={tr('tabs.unsaved')}></span>{/if}
         </div>
@@ -146,6 +147,7 @@
   .tab.before { box-shadow: inset 2px 0 0 var(--accent); }
   .tab.after { box-shadow: inset -2px 0 0 var(--accent); }
   .name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .emoji { flex: none; line-height: 1; }
   .mark { display: flex; flex: none; color: var(--text-3); }
   .dirty { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
   .x { display: flex; flex: none; padding: var(--space-1); border: 0; border-radius: var(--radius-xs); background: none; color: inherit; opacity: 0; }

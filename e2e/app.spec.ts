@@ -3862,3 +3862,60 @@ test('a folder gets a colour or an emoji that follows it when renamed and goes w
   await expect(row('vacia')).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__test.looks.a.vacia)).toBeUndefined();
 });
+
+test('a note gets an icon and a cover from the Nota tab, shown in the tree, tabs, path and both views', async ({ page }) => {
+  await page.evaluate(() => (window as any).__test.externalWrite('b', 'Otra.md', '---\nicono: 📚\n---\n# Otra\n'));
+  await expect(page.locator('aside').getByRole('button', { name: 'Otra', exact: true }).locator('.emoji')).toHaveText('📚');
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+Shift+o');
+  await notePanel(page).getByRole('tab', { name: 'Nota', exact: true }).click();
+  const form = notePanel(page);
+  await form.getByRole('button', { name: 'Icono', exact: true }).click();
+  const picker = page.getByRole('form', { name: 'Icono de la nota' });
+  await picker.getByRole('button', { name: '🧭' }).click();
+  await picker.getByRole('button', { name: 'Aceptar' }).click();
+  await form.getByRole('button', { name: 'Portada', exact: true }).click();
+  await page.getByRole('form', { name: 'Portada de la nota' }).getByRole('option', { name: /imagen\.png/ }).click();
+  await expect(page.locator('main footer')).toContainText('Guardado', { timeout: 3000 });
+  expect(await disk(page, 'a', 'Inicio.md')).toMatch(/^---\nicono: 🧭\nportada: vacia\/imagen\.png\n---\n# Inicio/);
+  await expect(page.getByRole('tab', { name: 'Inicio', exact: true }).locator('.emoji')).toHaveText('🧭');
+  await expect(page.getByRole('navigation', { name: 'Ruta de la nota' }).getByRole('button', { name: /Inicio/ })).toContainText('🧭');
+  await expect(page.locator('aside').getByRole('button', { name: 'Inicio', exact: true }).locator('.emoji')).toHaveText('🧭');
+  // The properties list does not repeat them.
+  await expect(form.getByRole('textbox', { name: 'icono', exact: true })).toHaveCount(0);
+  // Visual mode: the banner offers to change or remove it.
+  await page.getByRole('button', { name: 'Visual', exact: true }).click();
+  await expect(page.locator('.cm-v-head .cm-v-icon')).toHaveText('🧭');
+  await page.locator('.cm-v-cover').hover();
+  await expect(page.getByRole('button', { name: 'Cambiar portada' }).first()).toBeVisible();
+  // The preview shows both above the note.
+  await page.getByRole('button', { name: 'Vista previa', exact: true }).click();
+  await expect(page.locator('.note-head .note-cover')).toHaveCount(1);
+  await expect(page.locator('.note-head .note-icon')).toHaveText('🧭');
+  // Removing from the banner leaves the icon.
+  await page.getByRole('button', { name: 'Visual', exact: true }).click();
+  await page.locator('.cm-v-cover').hover();
+  await page.locator('.cm-v-cover-tools').getByRole('button', { name: 'Quitar' }).click();
+  await expect(page.locator('.cm-v-cover')).toHaveCount(0);
+  await expect(page.locator('main footer')).toContainText('Guardado', { timeout: 3000 });
+  expect(await disk(page, 'a', 'Inicio.md')).toMatch(/^---\nicono: 🧭\n---\n# Inicio/);
+  // And from the panel.
+  await form.getByRole('button', { name: 'Quitar' }).click();
+  await expect(page.locator('main footer')).toContainText('Guardado', { timeout: 3000 });
+  expect(await disk(page, 'a', 'Inicio.md')).toMatch(/^# Inicio/);
+});
+
+test('a cover is found beside the note or from the vault, by the same rules as images', async ({ page }) => {
+  await page.evaluate(() => {
+    const t = (window as any).__test;
+    t.externalWrite('a', 'vacia/Local.md', '---\nportada: imagen.png\n---\n# Local\n');
+    t.externalWrite('a', 'Raiz.md', '---\ncover: "vacia/imagen.png"\nicon: 🔥\n---\n# Raiz\n');
+  });
+  await open(page, 'vacia');
+  await open(page, 'Local');
+  await page.getByRole('button', { name: 'Vista previa', exact: true }).click();
+  await expect(page.locator('.note-cover')).toHaveCount(1);
+  await open(page, 'Raiz');
+  await expect(page.locator('.note-cover')).toHaveCount(1);
+  await expect(page.locator('.note-icon')).toHaveText('🔥');
+});

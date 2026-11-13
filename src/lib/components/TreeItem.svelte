@@ -34,6 +34,7 @@
   const icon = $derived(node.isDir ? 'folder' : iconOf(node.path));
   const look = $derived(node.isDir ? store.looks[vaultId]?.[node.path] : undefined);
   const tint = $derived(look?.color ? FOLDER_COLORS[look.color] : undefined);
+  const emoji = $derived(node.isDir ? look?.emoji : icon === 'note' ? store.noteIcon(vaultId, node.path) : null);
 
   // Reveals the note being edited, including one opened from a link or search.
   $effect(() => {
@@ -137,8 +138,8 @@
   {#if node.isDir}
     <span class="chev" class:open={expanded}><Icon name="chevron" size={12} /></span>
   {/if}
-  <span class="ico" class:tinted={!!tint} style:color={tint} data-icon={look?.emoji ? "emoji" : icon}>
-    {#if look?.emoji}<span class="emoji" aria-hidden="true">{look.emoji}</span>{:else}<Icon name={icon} size={15} />{/if}
+  <span class="ico" class:tinted={!!tint} style:color={tint} data-icon={emoji ? "emoji" : icon}>
+    {#if emoji}<span class="emoji" aria-hidden="true">{emoji}</span>{:else}<Icon name={icon} size={15} />{/if}
   </span>
   <span class="label">{node.isDir ? node.name : node.name.replace(/\.(md|markdown)$/i, '')}</span>
   {#if git}<span class="git {git}" title={tr(`git.${git}`)}>{GIT_LETTER[git]}</span>{/if}

@@ -79,6 +79,8 @@ export const NOTE_SETTINGS: SettingEntry[] = [
   { id: 'note.titulo', scope: 'note', group: 'props', label: 'props.title', hint: 'props.titleHint', keywords: 'titulo title frontmatter propiedades properties izenburua' },
   { id: 'note.autor', scope: 'note', group: 'props', label: 'props.author', hint: 'props.authorHint', keywords: 'autor author frontmatter egilea' },
   { id: 'note.fecha', scope: 'note', group: 'props', label: 'props.date', hint: 'props.dateHint', keywords: 'fecha date hoy today frontmatter data' },
+  { id: 'note.icon', scope: 'note', group: 'props', label: 'look.icon', hint: 'look.iconHint', keywords: 'icono emoji icon nota note ikonoa' },
+  { id: 'note.cover', scope: 'note', group: 'props', label: 'look.cover', hint: 'look.coverFieldHint', keywords: 'portada cover banner imagen image cabecera azala' },
   { id: 'note.theme', scope: 'note', group: 'look', label: 'props.theme', hint: 'props.themeHint', keywords: 'tema oscuro claro dark light theme colores colors nota note gaia' },
   { id: 'note.diagramTheme', scope: 'note', group: 'look', label: 'props.diagramTheme', hint: 'props.diagramThemeHint', keywords: 'diagramas mermaid boceto sketch estilo colores diagrams style colors diagramak' },
   { id: 'note.others', scope: 'note', group: 'props', label: 'props.others', hint: 'props.othersHint', keywords: 'propiedades properties frontmatter yaml etiquetas tags campos fields' },

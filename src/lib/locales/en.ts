@@ -1054,4 +1054,18 @@ export const en: Record<Key, string> = {
   'look.remove': 'Remove',
   'look.folderHint': 'The color tints the folder; an emoji replaces it in the tree. It is saved in the vault, not in the folder.',
   'look.iconHint': 'Shown next to the name of the note.',
+
+  'look.icon': 'Icon',
+  'look.cover': 'Cover',
+  'look.choose': 'Choose…',
+  'look.change': 'Change',
+  'look.iconTitle': 'Icon of the note',
+  'look.coverTitle': 'Cover of the note',
+  'look.changeCover': 'Change cover',
+  'look.removeCover': 'Remove',
+  'look.findImage': 'Search an image of the vault',
+  'look.noImages': 'No images match in this vault.',
+  'look.coverHint': 'Shown above the note. In the text it stays as "portada:" at the top.',
+  'look.coverFieldHint': 'An image of the vault, as a banner above the note.',
+  'look.needsVault': 'Available for notes in a vault.',
 };
