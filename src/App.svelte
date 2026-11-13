@@ -245,7 +245,7 @@
         {#key tab.key}<Preview {tab} />{/key}
       {:else}
         <div class="pane" class:hidden={tab.view === 'preview'}>
-          <Editor {tab} onscroll={(ratio) => preview?.scrollTo(ratio)} />
+          <Editor {tab} onscroll={(place) => preview?.scrollToPlace(place)} />
         </div>
         {#if tab.view === 'split' || tab.view === 'preview'}
           <div class="pane preview">

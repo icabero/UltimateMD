@@ -28,7 +28,9 @@
   import { tagCompletions, tagMarks } from '../tags';
   import { mathMarks } from '../mathSource';
 
-  let { tab, onscroll }: { tab: Tab; onscroll?: (ratio: number) => void } = $props();
+  import { places, type Place } from '../place';
+
+  let { tab, onscroll }: { tab: Tab; onscroll?: (place: Place) => void } = $props();
 
   const external = Annotation.define<boolean>();
   const highlight = HighlightStyle.define([
@@ -100,6 +102,9 @@
 
   let host: HTMLDivElement;
   let view: EditorView | null = null;
+  let shownView: Tab['view'] | null = null;
+  /** The scroll position set by code, so that its own scroll event is not taken for the reader's. */
+  let expected: number | null = null;
   // Editor states of the tabs not shown. Never drawn, so not reactive.
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const states = new Map<string, EditorState>();
@@ -243,8 +248,44 @@
     });
   }
 
+  /** The line at the top of the editor and how far down it the top falls. */
+  function topPlace(target: EditorView): Place {
+    const y = Math.max(target.scrollDOM.scrollTop - target.documentPadding.top, 0);
+    const block = target.lineBlockAtHeight(y);
+    const line = target.state.doc.lineAt(block.from).number;
+    return { line, frac: block.height > 0 ? Math.min(Math.max((y - block.top) / block.height, 0), 0.99) : 0 };
+  }
+
+  /** Puts a place of the note at the top of the editor. */
+  function scrollToPlace(place: Place) {
+    if (!view || view.scrollDOM.clientHeight === 0) return;
+    const doc = view.state.doc;
+    const block = view.lineBlockAt(doc.line(Math.min(Math.max(place.line, 1), doc.lines)).from);
+    view.scrollDOM.scrollTop = Math.round(block.top + place.frac * block.height + view.documentPadding.top);
+    expected = view.scrollDOM.scrollTop;
+  }
+
+  /** Back to where the reader was after a view or a tab change, once the editor has measured itself. */
+  function restore(key: string) {
+    const place = places.get(key);
+    if (!view || !place) return;
+    const again = () => {
+      if (tab.key === key && tab.view !== 'preview') scrollToPlace(place);
+    };
+    // Lines far from the screen have only estimated heights: let the editor bring the line in and measure it first.
+    const doc = view.state.doc;
+    const from = doc.line(Math.min(Math.max(place.line, 1), doc.lines)).from;
+    view.dispatch({ effects: EditorView.scrollIntoView(from, { y: 'start', yMargin: 0 }) });
+    requestAnimationFrame(() => {
+      again();
+      requestAnimationFrame(again);
+    });
+  }
+
   function show(current: Tab) {
     if (!view) return;
+    const moved = shownKey !== current.key || shownView !== current.view;
+    shownView = current.view;
     if (shownKey !== current.key) {
       if (shownKey) states.set(shownKey, view.state);
       view.setState(states.get(current.key) ?? restoreFolds(current.key, makeState(current)));
@@ -288,6 +329,7 @@
       spelledKey = shownKey;
       view.dispatch({ effects: spelling.reconfigure(spellAttributes(lang)) });
     }
+    if (moved && current.view !== 'preview') restore(current.key);
   }
 
   /** Marks misspelt words in a note's language; code and HTML files are left alone. */
@@ -377,8 +419,12 @@
     view.dom.addEventListener(SORT_LINES, () => view && tab.kind === 'md' && sortLines(view));
     const scroller = view.scrollDOM;
     scroller.addEventListener('scroll', () => {
-      const max = scroller.scrollHeight - scroller.clientHeight;
-      onscroll?.(max > 0 ? scroller.scrollTop / max : 0);
+      if (!view || scroller.clientHeight === 0) return;
+      if (expected !== null && Math.abs(scroller.scrollTop - expected) < 1) return void (expected = null);
+      expected = null;
+      const place = topPlace(view);
+      places.set(tab.key, place);
+      onscroll?.(place);
     }, { passive: true });
     show(tab);
     view.focus();

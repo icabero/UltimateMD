@@ -3551,3 +3551,81 @@ test('typewriter mode is a remembered setting that keeps the cursor line in the 
     )
     .toBeLessThan(30);
 });
+
+// A long note whose headings and paragraphs are numbered in order, so the number at the top of the screen says where we are.
+const NUMBERED = Array.from({ length: 120 }, (_, i) => (i % 3 === 0 ? `## Sección ${i}` : `Párrafo ${i}: ${'texto '.repeat(8 + (i % 5) * 6)}`)).join('\n\n') + '\n';
+
+async function numberedNote(page: Page) {
+  await page.evaluate((text) => (window as any).__test.externalWrite('b', 'Otra.md', text), NUMBERED);
+  await open(page, 'Otra');
+}
+
+/** The number of the first block visible at the top of whichever view shows the note. */
+async function numberAtTop(page: Page) {
+  return page.evaluate(() => {
+    const number = (el: Element) => Number(/(?:Sección|Párrafo) (\d+)/.exec(el.textContent ?? '')?.[1] ?? NaN);
+    const preview = document.querySelector<HTMLElement>('.scroll');
+    const scroller = document.querySelector<HTMLElement>('.cm-scroller');
+    const shadow = preview?.querySelector('div')?.shadowRoot;
+    // Reading view alone shows the preview; otherwise the editor says where we are.
+    if (shadow && preview!.clientHeight > 0 && !(scroller && scroller.clientHeight > 0)) {
+      const top = preview!.getBoundingClientRect().top;
+      for (const el of shadow.querySelectorAll('article > [data-lines]')) if (el.getBoundingClientRect().bottom > top + 1) return number(el);
+    }
+    const top = scroller!.getBoundingClientRect().top;
+    for (const el of document.querySelectorAll('.cm-line')) if (el.getBoundingClientRect().bottom > top + 1 && !Number.isNaN(number(el))) return number(el);
+    return NaN;
+  });
+}
+
+const switchView = (page: Page, name: string) => page.getByTitle(name, { exact: true }).click();
+async function expectNumberNear(page: Page, wanted: number) {
+  await expect.poll(async () => Math.abs((await numberAtTop(page)) - wanted), { timeout: 3000 }).toBeLessThanOrEqual(3);
+}
+
+test('changing the view keeps the same part of the note on screen', async ({ page }) => {
+  await numberedNote(page);
+  await switchView(page, 'Editar');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  for (let i = 0; i < 4; i++) await page.keyboard.press('PageUp');
+  await expect.poll(() => numberAtTop(page)).toBeGreaterThan(30);
+  await page.waitForTimeout(500);
+  const wanted = await numberAtTop(page);
+  const cursor = await page.locator('.cm-activeLine').innerText();
+
+  for (const name of ['Vista previa', 'Visual', 'Dividido', 'Editar', 'Vista previa', 'Dividido', 'Visual', 'Vista previa', 'Editar']) {
+    await switchView(page, name);
+    await expectNumberNear(page, wanted);
+  }
+  // The cursor stayed where it was, too.
+  await expect(page.locator('.cm-activeLine')).toHaveText(cursor);
+});
+
+test('scrolling in reading view is kept when going back to editing', async ({ page }) => {
+  await numberedNote(page);
+  await switchView(page, 'Vista previa');
+  await expect(prose(page).locator('h2').first()).toBeVisible();
+  await page.locator('.scroll').hover();
+  await page.mouse.wheel(0, 2500);
+  await expect.poll(() => numberAtTop(page)).toBeGreaterThan(20);
+  const wanted = await numberAtTop(page);
+  for (const name of ['Editar', 'Visual', 'Vista previa']) {
+    await switchView(page, name);
+    await expectNumberNear(page, wanted);
+  }
+});
+
+test('coming back to a tab shows the same part of the note', async ({ page }) => {
+  await numberedNote(page);
+  await switchView(page, 'Editar');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.press('PageUp');
+  await expect.poll(() => numberAtTop(page)).toBeGreaterThan(30);
+  await page.waitForTimeout(500);
+  const wanted = await numberAtTop(page);
+  await open(page, 'Inicio');
+  await open(page, 'Otra');
+  await expectNumberNear(page, wanted);
+});
