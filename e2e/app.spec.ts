@@ -3812,3 +3812,53 @@ test('the quick menu works in visual mode and can be turned off in the settings'
   await page.keyboard.type('\n/cita');
   await expect(completion(page)).toHaveCount(0);
 });
+
+test('each kind of file has its own icon in the tree', async ({ page }) => {
+  await page.evaluate(() => (window as any).__test.externalWrite('a', 'Manual.pdf', ''));
+  await page.evaluate(() => (window as any).__test.externalWrite('a', 'datos.bin', ''));
+  const aside = page.locator('aside');
+  const icon = (name: string) => aside.getByRole('button', { name, exact: true }).locator('[data-icon]').getAttribute('data-icon');
+  await expect.poll(() => icon('Manual.pdf')).toBe('pdf');
+  expect(await icon('Inicio')).toBe('note');
+  expect(await icon('datos.bin')).toBe('file');
+  expect(await icon('dir')).toBe('folder');
+  await aside.getByRole('button', { name: 'vacia', exact: true }).click();
+  expect(await icon('imagen.png')).toBe('image');
+});
+
+test('a folder gets a colour or an emoji that follows it when renamed and goes when deleted', async ({ page }) => {
+  const aside = page.locator('aside');
+  const row = (name: string) => aside.getByRole('button', { name, exact: true });
+  await row('dir').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Color e icono…' }).click();
+  const picker = page.getByRole('form', { name: /Color e icono de/ });
+  await picker.getByRole('radio', { name: 'Color 3' }).click();
+  await picker.getByRole('button', { name: '🧭' }).click();
+  await picker.getByRole('button', { name: 'Aceptar' }).click();
+  await expect(row('dir').locator('.emoji')).toHaveText('🧭');
+  expect(await page.evaluate(() => (window as any).__test.looks.a.dir)).toEqual({ color: 'string', emoji: '🧭' });
+  // A free emoji and no colour, on a second folder.
+  await row('vacia').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Color e icono…' }).click();
+  await picker.getByRole('textbox').fill('🐙');
+  await picker.getByRole('button', { name: 'Aceptar' }).click();
+  await expect(row('vacia').locator('.emoji')).toHaveText('🐙');
+  // Renaming keeps it.
+  await row('dir').focus();
+  await page.keyboard.press('F2');
+  await page.locator('input').fill('carpeta');
+  await page.keyboard.press('Enter');
+  await expect(row('carpeta').locator('.emoji')).toHaveText('🧭');
+  expect(await page.evaluate(() => Object.keys((window as any).__test.looks.a).sort())).toEqual(['carpeta', 'vacia']);
+  // "Quitar" gives the folder its plain look back.
+  await row('carpeta').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Color e icono…' }).click();
+  await picker.getByRole('button', { name: 'Quitar' }).click();
+  await expect(row('carpeta').locator('.emoji')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).__test.looks.a.carpeta)).toBeUndefined();
+  // Deleting a folder forgets its look.
+  await row('vacia').focus();
+  await page.keyboard.press('Delete');
+  await expect(row('vacia')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).__test.looks.a.vacia)).toBeUndefined();
+});

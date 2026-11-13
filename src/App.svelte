@@ -6,6 +6,7 @@
   import About from './lib/components/About.svelte';
   import Export from './lib/components/Export.svelte';
   import Modal from './lib/components/Modal.svelte';
+  import Picker from './lib/components/Picker.svelte';
   import WindowControls from './lib/components/WindowControls.svelte';
   import TemplatePicker from './lib/components/TemplatePicker.svelte';
   import { IS_MAC, frame } from './lib/frame.svelte';
@@ -303,6 +304,9 @@
 {#if store.menu}{#key store.menu}<ContextMenu {...store.menu} />{/key}{/if}
 {#if store.dialog}
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}
+{/if}
+{#if store.picker}
+  {#key store.picker}<Picker picker={store.picker} />{/key}
 {/if}
 {#if store.tutorial}<Tutorial />{/if}
 {#if store.toast}{#key store.toast.id}<Toast toast={store.toast} />{/key}{/if}

@@ -2,6 +2,7 @@
   import Icon from './Icon.svelte';
   import type { TreeNode } from '../api';
   import { tr } from '../i18n.svelte';
+  import { iconOf } from '../look';
   import { baseName, dirName, kindOf } from '../paths';
   import { store, type MenuItem, type Tab } from '../store.svelte';
 
@@ -29,8 +30,6 @@
     return level;
   }
 
-  const ICONS = { md: 'file', html: 'code', image: 'image', other: 'file' } as const;
-
   /** What is in a folder, as the tree orders it, to open any of it; and where to find it in the tree. */
   function folderItems(anchor: HTMLElement, dir: string, reveal = dir): MenuItem[] {
     const nodes = contents(tab.vaultId, dir).filter((n) => n.isDir || kindOf(n.path) !== 'other');
@@ -39,7 +38,7 @@
         ? { label: n.name, icon: 'folder', run: () => setTimeout(() => openMenu(anchor, folderItems(anchor, n.path))) }
         : {
             label: n.name.replace(/\.(md|markdown|html|htm)$/i, ''),
-            icon: n.path === tab.path ? 'check' : ICONS[kindOf(n.path)],
+            icon: n.path === tab.path ? 'check' : iconOf(n.path),
             run: () => void store.openFile(tab.vaultId, n.path),
           },
     );

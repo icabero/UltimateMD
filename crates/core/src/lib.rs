@@ -11,6 +11,7 @@ pub mod docx;
 pub mod error;
 pub mod export_links;
 pub mod files;
+pub mod folder_looks;
 pub mod git;
 pub mod history;
 pub mod links;

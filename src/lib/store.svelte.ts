@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { anchorLabel, findAnchor, parseAnchor } from './anchors';
-import { api, type GitStatus, type ReplaceOptions, type SortMode, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
+import { api, type FolderLook, type GitStatus, type ReplaceOptions, type SortMode, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
 import { fold } from './fold';
 import { addDays, dailyPath, dailyTitle } from './daily';
 import { fillTemplate } from './noteTemplates';
@@ -107,6 +107,16 @@ const TOAST_TIME = 4500;
 /** Longer when there is something to do with it. */
 const TOAST_TIME_ACTIONS = 9000;
 const TOAST_SHORT = 140;
+
+/** A small chooser: a colour and emoji for a folder, or an emoji for a note. */
+export interface Picker {
+  kind: 'look' | 'emoji';
+  title: string;
+  color: string | null;
+  emoji: string | null;
+  /** Null when closed without choosing; a null colour or emoji is one taken away. */
+  resolve: (value: { color: string | null; emoji: string | null } | null) => void;
+}
 
 export interface Dialog {
   title: string;
@@ -332,6 +342,9 @@ class Store {
   /** The view new tabs open in: the last one the user chose. */
   preferredView = $state(loadView());
   dialog = $state<Dialog | null>(null);
+  picker = $state<Picker | null>(null);
+  /** Each vault's folders with a colour or emoji, by path. */
+  looks = $state<Record<string, Record<string, FolderLook>>>({});
   vaultThemes = $state<Record<string, VaultThemes>>({});
   /** The vault whose settings are open, and at which part. */
   vaultSettings = $state<{ vaultId: string; section: VaultSection } | null>(null);
@@ -777,6 +790,31 @@ class Store {
     });
   }
 
+  #pick(request: Omit<Picker, 'resolve'>) {
+    return new Promise<Parameters<Picker['resolve']>[0]>((resolve) => {
+      this.picker = {
+        ...request,
+        resolve: (result) => {
+          this.picker = null;
+          resolve(result);
+        },
+      };
+    });
+  }
+
+  /** Asks for the colour and emoji of a folder and keeps them in the vault. */
+  async chooseFolderLook(vaultId: string, folder: string) {
+    const now = this.looks[vaultId]?.[folder];
+    const result = await this.#pick({ kind: 'look', title: tr('look.folderTitle', { name: baseName(folder) }), color: now?.color ?? null, emoji: now?.emoji ?? null });
+    if (!result) return;
+    try {
+      await api.setFolderLook(vaultId, folder, result.color || result.emoji ? { color: result.color, emoji: result.emoji } : null);
+      this.looks[vaultId] = await api.folderLooks(vaultId);
+    } catch (e) {
+      this.fail(e);
+    }
+  }
+
   prompt(title: string, value = '', action = tr('common.accept')) {
     return this.#ask(title, value, action, false);
   }
@@ -910,9 +948,10 @@ class Store {
 
   async refreshTree(id: string) {
     try {
-      const [tree, order] = await Promise.all([api.tree(id), api.treeOrder(id)]);
+      const [tree, order, looks] = await Promise.all([api.tree(id), api.treeOrder(id), api.folderLooks(id).catch(() => ({}))]);
       this.trees[id] = tree;
       this.orders[id] = order;
+      this.looks[id] = looks;
     } catch (e) {
       this.trees[id] = [];
       this.fail(e);

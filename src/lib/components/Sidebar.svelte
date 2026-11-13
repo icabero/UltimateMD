@@ -36,7 +36,12 @@
       { label: tr('cmd.fromTemplate'), icon: 'tasks', run: () => store.newNoteFromTemplate(id, dir) },
       { label: tr('sidebar.newFolder'), icon: 'folderPlus', run: () => void newFolder(id, dir) },
     ];
-    if (node.isDir) items.push({ label: tr('reader.readFolder'), icon: 'eye', separator: true, run: () => (store.reader = { vaultId: id, folder: node.path }) });
+    if (node.isDir) {
+      items.push(
+        { label: tr('reader.readFolder'), icon: 'eye', separator: true, run: () => (store.reader = { vaultId: id, folder: node.path }) },
+        { label: tr('look.menu'), icon: 'palette', run: () => void store.chooseFolderLook(id, node.path) },
+      );
+    }
     if (!node.isDir) {
       const favorite = store.isFavorite(id, node.path);
       if (kindOf(node.path) !== 'other') items.push({ label: tr('menu.openBeside'), icon: 'split', separator: true, run: () => void store.openBeside(id, node.path) });

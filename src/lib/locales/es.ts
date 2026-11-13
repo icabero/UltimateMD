@@ -1042,4 +1042,15 @@ export const es = {
   'slash.setting': 'Menú rápido con /',
   'slash.settingHint': 'Al escribir / al principio de una línea se ofrecen bloques para insertar.',
   'shortcuts.slash': 'Insertar un bloque (al principio de una línea)',
+
+  'look.menu': 'Color e icono…',
+  'look.folderTitle': 'Color e icono de «{name}»',
+  'look.colors': 'Colores',
+  'look.noColor': 'Sin color',
+  'look.color': 'Color {n}',
+  'look.emojis': 'Emojis',
+  'look.typeOne': 'O escribe uno',
+  'look.remove': 'Quitar',
+  'look.folderHint': 'El color tiñe la carpeta; un emoji la sustituye en el árbol. Se guarda en el almacén, no en la carpeta.',
+  'look.iconHint': 'Aparece junto al nombre de la nota.',
 };

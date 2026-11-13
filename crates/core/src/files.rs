@@ -1,5 +1,6 @@
 //! File operations inside one vault.
 
+use crate::folder_looks;
 use crate::paths::{check_new_name, check_new_path, is_image, is_note, normalize, resolve, to_rel};
 use crate::tree_order::{self, Order, SortMode};
 use crate::{Error, Result};
@@ -213,6 +214,7 @@ impl Vault {
         }
         retry_locked(|| std::fs::rename(&src, &dst))?;
         tree_order::renamed(&self.root, &normalize(from)?, &to_norm);
+        folder_looks::renamed(&self.root, &normalize(from)?, &to_norm);
         Ok(())
     }
 
@@ -229,6 +231,7 @@ impl Vault {
         // trash expects the ordinary form.
         trash::delete(dunce::simplified(&path)).map_err(|e| Error::Trash(e.to_string()))?;
         tree_order::removed(&self.root, &normalize(rel)?);
+        folder_looks::removed(&self.root, &normalize(rel)?);
         Ok(())
     }
 
@@ -334,6 +337,7 @@ impl Vault {
         trash::delete(dunce::simplified(&target)).map_err(|e| Error::Trash(e.to_string()))?;
         std::fs::remove_dir_all(dir)?;
         tree_order::removed(&self.root, &origin);
+        folder_looks::removed(&self.root, &origin);
         Ok(())
     }
 

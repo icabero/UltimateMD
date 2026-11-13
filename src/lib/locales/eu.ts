@@ -1043,4 +1043,15 @@ export const eu: Record<Key, string> = {
   'slash.setting': 'Menu bizkorra / idatzita',
   'slash.settingHint': 'Lerro baten hasieran / idatzitakoan, txertatzeko blokeak eskaintzen dira.',
   'shortcuts.slash': 'Bloke bat txertatu (lerro baten hasieran)',
+
+  'look.menu': 'Kolorea eta ikonoa…',
+  'look.folderTitle': '«{name}» karpetaren kolorea eta ikonoa',
+  'look.colors': 'Koloreak',
+  'look.noColor': 'Koloregabe',
+  'look.color': '{n}. kolorea',
+  'look.emojis': 'Emojiak',
+  'look.typeOne': 'Edo idatzi bat',
+  'look.remove': 'Kendu',
+  'look.folderHint': 'Koloreak karpeta tindatzen du; emoji batek zuhaitzean ordezkatzen du. Biltegian gordetzen da, ez karpetan.',
+  'look.iconHint': 'Oharraren izenaren ondoan agertzen da.',
 };

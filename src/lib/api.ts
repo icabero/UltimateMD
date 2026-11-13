@@ -12,6 +12,12 @@ export interface Vault {
 }
 
 /** How a vault's tree is ordered; folders always come first. */
+/** What a folder is given to stand out: a colour of the theme, by name, and an emoji. */
+export interface FolderLook {
+  color?: string | null;
+  emoji?: string | null;
+}
+
 export type SortMode = 'nameAsc' | 'nameDesc' | 'modifiedNew' | 'modifiedOld' | 'manual';
 export type DailyFormat = 'iso' | 'yearMonth' | 'dayFirst';
 export interface DailySettings {
@@ -224,6 +230,10 @@ export const api = {
   saveDailyNotes: (id: string, settings: DailySettings) => invoke<void>('save_daily_notes', { id, settings }),
   treeOrder: (id: string) => invoke<SortMode>('tree_order', { id }),
   setTreeOrder: (id: string, mode: SortMode) => invoke<void>('set_tree_order', { id, mode }),
+  /** The colour or emoji of each folder that has one, by path. */
+  folderLooks: (id: string) => invoke<Record<string, FolderLook>>('folder_looks', { id }),
+  /** Gives a folder a look, or takes it away with null. */
+  setFolderLook: (id: string, folder: string, look: FolderLook | null) => invoke<void>('set_folder_look', { id, folder, look }),
   placeInTree: (id: string, path: string, target: string, after: boolean) => invoke<void>('place_in_tree', { id, path, target, after }),
   read: (id: string, path: string) => invoke<Note>('read_note', { id, path }),
   write: (id: string, path: string, content: string, expected: string | null) =>

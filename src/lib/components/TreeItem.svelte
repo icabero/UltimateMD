@@ -9,7 +9,8 @@
   import Icon from './Icon.svelte';
   import type { TreeNode } from '../api';
   import { tr } from '../i18n.svelte';
-  import { baseName, dirName, join, kindOf } from '../paths';
+  import { FOLDER_COLORS, iconOf } from '../look';
+  import { baseName, dirName, join } from '../paths';
   import { store } from '../store.svelte';
 
   /** As Git writes them. */
@@ -30,7 +31,9 @@
   // of rows, and each change to any open tab would otherwise reach every one.
   const active = $derived(store.activeKey === `${vaultId}:${node.path}`);
   const git = $derived(node.isDir ? null : store.gitState(vaultId, node.path));
-  const icon = $derived(node.isDir ? 'folder' : { md: 'file', html: 'code', image: 'image', other: 'file' }[kindOf(node.path)]);
+  const icon = $derived(node.isDir ? 'folder' : iconOf(node.path));
+  const look = $derived(node.isDir ? store.looks[vaultId]?.[node.path] : undefined);
+  const tint = $derived(look?.color ? FOLDER_COLORS[look.color] : undefined);
 
   // Reveals the note being edited, including one opened from a link or search.
   $effect(() => {
@@ -134,7 +137,9 @@
   {#if node.isDir}
     <span class="chev" class:open={expanded}><Icon name="chevron" size={12} /></span>
   {/if}
-  <span class="ico"><Icon name={icon} size={15} /></span>
+  <span class="ico" class:tinted={!!tint} style:color={tint} data-icon={look?.emoji ? "emoji" : icon}>
+    {#if look?.emoji}<span class="emoji" aria-hidden="true">{look.emoji}</span>{:else}<Icon name={icon} size={15} />{/if}
+  </span>
   <span class="label">{node.isDir ? node.name : node.name.replace(/\.(md|markdown)$/i, '')}</span>
   {#if git}<span class="git {git}" title={tr(`git.${git}`)}>{GIT_LETTER[git]}</span>{/if}
 </button>
@@ -161,7 +166,9 @@
   .git { flex: none; margin-left: auto; color: var(--accent-text); font: 600 var(--font-xs)/1 var(--mono); }
   .git.untracked, .git.added { color: var(--text-2); }
   .git.conflict { color: var(--danger); }
-  .ico { display: flex; flex: none; opacity: .65; }
+  .ico { display: flex; flex: none; align-items: center; justify-content: center; width: 15px; opacity: .65; }
+  .ico.tinted { opacity: 1; }
+  .emoji { font-size: var(--font-md); line-height: 1; }
   .chev { display: flex; flex: none; transition: transform .12s; }
   .chev.open { transform: rotate(90deg); }
 </style>

@@ -12,6 +12,7 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use ultimatemd_core::daily_notes::{self, DailySettings};
 use ultimatemd_core::docx::Section;
+use ultimatemd_core::folder_looks::{self, FolderLook};
 use ultimatemd_core::links::{self, LinkInfo};
 use ultimatemd_core::paths::{is_image, join_relative};
 use ultimatemd_core::tree_order::{self, SortMode};
@@ -705,6 +706,18 @@ pub fn tree_order(id: String) -> Result<SortMode> {
 #[tauri::command(async)]
 pub fn set_tree_order(id: String, mode: SortMode) -> Result<()> {
     tree_order::set_mode(fs(&id)?.root(), mode)
+}
+
+/// The colour or emoji chosen for each folder, by path.
+#[tauri::command(async)]
+pub fn folder_looks(id: String) -> Result<folder_looks::Looks> {
+    Ok(folder_looks::load(fs(&id)?.root()))
+}
+
+/// Sets a folder's look, or clears it with `None`.
+#[tauri::command(async)]
+pub fn set_folder_look(id: String, folder: String, look: Option<FolderLook>) -> Result<()> {
+    folder_looks::set(fs(&id)?.root(), &folder, look)
 }
 
 /// Places a note or folder before or after a sibling, for the manual order.

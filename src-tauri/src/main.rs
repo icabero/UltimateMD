@@ -209,6 +209,8 @@ fn main() {
             commands::save_daily_notes,
             commands::tree_order,
             commands::set_tree_order,
+            commands::folder_looks,
+            commands::set_folder_look,
             commands::place_in_tree,
             commands::choose_vault_template,
             commands::remove_vault_template,

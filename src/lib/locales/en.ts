@@ -1043,4 +1043,15 @@ export const en: Record<Key, string> = {
   'slash.setting': 'Quick menu with /',
   'slash.settingHint': 'Typing / at the start of a line offers blocks to insert.',
   'shortcuts.slash': 'Insert a block (at the start of a line)',
+
+  'look.menu': 'Color and icon…',
+  'look.folderTitle': 'Color and icon of "{name}"',
+  'look.colors': 'Colors',
+  'look.noColor': 'No color',
+  'look.color': 'Color {n}',
+  'look.emojis': 'Emojis',
+  'look.typeOne': 'Or type one',
+  'look.remove': 'Remove',
+  'look.folderHint': 'The color tints the folder; an emoji replaces it in the tree. It is saved in the vault, not in the folder.',
+  'look.iconHint': 'Shown next to the name of the note.',
 };

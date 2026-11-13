@@ -82,6 +82,17 @@
   // The order of each vault's tree, as the backend keeps it: a mode, and for the
   // manual one a list of names per folder.
   const orders = {};
+  // The colour or emoji of folders, kept per vault like `.ultimatemd/carpetas.json`.
+  const looks = {};
+  const moveLooks = (id, from, to) => {
+    const own = (looks[id] ??= {});
+    for (const key of Object.keys(own)) {
+      if (key !== from && !key.startsWith(`${from}/`)) continue;
+      const look = own[key];
+      delete own[key];
+      if (to !== null) own[to + key.slice(from.length)] = look;
+    }
+  };
   const orderOf = (id) => (orders[id] ??= { mode: 'nameAsc', manual: {} });
   const natural = (a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' });
   function arrange(id, nodes, dir, order) {
@@ -126,6 +137,12 @@
       (window.__daily ??= {})[id] = settings;
     },
     tree_order: ({ id }) => orderOf(id).mode,
+    folder_looks: ({ id }) => structuredClone(looks[id] ?? {}),
+    set_folder_look: ({ id, folder, look }) => {
+      const own = (looks[id] ??= {});
+      if (look && (look.color || look.emoji)) own[folder] = look;
+      else delete own[folder];
+    },
     set_tree_order: ({ id, mode }) => {
       orderOf(id).mode = mode;
     },
@@ -151,6 +168,7 @@
     // Moves a note or folder and, like the backend, rewrites [[name]] links to a renamed note.
     rename_path: ({ id, from, to }) => {
       const notes = files[id];
+      moveLooks(id, from, to);
       const [dir, name] = [from.slice(0, Math.max(0, from.lastIndexOf('/'))), from.split('/').pop()];
       const list = orderOf(id).manual[dir];
       if (list && dir === to.slice(0, Math.max(0, to.lastIndexOf('/')))) list[list.indexOf(name)] = to.split('/').pop();
@@ -205,6 +223,7 @@
     },
     // Deletions wait aside until undone or finished, like the backend.
     trash_path: ({ id, path }) => {
+      moveLooks(id, path, null);
       const token = `t${Object.keys(staged).length}`;
       const moved = {};
       for (const p of Object.keys(files[id])) {
@@ -538,6 +557,7 @@
 
   window.__test = {
     files,
+    looks,
     vaults,
     vaultThemes,
     guides,
