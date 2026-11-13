@@ -3629,3 +3629,87 @@ test('coming back to a tab shows the same part of the note', async ({ page }) =>
   await open(page, 'Otra');
   await expectNumberNear(page, wanted);
 });
+
+const PEEK_NOTE = '# Nota\n\nTexto antes.\n\n```mermaid\npie title Mascotas\n  "Perros" : 3\n```\n\nTexto después.\n';
+const peekWindow = (page: Page) => page.getByRole('region', { name: 'Vista previa del diagrama' });
+
+async function peekNote(page: Page) {
+  await page.evaluate((text) => (window as any).__test.externalWrite('a', 'Inicio.md', text), PEEK_NOTE);
+  await open(page, 'Inicio');
+  await page.getByTitle('Editar', { exact: true }).click();
+}
+
+test('a diagram is drawn next to its code while it is typed, and goes away with the cursor', async ({ page }) => {
+  await peekNote(page);
+  await page.locator('.cm-line', { hasText: 'Texto antes.' }).click();
+  await expect(peekWindow(page)).toBeHidden();
+
+  await page.locator('.cm-line', { hasText: '"Perros" : 3' }).click();
+  await page.keyboard.press('End');
+  await expect(peekWindow(page).locator('.drawing > svg')).toBeVisible();
+
+  // It never covers the line being typed.
+  const win = (await peekWindow(page).boundingBox())!;
+  const text = (await page.evaluate(() => {
+    const line = [...document.querySelectorAll('.cm-line')].find((l) => l.textContent?.includes('"Perros" : 3'))!;
+    const range = document.createRange();
+    range.selectNodeContents(line);
+    const r = range.getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  }));
+  const apart = win.x >= text.x + text.width - 1 || win.y >= text.y + text.height - 1 || win.y + win.height <= text.y + 1;
+  expect(apart).toBe(true);
+
+  // A broken diagram keeps the last good drawing and says what fails.
+  await page.keyboard.type('\n  "Gatos" : x');
+  await expect(peekWindow(page).getByRole('alert')).toContainText('Línea', { timeout: 10_000 });
+  await expect(peekWindow(page)).toContainText('Se muestra el último dibujo que funcionó.');
+  await expect(peekWindow(page).locator('.drawing > svg')).toBeVisible();
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('2');
+  await expect(peekWindow(page).getByRole('alert')).toBeHidden({ timeout: 10_000 });
+
+  // Escape closes it, and it stays closed until the cursor has left the block.
+  await page.keyboard.press('Escape');
+  await expect(peekWindow(page)).toBeHidden();
+  await page.keyboard.type(' ');
+  await expect(peekWindow(page)).toBeHidden();
+  await page.locator('.cm-line', { hasText: 'Texto después.' }).click({ position: { x: 40, y: 5 } });
+  await page.locator('.cm-line', { hasText: '"Perros" : 3' }).click();
+  await expect(peekWindow(page)).toBeVisible();
+  await page.locator('.cm-line', { hasText: 'Texto después.' }).click({ position: { x: 40, y: 5 } });
+  await expect(peekWindow(page)).toBeHidden();
+});
+
+test('the drawing can be kept open and folded away, and split mode does not need it', async ({ page }) => {
+  await peekNote(page);
+  await page.locator('.cm-line', { hasText: '"Perros" : 3' }).click();
+  await expect(peekWindow(page).locator('.drawing > svg')).toBeVisible();
+  await peekWindow(page).getByRole('button', { name: 'Mantener abierta' }).click();
+  await page.locator('.cm-line', { hasText: 'Texto después.' }).click({ position: { x: 40, y: 5 } });
+  await expect(peekWindow(page).locator('.drawing > svg')).toBeVisible();
+  await peekWindow(page).getByRole('button', { name: 'Plegar' }).click();
+  await expect(peekWindow(page).locator('.drawing > svg')).toBeHidden();
+  await peekWindow(page).getByRole('button', { name: 'Desplegar' }).click();
+  await expect(peekWindow(page).locator('.drawing > svg')).toBeVisible();
+  await peekWindow(page).getByRole('button', { name: 'Cerrar (Esc)' }).click();
+  await expect(peekWindow(page)).toBeHidden();
+
+  await page.locator('.cm-line', { hasText: '"Perros" : 3' }).click();
+  await expect(peekWindow(page)).toBeVisible();
+  await page.getByTitle('Dividido', { exact: true }).click();
+  await expect(prose(page).locator('.diagram > svg')).toBeVisible();
+  await expect(peekWindow(page)).toBeHidden();
+});
+
+test('the drawing while typing can be turned off in the settings', async ({ page }) => {
+  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  const setting = page.locator('[data-setting="app.diagramPeek"]');
+  await expect(setting).toContainText('En el modo Markdown, dibuja el diagrama en una ventana pequeña');
+  await setting.getByRole('checkbox', { name: 'Vista previa del diagrama al escribir' }).uncheck();
+  await page.keyboard.press('Escape');
+  await peekNote(page);
+  await page.locator('.cm-line', { hasText: '"Perros" : 3' }).click();
+  await page.waitForTimeout(800);
+  await expect(peekWindow(page)).toBeHidden();
+});

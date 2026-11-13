@@ -11,9 +11,10 @@
   import { languages } from '@codemirror/language-data';
   import { tags as t } from '@lezer/highlight';
   import DiagramBuilder, { type BuilderResult, type BuilderStart } from './DiagramBuilder.svelte';
+  import DiagramPeek, { type Box } from './DiagramPeek.svelte';
   import Toolbar from './Toolbar.svelte';
   import { parseSource } from '../diagramBuilder';
-  import { fenceLine, parseStyle, splitFence } from '../diagramStyle';
+  import { fenceLine, parseStyle, splitFence, type DiagramStyle } from '../diagramStyle';
   import { findTerms } from '../fold';
   import { FOLD_ALL, UNFOLD_ALL, folding, rememberFolds, restoreFolds } from '../folding';
   import { htmlToMarkdown } from '../paste';
@@ -154,6 +155,8 @@
     { key: 'Alt-ArrowLeft', run: (v: EditorView) => tab.kind === 'md' && moveInTable(v, 'column', -1) },
     { key: 'Alt-ArrowRight', run: (v: EditorView) => tab.kind === 'md' && moveInTable(v, 'column', 1) },
     // In a note only: elsewhere Ctrl+Enter keeps opening a line below, as CodeMirror does.
+    // Closes the drawing that follows a diagram, when there is one.
+    { key: 'Escape', run: () => closePeek() },
     { key: 'Mod-Enter', run: (v: EditorView) => tab.kind === 'md' && command(toggleTask)(v) },
   ];
 
@@ -239,6 +242,7 @@
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
           if (u.docChanged || u.selectionSet || u.transactions.some((x) => x.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)))) rememberFolds(tab.key, u.state);
+          if (u.docChanged || u.selectionSet || u.geometryChanged || u.viewportChanged) schedulePeek();
           if (u.docChanged || u.selectionSet) {
             publishPosition(u.state);
             publishSelection(u.state);
@@ -290,6 +294,9 @@
       if (shownKey) states.set(shownKey, view.state);
       view.setState(states.get(current.key) ?? restoreFolds(current.key, makeState(current)));
       shownKey = current.key;
+      peek = null;
+      pinned = false;
+      dismissed = null;
       shownRevision = current.revision;
       publishPosition(view.state);
       publishSelection(view.state);
@@ -337,6 +344,88 @@
     return EditorView.contentAttributes.of(
       lang ? { spellcheck: 'true', lang, autocorrect: 'off', autocapitalize: 'off' } : { spellcheck: 'false' },
     );
+  }
+
+  // The drawing of the diagram being typed. Only in Markdown mode: the
+  // preview and the visual mode already show it.
+  interface Peek {
+    from: number;
+    lang: string;
+    source: string;
+    style: DiagramStyle;
+    anchor: Box;
+    caret: Box;
+  }
+  let peek = $state<Peek | null>(null);
+  let pinned = $state(false);
+  let area = $state({ width: 0, height: 0 });
+  let root: HTMLDivElement;
+  /** The diagram that was closed with Escape stays closed until the cursor leaves it. */
+  let dismissed: number | null = null;
+  let peekFrame = 0;
+
+  function schedulePeek() {
+    if (peekFrame) return;
+    peekFrame = requestAnimationFrame(() => {
+      peekFrame = 0;
+      refreshPeek();
+    });
+  }
+
+  function refreshPeek() {
+    if (!view || tab.kind !== 'md' || tab.view !== 'edit' || !store.diagramPeek) {
+      peek = null;
+      return;
+    }
+    const fence = fenceAt(view.state);
+    const { lang, words } = fence ? splitFence(fence.info) : { lang: '', words: '' };
+    if (!fence || (lang !== 'mermaid' && lang !== 'd2')) {
+      dismissed = null;
+      if (!pinned) peek = null;
+      return;
+    }
+    if (dismissed === fence.from) {
+      peek = null;
+      return;
+    }
+    // A block that is still open has no closing line: what is written so far is the code.
+    const doc = view.state.doc;
+    const last = doc.lineAt(fence.to);
+    const closed = /^\s*(`{3,}|~{3,})\s*$/.test(last.text) && last.number > doc.lineAt(fence.from).number;
+    const source = closed ? fence.source : doc.sliceString(doc.lineAt(fence.from).to + 1, fence.to);
+    const frame = root.getBoundingClientRect();
+    const top = view.documentTop;
+    const first = view.lineBlockAt(fence.from);
+    const end = view.lineBlockAt(fence.to);
+    let right = 0;
+    for (let n = doc.lineAt(fence.from).number; n <= Math.min(doc.lineAt(fence.to).number, doc.lineAt(fence.from).number + 80); n++) {
+      const line = doc.line(n);
+      const block = view.lineBlockAt(line.from);
+      // A wrapped line fills the width.
+      const edge = block.height > view.defaultLineHeight * 1.5 ? frame.width : (view.coordsAtPos(line.to, -1)?.right ?? frame.left) - frame.left;
+      right = Math.max(right, edge);
+    }
+    const head = view.lineBlockAt(view.state.selection.main.head);
+    const guttersLeft = (view.dom.querySelector('.cm-gutters')?.getBoundingClientRect().right ?? frame.left) - frame.left;
+    area = { width: frame.width, height: frame.height };
+    const box = (a: number, b: number): Box => ({ top: top + a - frame.top, bottom: top + b - frame.top, left: guttersLeft, right });
+    peek = {
+      from: fence.from,
+      lang,
+      source,
+      style: parseStyle(words),
+      anchor: box(first.top, end.bottom),
+      caret: box(head.top, head.bottom),
+    };
+  }
+
+  /** Escape closes the drawing, and lets go of it when it was kept open. */
+  function closePeek() {
+    if (!peek) return false;
+    if (view && fenceAt(view.state)) dismissed = fenceAt(view.state)!.from;
+    pinned = false;
+    peek = null;
+    return true;
   }
 
   /** Opens the diagram under the cursor when the builder can read it. */
@@ -418,6 +507,7 @@
     view.dom.addEventListener(UNFOLD_ALL, () => view && unfoldAll(view));
     view.dom.addEventListener(SORT_LINES, () => view && tab.kind === 'md' && sortLines(view));
     const scroller = view.scrollDOM;
+    scroller.addEventListener('scroll', schedulePeek, { passive: true });
     scroller.addEventListener('scroll', () => {
       if (!view || scroller.clientHeight === 0) return;
       if (expected !== null && Math.abs(scroller.scrollTop - expected) < 1) return void (expected = null);
@@ -431,6 +521,7 @@
   });
 
   onDestroy(() => {
+    cancelAnimationFrame(peekFrame);
     store.selection = null;
     view?.destroy();
   });
@@ -481,6 +572,15 @@
   });
 
   $effect(() => {
+    tab.view;
+    tab.kind;
+    tab.key;
+    store.diagramPeek;
+    pinned;
+    refreshPeek();
+  });
+
+  $effect(() => {
     store.reveal;
     tab.key;
     tab.view;
@@ -488,15 +588,20 @@
   });
 </script>
 
-<div class="editor">
+<div class="editor" bind:this={root}>
   {#if tab.kind === 'md' && !store.focus}<Toolbar view={() => view} ondiagram={openBuilder} onstyle={() => store.openPanel('properties')} />{/if}
   <div class="host" bind:this={host}></div>
+  {#if peek}
+    {#key peek.from}
+      <DiagramPeek {tab} lang={peek.lang} source={peek.source} style={peek.style} anchor={peek.anchor} caret={peek.caret} {area} bind:pinned onclose={closePeek} />
+    {/key}
+  {/if}
 </div>
 {#if builder}
   <DiagramBuilder {tab} initial={builder.initial} onsave={saveDiagram} onclose={closeBuilder} />
 {/if}
 
 <style>
-  .editor { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .editor { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .host { flex: 1; min-height: 0; overflow: hidden; }
 </style>

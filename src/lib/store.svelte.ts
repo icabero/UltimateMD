@@ -126,6 +126,7 @@ const LAYOUT_KEY = 'ultimatemd.layout';
 const READING_KEY = 'ultimatemd.reading';
 const TYPEWRITER_KEY = 'ultimatemd.typewriter';
 const IMAGES_KEY = 'ultimatemd.images';
+const PEEK_KEY = 'ultimatemd.diagramPeek';
 const RECENT_KEY = 'ultimatemd.recent';
 const FAVORITES_KEY = 'ultimatemd.favorites';
 const RECENT_MAX = 30;
@@ -213,6 +214,14 @@ function loadImagePlace(): ImagePlace {
     return localStorage.getItem(IMAGES_KEY) === 'note' ? 'note' : 'vault';
   } catch {
     return 'vault';
+  }
+}
+
+function loadDiagramPeek() {
+  try {
+    return localStorage.getItem(PEEK_KEY) !== 'off';
+  } catch {
+    return true;
   }
 }
 
@@ -305,6 +314,8 @@ class Store {
   outsideDiff = $state(false);
   /** Whether and in which language spelling is checked while writing. */
   spellcheck = $state<SpellSetting>(loadSpellSetting());
+  /** Whether a diagram is drawn next to its code while it is typed. */
+  diagramPeek = $state(loadDiagramPeek());
   /** The version whose news show, as `0.7`. */
   news = $state<string | null>(null);
   /** A newer published version, once known. */
@@ -1136,6 +1147,15 @@ class Store {
   setSpellcheck(setting: SpellSetting) {
     this.spellcheck = setting;
     saveSpellSetting(setting);
+  }
+
+  setDiagramPeek(on: boolean) {
+    this.diagramPeek = on;
+    try {
+      localStorage.setItem(PEEK_KEY, on ? 'on' : 'off');
+    } catch {
+      // Not saved; it lasts until the app closes.
+    }
   }
 
   setImagePlace(place: ImagePlace) {

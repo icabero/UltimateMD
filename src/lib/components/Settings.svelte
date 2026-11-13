@@ -206,6 +206,14 @@
     </label>
     <p class="hint">{tr('typewriter.hint')}</p>
   </section>
+  <section data-setting="app.diagramPeek">
+    <h3>{tr('peek.title')}</h3>
+    <label class="follow">
+      <input type="checkbox" checked={store.diagramPeek} onchange={(e) => store.setDiagramPeek(e.currentTarget.checked)} />
+      {tr('peek.setting')}
+    </label>
+    <p class="hint">{tr('peek.settingHint')}</p>
+  </section>
   <section data-setting="app.images">
     <h3>{tr('images.title')}</h3>
     <select aria-label={tr('images.title')} value={store.imagePlace} onchange={(e) => store.setImagePlace(e.currentTarget.value as ImagePlace)}>
