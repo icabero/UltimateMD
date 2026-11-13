@@ -68,6 +68,7 @@ export const SHORTCUTS: { title: Key; items: Shortcut[] }[] = [
       { label: 'shortcuts.bold', keys: [['Ctrl', 'B']] },
       { label: 'shortcuts.italic', keys: [['Ctrl', 'I']] },
       { label: 'shortcuts.link', keys: [['Ctrl', 'K']] },
+      { label: 'shortcuts.slash', keys: [['/']] },
       { label: 'shortcuts.followLink', keys: [['Ctrl', 'Click']] },
       { label: 'shortcuts.pastePlain', keys: [['Ctrl', 'Shift', 'V']] },
       { label: 'shortcuts.undo', keys: [['Ctrl', 'Z']] },

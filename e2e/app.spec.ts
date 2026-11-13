@@ -3713,3 +3713,102 @@ test('the drawing while typing can be turned off in the settings', async ({ page
   await page.waitForTimeout(800);
   await expect(peekWindow(page)).toBeHidden();
 });
+
+test('typing / at the start of a line offers blocks, filtered without accents', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Editar', { exact: true }).click();
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('\n/');
+  const menu = completion(page);
+  await expect(menu).toContainText('Título 1');
+  await expect(menu).toContainText('Tabla');
+  await expect(menu.locator('svg').first()).toBeVisible();
+  await page.keyboard.type('tab');
+  await expect(menu.getByRole('option')).toHaveCount(1);
+  await page.waitForTimeout(150); // the list ignores keys for a moment after it opens
+  await page.keyboard.press('Enter');
+  await expect(editorText(page)).toContainText('| Columna 1 | Columna 2 |');
+  await expect(editorText(page)).not.toContainText('/tab');
+  await page.keyboard.type('\n/titulo 2');
+  await expect(completion(page).getByRole('option')).toHaveCount(1);
+  await page.waitForTimeout(150); // the list ignores keys for a moment after it opens
+  await page.keyboard.press('Tab');
+  await page.keyboard.type('Hola');
+  await expect(editorText(page)).toContainText('## Hola');
+});
+
+test('the quick menu closes with Escape and leaves the slash', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Editar', { exact: true }).click();
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('\n/');
+  await expect(completion(page)).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Escape');
+  await expect(completion(page)).toHaveCount(0);
+  await expect(page.locator('.cm-line').last()).toHaveText('/');
+});
+
+test('a slash inside a line does not open the quick menu', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Editar', { exact: true }).click();
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('\nver carpeta/');
+  await expect(completion(page)).toHaveCount(0);
+  await page.keyboard.type(' y 12/');
+  await expect(completion(page)).toHaveCount(0);
+});
+
+test('the quick menu inserts a task', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Editar', { exact: true }).click();
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('\n/tarea');
+  await expect(completion(page).getByRole('option')).toHaveCount(1);
+  await page.waitForTimeout(150); // the list ignores keys for a moment after it opens
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('comprar');
+  await expect(editorText(page)).toContainText('- [ ] comprar');
+});
+
+test('the quick menu inserts a formula and opens the diagram builder', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Editar', { exact: true }).click();
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('\n/formu');
+  await expect(completion(page).getByRole('option')).toHaveCount(1);
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('x^2');
+  await expect(editorText(page)).toContainText('$$');
+  await expect(editorText(page)).toContainText('x^2');
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('\n/diagrama');
+  await expect(completion(page).getByRole('option')).toHaveCount(1);
+  await page.waitForTimeout(150); // the list ignores keys for a moment after it opens
+  await page.keyboard.press('Enter');
+  await expect(builder(page, 'Crear diagrama')).toBeVisible();
+});
+
+test('the quick menu works in visual mode and can be turned off in the settings', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByTitle('Visual', { exact: true }).click();
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('\n/cita');
+  await expect(completion(page)).toContainText('Cita');
+  await page.keyboard.press('Escape');
+  await page.getByTitle('Ajustes y MCP').click();
+  const settings = page.getByRole('dialog', { name: 'Ajustes' });
+  await settings.getByLabel('Menú rápido con /').uncheck();
+  await page.keyboard.press('Escape');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('\n/cita');
+  await expect(completion(page)).toHaveCount(0);
+});

@@ -5,6 +5,7 @@
   import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
   import { HighlightStyle, foldEffect, foldAll, unfoldAll, unfoldEffect, indentOnInput, syntaxHighlighting, bracketMatching, ensureSyntaxTree, syntaxTree } from '@codemirror/language';
   import { autocompletion } from '@codemirror/autocomplete';
+  import { slashCompletions, slashIcons, slashKeys } from '../slashMenu';
   import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
   import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
   import { html } from '@codemirror/lang-html';
@@ -238,7 +239,7 @@
         typewriter.of(store.typewriter ? TYPEWRITER : PLAIN),
         found,
         outside,
-        ...(current.kind === 'md' ? [wikilinks, tagMarks, mathMarks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions, tagCompletions], icons: false })] : []),
+        ...(current.kind === 'md' ? [wikilinks, tagMarks, mathMarks, followWithCtrl, pasteMarkdown, dropImages, slashKeys, autocompletion({ override: [slashCompletions(() => openBuilder()), noteCompletions, headingCompletions, tagCompletions], icons: false, addToOptions: [slashIcons] })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
           if (u.docChanged || u.selectionSet || u.transactions.some((x) => x.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)))) rememberFolds(tab.key, u.state);

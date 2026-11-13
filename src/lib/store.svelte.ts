@@ -127,6 +127,7 @@ const READING_KEY = 'ultimatemd.reading';
 const TYPEWRITER_KEY = 'ultimatemd.typewriter';
 const IMAGES_KEY = 'ultimatemd.images';
 const PEEK_KEY = 'ultimatemd.diagramPeek';
+const SLASH_KEY = 'ultimatemd.slashMenu';
 const RECENT_KEY = 'ultimatemd.recent';
 const FAVORITES_KEY = 'ultimatemd.favorites';
 const RECENT_MAX = 30;
@@ -206,6 +207,14 @@ function loadTypewriter(): boolean {
     return localStorage.getItem(TYPEWRITER_KEY) === 'on';
   } catch {
     return false;
+  }
+}
+
+function loadSlashMenu() {
+  try {
+    return localStorage.getItem(SLASH_KEY) !== 'off';
+  } catch {
+    return true;
   }
 }
 
@@ -343,6 +352,8 @@ class Store {
   /** Concentration mode: only the note shows. It hides bars without touching `layout`, so leaving restores them. Never remembered: the app always opens whole. */
   focus = $state(false);
   imagePlace = $state<ImagePlace>(loadImagePlace());
+  /** The menu of blocks that `/` opens at the start of a line. */
+  slashMenu = $state(loadSlashMenu());
   windowWidth = $state(innerWidth);
   /** A bar shown by hand while the window is too narrow for it. It folds again once the width changes enough. */
   peek = $state({ left: false, right: false });
@@ -1155,6 +1166,15 @@ class Store {
       localStorage.setItem(PEEK_KEY, on ? 'on' : 'off');
     } catch {
       // Not saved; it lasts until the app closes.
+    }
+  }
+
+  setSlashMenu(on: boolean) {
+    this.slashMenu = on;
+    try {
+      localStorage.setItem(SLASH_KEY, on ? 'on' : 'off');
+    } catch {
+      // Lasts for this session only.
     }
   }
 

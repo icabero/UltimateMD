@@ -214,6 +214,13 @@
     </label>
     <p class="hint">{tr('peek.settingHint')}</p>
   </section>
+  <section data-setting="app.slash">
+    <label class="follow">
+      <input type="checkbox" checked={store.slashMenu} onchange={(e) => store.setSlashMenu(e.currentTarget.checked)} />
+      {tr('slash.setting')}
+    </label>
+    <p class="hint">{tr('slash.settingHint')}</p>
+  </section>
   <section data-setting="app.images">
     <h3>{tr('images.title')}</h3>
     <select aria-label={tr('images.title')} value={store.imagePlace} onchange={(e) => store.setImagePlace(e.currentTarget.value as ImagePlace)}>

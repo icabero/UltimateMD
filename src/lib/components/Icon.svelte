@@ -1,5 +1,5 @@
-<script lang="ts">
-  const PATHS: Record<string, string> = {
+<script lang="ts" module>
+  export const PATHS: Record<string, string> = {
     plus: 'M12 5v14M5 12h14',
     sort:'M7 4v16M4 17l3 3 3-3M17 20V4M14 7l3-3 3 3',
     close: 'M6 6l12 12M18 6L6 18',
@@ -42,7 +42,12 @@
     star: 'M12 4l2.5 5.2 5.5.8-4 4 1 5.6-5-2.7-5 2.7 1-5.6-4-4 5.5-.8z',
     keyboard: 'M3 7h18v10H3zM7 10h.01M11 10h.01M15 10h.01M8 14h8',
     link: 'M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1',
+    heading: 'M6 4v16M18 4v16M6 12h12',
+    sigma: 'M18 5H6l7 7-7 7h12',
   };
+</script>
+
+<script lang="ts">
   let { name, size = 16 }: { name: string; size?: number } = $props();
 </script>
 

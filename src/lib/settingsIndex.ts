@@ -43,6 +43,7 @@ export const APP_SETTINGS: SettingEntry[] = [
   { id: 'app.spell', scope: 'app', section: 'general', label: 'spell.title', hint: 'spell.hint', keywords: 'ortografia corrector spell spelling checker zuzentzailea' },
   { id: 'app.typewriter', scope: 'app', section: 'general', label: 'typewriter.title', hint: 'typewriter.hint', keywords: 'maquina de escribir typewriter centrar centrado cursor linea concentracion enfoque focus escritura idazmakina erdian' },
   { id: 'app.diagramPeek', scope: 'app', section: 'general', label: 'peek.setting', hint: 'peek.settingHint', keywords: 'diagrama vista previa ventana escribir mermaid d2 diagram preview window typing live diagramak aurrebista' },
+  { id: 'app.slash', scope: 'app', section: 'general', label: 'slash.setting', hint: 'slash.settingHint', keywords: 'barra menu rapido bloques insertar slash quick menu blocks insert command komando menua blokeak' },
   { id: 'app.images', scope: 'app', section: 'general', label: 'images.title', hint: 'images.hint', keywords: 'imagenes pegar images paste attachments adjuntos irudiak carpeta folder' },
   { id: 'app.log', scope: 'app', section: 'general', label: 'log.title', hint: 'log.intro', keywords: 'registro errores log errors diagnostico bug erregistroa akatsak' },
   { id: 'app.tutorial', scope: 'app', section: 'general', label: 'settings.tutorial', keywords: 'tutorial ayuda guia help guide laguntza' },
