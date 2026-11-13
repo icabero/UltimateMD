@@ -11,7 +11,6 @@
   import { languages } from '@codemirror/language-data';
   import { tags as t } from '@lezer/highlight';
   import DiagramBuilder, { type BuilderResult, type BuilderStart } from './DiagramBuilder.svelte';
-  import NoteDiagramStyle from './NoteDiagramStyle.svelte';
   import Toolbar from './Toolbar.svelte';
   import { parseSource } from '../diagramBuilder';
   import { fenceLine, parseStyle, splitFence } from '../diagramStyle';
@@ -21,7 +20,6 @@
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
   import { baseName } from '../paths';
-  import { frontmatterChange, frontmatterValue } from '../themes';
   import { EDIT_DIAGRAM, visualMode } from '../visual';
   import { headingCompletions, linkAt, noteCompletions, wikilinks } from '../wikilinks';
   import { spellLanguage } from '../spellcheck';
@@ -108,7 +106,6 @@
   let spelledKey = '';
   const PLAIN: Extension = [];
   let builder = $state<{ initial: BuilderStart | null; replace: { from: number; to: number } | null } | null>(null);
-  let styling = $state(false);
   let shownKey = '';
   let shownRevision = 0;
 
@@ -325,12 +322,6 @@
     }
   }
 
-  function setNoteStyle(value: string | null) {
-    if (!view) return;
-    const change = frontmatterChange(view.state.doc.toString(), 'tema-diagramas', value);
-    if (change) view.dispatch({ changes: change });
-  }
-
   onMount(() => {
     view = new EditorView({ parent: host });
     view.dom.addEventListener(EDIT_DIAGRAM, openBuilder);
@@ -387,14 +378,11 @@
 </script>
 
 <div class="editor">
-  {#if tab.kind === 'md'}<Toolbar view={() => view} ondiagram={openBuilder} onstyle={() => (styling = true)} />{/if}
+  {#if tab.kind === 'md'}<Toolbar view={() => view} ondiagram={openBuilder} onstyle={() => store.openPanel('properties')} />{/if}
   <div class="host" bind:this={host}></div>
 </div>
 {#if builder}
   <DiagramBuilder {tab} initial={builder.initial} onsave={saveDiagram} onclose={closeBuilder} />
-{/if}
-{#if styling}
-  <NoteDiagramStyle {tab} value={frontmatterValue(tab.content, 'tema-diagramas')} onchange={setNoteStyle} onclose={() => (styling = false)} />
 {/if}
 
 <style>

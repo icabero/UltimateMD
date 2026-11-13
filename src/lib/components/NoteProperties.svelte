@@ -1,19 +1,17 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import NoteLook from './NoteLook.svelte';
   import { properties, setProperty, validKey } from '../frontmatter';
-  import { themeName, tr, type Key } from '../i18n.svelte';
+  import { tr, type Key } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
-  import { THEMES } from '../themes';
 
   let { tab }: { tab: Tab } = $props();
 
   /** The fields UltimateMD itself reads. The first key is the one written; the others are accepted too. */
-  const KNOWN: { keys: string[]; label: Key; hint: Key; kind: 'text' | 'date' | 'theme' | 'diagram' }[] = [
+  const KNOWN: { keys: string[]; label: Key; hint: Key; kind: 'text' | 'date' }[] = [
     { keys: ['titulo', 'title'], label: 'props.title', hint: 'props.titleHint', kind: 'text' },
     { keys: ['autor', 'author'], label: 'props.author', hint: 'props.authorHint', kind: 'text' },
     { keys: ['fecha', 'date'], label: 'props.date', hint: 'props.dateHint', kind: 'date' },
-    { keys: ['tema'], label: 'props.theme', hint: 'props.themeHint', kind: 'theme' },
-    { keys: ['tema-diagramas'], label: 'props.diagramTheme', hint: 'props.diagramThemeHint', kind: 'diagram' },
   ];
 
   const fields = $derived(properties(tab.content));
@@ -24,7 +22,6 @@
     }),
   );
   const others = $derived(fields.filter((p) => !KNOWN.some((k) => k.keys.includes(p.key))));
-  const own = $derived(store.vaultThemes[tab.vaultId]?.themes ?? []);
 
   function commit(key: string, value: string) {
     const next = setProperty(tab.content, key, value);
@@ -46,19 +43,6 @@
   const today = () => new Date().toISOString().slice(0, 10);
 </script>
 
-{#snippet themeOptions(diagram: boolean)}
-  <option value="">{tr(diagram ? 'props.diagramFromVault' : 'props.fromVault')}</option>
-  {#if diagram}<option value="boceto">{tr('noteStyle.sketch')}</option>{/if}
-  {#if own.length}
-    <optgroup label={tr('themes.fromVault')}>
-      {#each own as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
-    </optgroup>
-  {/if}
-  <optgroup label={tr('themes.included')}>
-    {#each THEMES as t (t.id)}<option value={t.id}>{themeName(t)}</option>{/each}
-  </optgroup>
-{/snippet}
-
 <div class="props">
   {#each known as f (f.label)}
     {@const id = `prop-${f.keys[0]}`}
@@ -66,13 +50,6 @@
       <label class="name" for={id}>{tr(f.label)}</label>
       {#if f.complex}
         <span class="complex">{tr('props.complex')}</span>
-      {:else if f.kind === 'theme' || f.kind === 'diagram'}
-        <select {id} aria-describedby="{id}-hint" value={f.value} onchange={(e) => commit(f.key, e.currentTarget.value)}>
-          {@render themeOptions(f.kind === 'diagram')}
-          {#if f.value && f.value !== 'boceto' && !THEMES.some((t) => t.id === f.value) && !own.some((t) => t.id === f.value)}
-            <option value={f.value}>{tr('props.unknownTheme', { id: f.value })}</option>
-          {/if}
-        </select>
       {:else}
         <span class="row">
           <input {id} aria-describedby="{id}-hint" value={f.value} placeholder={f.kind === 'date' ? tr('props.datePlaceholder') : ''} onchange={(e) => commit(f.key, e.currentTarget.value)} onkeydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
@@ -82,6 +59,8 @@
       <span class="hint" id="{id}-hint">{tr(f.hint)}</span>
     </div>
   {/each}
+
+  <NoteLook {tab} />
 
   <h3>{tr('props.others')}</h3>
   <p class="hint">{tr('props.othersHint')}</p>
@@ -111,8 +90,8 @@
   .name { color: var(--text-2); font-size: var(--font-sm); font-weight: 600; }
   .row { display: flex; gap: var(--space-1-5); }
   .row input { flex: 1; min-width: 0; }
-  input, select { width: 100%; height: 30px; font-size: var(--font-md); }
-  select { padding: 0 var(--space-1-5); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg); color: var(--text); }
+  input { width: 100%; height: 30px; font-size: var(--font-md); }
+
   .hint { margin: 0; color: var(--text-3); font-size: var(--font-xs); line-height: 1.4; }
   .complex { color: var(--text-3); font-size: var(--font-sm); font-style: italic; }
   h3 { margin: var(--space-2) 0 0; color: var(--text-3); font-size: var(--font-xs); font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }

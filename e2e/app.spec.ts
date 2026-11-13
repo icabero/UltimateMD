@@ -945,7 +945,7 @@ test('the properties form edits the frontmatter and keeps the cursor', async ({ 
   await page.locator('.cm-content').click();
   await page.keyboard.press('ControlOrMeta+End');
   await page.keyboard.press('Control+Shift+o');
-  await notePanel(page).getByRole('tab', { name: 'Propiedades' }).click();
+  await notePanel(page).getByRole('tab', { name: 'Nota', exact: true }).click();
   const form = notePanel(page);
   await expect(form.getByLabel('Tema de la nota')).toHaveValue('sepia');
   await form.getByLabel('Título').fill('Informe: fase 2');
@@ -2449,20 +2449,29 @@ const fillOf = (id: string) => THEMES.find((t) => t.id === id)!.diagram.surface;
 test('a diagram goes by its own style, then its note, then its vault', async ({ page }) => {
   await open(page, 'Inicio');
   await expect(svgOf(page).locator('svg').first()).toBeVisible();
-  await page.getByRole('button', { name: 'Estilo', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Estilo de los diagramas' });
-
-  await dialog.getByLabel('En todo «Trabajo»').selectOption('bosque');
+  const settings = await vaultSettings(page, 'Trabajo', 'Diagramas');
+  await settings.getByLabel('Tema de los diagramas del vault').selectOption('bosque');
+  await page.keyboard.press('Escape');
+  await expect(settings).toBeHidden();
   await expect.poll(() => svgOf(page).innerHTML()).toContain(fillOf('bosque'));
 
-  await dialog.getByLabel('En esta nota').selectOption('sepia');
+  await page.getByRole('button', { name: 'Estilo', exact: true }).click();
+  const panel = notePanel(page);
+  await expect(panel.getByRole('tab', { name: 'Nota', exact: true })).toHaveAttribute('aria-selected', 'true');
+  const field = panel.locator('.field', { hasText: 'Estilo de los diagramas' });
+  await expect(field).toContainText('Del vault: Bosque');
+  await field.getByRole('button', { name: 'Cambiar solo en esta nota' }).click();
+  await expect(field).toContainText('Propio de esta nota');
+
+  await panel.getByLabel('Estilo de los diagramas', { exact: true }).selectOption('sepia');
   await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('---\ntema-diagramas: sepia\n---\n');
   await expect.poll(() => svgOf(page).innerHTML()).toContain(fillOf('sepia'));
+  await expect(panel.getByRole('img', { name: /Así se dibujan/ }).locator('svg')).toContainText('Idea');
 
-  await dialog.getByLabel('En esta nota').selectOption('');
+  await field.getByRole('button', { name: 'Volver al del vault' }).click();
   await expect.poll(() => disk(page, 'a', 'Inicio.md')).not.toContain('tema-diagramas');
+  await expect(field).toContainText('Del vault: Bosque');
   await expect.poll(() => svgOf(page).innerHTML()).toContain(fillOf('bosque'));
-  await page.keyboard.press('Escape');
 
   await page.locator('.cm-line', { hasText: 'flowchart' }).click();
   await page.getByRole('button', { name: 'Diagrama', exact: true }).click();
@@ -2473,12 +2482,38 @@ test('a diagram goes by its own style, then its note, then its vault', async ({ 
   await expect.poll(() => svgOf(page).innerHTML()).toContain(fillOf('medianoche'));
 });
 
-test('the style dialog sends you to make your own theme', async ({ page }) => {
+test('the Nota tab says where the theme comes from and links to the vault settings', async ({ page }) => {
   await open(page, 'Inicio');
   await page.getByRole('button', { name: 'Estilo', exact: true }).click();
-  await page.getByRole('button', { name: 'Crear un tema con mis colores' }).click();
-  const screen = page.getByRole('dialog', { name: 'Ajustes de Trabajo' });
-  await expect(screen.getByRole('navigation').getByRole('button', { name: 'Apariencia' })).toHaveAttribute('aria-current', 'page');
+  const panel = notePanel(page);
+  const field = panel.locator('.field', { hasText: 'Tema de la nota' });
+  await expect(field).toContainText('Del vault: el tema de la app');
+  await field.getByRole('button', { name: 'Cambiar solo en esta nota' }).click();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).toContain('tema: ');
+  await expect(field).toContainText('Propio de esta nota');
+  await field.getByRole('button', { name: 'Volver al del vault' }).click();
+  await expect.poll(() => disk(page, 'a', 'Inicio.md')).not.toContain('tema: ');
+  await field.getByRole('button', { name: 'Ajustes del vault' }).click();
+  const settings = page.getByRole('dialog', { name: 'Ajustes de Trabajo' });
+  await expect(settings.getByRole('navigation').getByRole('button', { name: 'Apariencia', exact: true })).toHaveAttribute('aria-current', 'page');
+});
+
+test('a loose file has no vault parts in the Nota tab', async ({ page }) => {
+  await openFiles(page, '/fuera/nota.md');
+  await page.getByRole('button', { name: 'Estilo', exact: true }).click();
+  const panel = notePanel(page);
+  await expect(panel.getByLabel('Estilo de los diagramas', { exact: true })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Ajustes del vault' })).toHaveCount(0);
+  await expect(panel.getByText(/Del vault/)).toHaveCount(0);
+  await panel.getByLabel('Estilo de los diagramas', { exact: true }).selectOption('sepia');
+  await expect.poll(() => disk(page, 'loose-nota.md', 'nota.md')).toContain('tema-diagramas: sepia');
+});
+
+test('the Nota tab sends you to make your own theme', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.getByRole('button', { name: 'Estilo', exact: true }).click();
+  await notePanel(page).getByRole('button', { name: 'Crear un tema con mis colores' }).click();
+  await expect(page.getByRole('dialog', { name: 'Ajustes de Trabajo' }).getByRole('button', { name: 'Nuevo tema' })).toBeVisible();
 });
 
 test('a chosen diagram style reaches the export, a plain one stays in the print look', async ({ page }) => {
