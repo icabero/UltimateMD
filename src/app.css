@@ -84,3 +84,6 @@ input[type='checkbox']:not(:disabled):active { scale: .82; }
   :root { --ease: 0ms; }
   :is(.cm-v-diagram, .drawing) svg * { animation: none !important; }
 }
+/* The setting that the settings search just opened. */
+.setting-flash { border-radius: var(--radius-sm); outline: 2px solid var(--accent); outline-offset: 3px; animation: umd-setting-flash 2.2s ease-out forwards; }
+@keyframes umd-setting-flash { 0%, 55% { outline-color: var(--accent); } 100% { outline-color: transparent; } }

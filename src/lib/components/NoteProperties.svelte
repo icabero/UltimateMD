@@ -46,7 +46,7 @@
 <div class="props">
   {#each known as f (f.label)}
     {@const id = `prop-${f.keys[0]}`}
-    <div class="field">
+    <div class="field" data-setting="note.{f.keys[0]}">
       <label class="name" for={id}>{tr(f.label)}</label>
       {#if f.complex}
         <span class="complex">{tr('props.complex')}</span>
@@ -62,7 +62,7 @@
 
   <NoteLook {tab} />
 
-  <h3>{tr('props.others')}</h3>
+  <h3 data-setting="note.others">{tr('props.others')}</h3>
   <p class="hint">{tr('props.othersHint')}</p>
   {#each others as p (p.key)}
     <div class="other">

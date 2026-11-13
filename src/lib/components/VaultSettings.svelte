@@ -93,7 +93,7 @@
       {/each}
     </nav>
 
-    <div class="content" class:fill={section === 'word' || section === 'diagrams'}>
+    <div class="content" data-setting-area class:fill={section === 'word' || section === 'diagrams'}>
       {#if !vault}
         <!-- Closing on the next tick. -->
       {:else if NEEDS_OPEN.includes(section) && !vault.open}
@@ -102,20 +102,20 @@
           <button class="plain" onclick={() => store.setVaultOpen(vaultId, true)}>{tr('vaultSettings.openVault')}</button>
         </div>
       {:else if section === 'general'}
-        <section>
+        <section data-setting="vault.name">
           <label class="field">
             <span>{tr('vaultSettings.name')}</span>
             <input type="text" value={vault.name} onchange={(e) => rename(e.currentTarget.value)} onkeydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
           </label>
           <p class="hint">{tr('vaultSettings.nameHint')}</p>
         </section>
-        <section>
+        <section data-setting="vault.folder">
           <h3>{tr('vaultSettings.folder')}</h3>
           <p class="path">{vault.path}</p>
           <button class="plain" onclick={() => store.revealInFolder(vaultId, '')}><Icon name="folder" size={14} /> {tr('menu.reveal')}</button>
         </section>
         {#if vault.open}
-          <section>
+          <section data-setting="vault.order">
             <label class="field">
               <span>{tr('vaultSettings.order')}</span>
               <select value={store.order(vaultId)} onchange={(e) => store.setOrder(vaultId, e.currentTarget.value as SortMode)}>
@@ -125,7 +125,7 @@
             <p class="hint">{tr('vaultSettings.orderHint')}</p>
           </section>
         {/if}
-        <section>
+        <section data-setting="vault.scripts">
           <h3>{tr('vaultSettings.safety')}</h3>
           <label class="check">
             <input type="checkbox" checked={vault.allowScripts} onchange={(e) => setScripts(e.currentTarget.checked)} />
@@ -133,7 +133,7 @@
           </label>
           <p class="hint">{tr('settings.scriptsHint')}</p>
         </section>
-        <section>
+        <section data-setting="vault.list">
           <h3>{tr('vaultSettings.inList')}</h3>
           <p class="hint">{tr(vault.open ? 'vaultSettings.openHint' : 'vaultSettings.closedHint')}</p>
           <div class="buttons">
@@ -148,7 +148,7 @@
       {:else if section === 'word'}
         <WordScreen {vaultId} />
       {:else}
-        <section>
+        <section data-setting="vault.ai">
           <p class="hint lead">{tr('vaultSettings.aiIntro')}</p>
           <div class="seg" role="group" aria-label={tr('settings.mcpAccessOf', { name })}>
             {#each ACCESS as a (a.value)}
@@ -157,12 +157,12 @@
           </div>
           <p class="hint" role="status">{tr(access.hint)}</p>
         </section>
-        <section>
+        <section data-setting="vault.aiLog">
           <h3>{tr('aiLog.open')}</h3>
           <p class="hint">{tr('vaultSettings.aiLogHint')}</p>
           <button class="plain" onclick={aiLog}>{tr('vaultSettings.aiLogOpen')}</button>
         </section>
-        <section>
+        <section data-setting="vault.connect">
           <h3>{tr('vaultSettings.connect')}</h3>
           <p class="hint">{tr('vaultSettings.connectHint')}</p>
           <button class="plain" onclick={connect}>{tr('vaultSettings.connectOpen')}</button>

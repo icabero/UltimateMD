@@ -9,6 +9,7 @@
   import { store } from '../store.svelte';
   import { THEMES, type Theme } from '../themes';
   import { SPELL_LANGUAGES, type SpellSetting } from '../spellcheck';
+  import { findSettings, flashSetting, type Hit } from '../settingsIndex';
 
   type Client = 'claude-code' | 'claude-desktop' | 'cursor' | 'other';
   type Section = 'general' | 'appearance' | 'vaults' | 'ai';
@@ -96,6 +97,46 @@
     { 'claude-code': tr('settings.hintCode'), 'claude-desktop': tr('settings.hintDesktop', { path: desktopConfig }), cursor: tr('settings.hintCursor'), other: tr('settings.hintOther') }[client],
   );
 
+  // The search: it looks in these settings, in the vault of the active note (or in every open vault) and in the note's own.
+  let query = $state('');
+  let chosen = $state(0);
+  const searching = $derived(query.trim() !== '');
+  const scope = $derived({
+    vaults: (store.active ? store.openVaults.filter((v) => v.id === store.active?.vaultId) : store.openVaults).map((v) => ({ id: v.id, name: v.name })),
+    hasNote: !!store.active,
+  });
+  const hits = $derived(findSettings(query, scope, tr));
+  $effect(() => {
+    void hits;
+    chosen = 0;
+  });
+
+  function open(hit: Hit) {
+    const { entry } = hit;
+    query = '';
+    if (entry.scope === 'app') section = entry.section;
+    else if (entry.scope === 'vault' && hit.vaultId) store.openVaultSettings(hit.vaultId, entry.section);
+    else {
+      store.settings = false;
+      store.openPanel('properties');
+    }
+    flashSetting(entry.id);
+  }
+
+  function searchKey(e: KeyboardEvent) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (hits.length) chosen = (chosen + (e.key === 'ArrowDown' ? 1 : hits.length - 1)) % hits.length;
+    } else if (e.key === 'Enter' && hits[chosen]) {
+      e.preventDefault();
+      open(hits[chosen]);
+    } else if (e.key === 'Escape' && query) {
+      query = '';
+    }
+  }
+
+  const hitId = (i: number) => `setting-hit-${i}`;
+
   const lightThemes = THEMES.filter((t) => t.mode === 'light');
   const darkThemes = THEMES.filter((t) => t.mode === 'dark');
   const following = $derived(store.themeChoice.fixed === null);
@@ -124,19 +165,31 @@
 
   <div class="layout">
   <nav aria-label={tr('settings.title')}>
+    <input type="search" class="search" data-clear-on-escape role="combobox" aria-expanded={searching} aria-controls="setting-hits" aria-activedescendant={hits.length ? hitId(chosen) : undefined} aria-label={tr('find.label')} placeholder={tr('find.placeholder')} bind:value={query} onkeydown={searchKey} />
     {#each SECTIONS as s (s.id)}
-      <button class:on={section === s.id} aria-current={section === s.id ? 'page' : undefined} onclick={() => (section = s.id)}>{tr(s.label)}</button>
+      <button class:on={!searching && section === s.id} aria-current={!searching && section === s.id ? 'page' : undefined} onclick={() => { query = ''; section = s.id; }}>{tr(s.label)}</button>
     {/each}
   </nav>
   <div class="content">
-  {#if section === 'general'}
-  <section>
+  {#if searching}
+    <div id="setting-hits" class="hits" role="listbox" aria-label={tr('find.label')}>
+      {#each hits as hit, i (`${hit.vaultId ?? ''}${hit.entry.id}`)}
+        <button id={hitId(i)} class="hit" class:on={i === chosen} role="option" aria-selected={i === chosen} tabindex="-1" onmousemove={() => (chosen = i)} onclick={() => open(hit)}>
+          <span class="hname">{tr(hit.entry.label)}</span>
+          <span class="hpath">{hit.path}</span>
+        </button>
+      {:else}
+        <p class="muted" role="status">{tr('find.none', { query: query.trim() })}</p>
+      {/each}
+    </div>
+  {:else if section === 'general'}
+  <section data-setting="app.language">
     <h3>{tr('settings.language')}</h3>
     <select aria-label={tr('settings.language')} value={language()} onchange={(e) => setLanguage(e.currentTarget.value as Language)}>
       {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
     </select>
   </section>
-  <section>
+  <section data-setting="app.spell">
     <h3>{tr('spell.title')}</h3>
     <select aria-label={tr('spell.title')} value={store.spellcheck} onchange={(e) => store.setSpellcheck(e.currentTarget.value as SpellSetting)}>
       <option value="app">{tr('spell.app')}</option>
@@ -145,7 +198,7 @@
     </select>
     <p class="hint">{tr('spell.hint')}</p>
   </section>
-  <section>
+  <section data-setting="app.images">
     <h3>{tr('images.title')}</h3>
     <select aria-label={tr('images.title')} value={store.imagePlace} onchange={(e) => store.setImagePlace(e.currentTarget.value as ImagePlace)}>
       <option value="vault">{tr('images.vault', { folder: IMAGE_FOLDER })}</option>
@@ -153,7 +206,7 @@
     </select>
     <p class="hint">{tr('images.hint')}</p>
   </section>
-  <section aria-label={tr('log.title')}>
+  <section data-setting="app.log" aria-label={tr('log.title')}>
     <h3>{tr('log.title')}</h3>
     <p class="muted">{tr('log.intro')}</p>
     <div class="logbar">
@@ -165,12 +218,12 @@
       <pre class="log" aria-label={tr('log.title')}>{log || tr('log.empty')}</pre>
     {/if}
   </section>
-  <section>
+  <section data-setting="app.tutorial">
     <h3>{tr('tutorial.label')}</h3>
     <button class="plain" onclick={() => { store.settings = false; store.tutorial = true; }}>{tr('settings.tutorial')}</button>
   </section>
   {#if defaultApp}
-    <section>
+    <section data-setting="app.defaultApp">
       <h3>{tr('settings.defaultApp')}</h3>
       {#if defaultApp.platform === 'windows'}
         <!-- eslint-disable-next-line svelte/no-at-html-tags -- our own translation, with markup -->
@@ -192,12 +245,12 @@
   {:else if section === 'appearance'}
   <section>
     <h3>{tr('settings.appearance')}</h3>
-    <div class="themes">
+    <div class="themes" data-setting="app.theme">
       {#each THEMES as t (t.id)}
         {@render swatch(t, store.theme.id === t.id, () => store.setThemeChoice({ fixed: t.id }))}
       {/each}
     </div>
-    <label class="follow">
+    <label class="follow" data-setting="app.followSystem">
       <input type="checkbox" checked={following} onchange={(e) => store.setThemeChoice({ fixed: e.currentTarget.checked ? null : store.theme.id })} />
       {tr('settings.followSystem')}
     </label>
@@ -216,7 +269,7 @@
       </div>
     {/if}
     <h3>{tr('reading.title')}</h3>
-    <div class="reading">
+    <div class="reading" data-setting="app.reading">
       <label>{tr('reading.textSize')}
         <select value={String(store.reading.textScale)} onchange={(e) => store.setReading({ textScale: Number(e.currentTarget.value) })}>
           {#each TEXT_SCALES as s}<option value={String(s)}>{tr(`reading.scale${Math.round(s * 100)}` as Key)}</option>{/each}
@@ -232,13 +285,13 @@
           {#each Object.keys(LEADINGS) as l}<option value={l}>{tr(`reading.leading.${l}` as Key)}</option>{/each}
         </select>
       </label>
-      <div class="zoom">
+      <div class="zoom" data-setting="app.zoom">
         <span>{tr('reading.zoom', { n: Math.round(store.reading.zoom * 100) })}</span>
         <button class="plain" disabled={store.reading.zoom === 1} onclick={() => store.setZoom(null, false)}>{tr('reading.zoomReset')}</button>
       </div>
       <p class="hint">{tr('reading.zoomHint')}</p>
     </div>
-    <label class="follow">
+    <label class="follow" data-setting="app.nativeFrame">
       <input type="checkbox" checked={frame.native} onchange={(e) => frame.setNative(e.currentTarget.checked)} />
       {tr('settings.nativeFrame')}
     </label>
@@ -246,7 +299,7 @@
   </section>
 
   {:else if section === 'vaults'}
-  <section>
+  <section data-setting="app.vaults">
     <h3>{tr('settings.sectionVaults')}</h3>
     <p class="muted">{tr('settings.vaultsIntro')}</p>
     {#each store.vaults as vault (vault.id)}
@@ -267,7 +320,7 @@
   </section>
 
   {:else}
-  <section>
+  <section data-setting="app.mcp">
     <h3>{tr('settings.mcpTitle')}</h3>
     <p class="muted">{tr('settings.mcpIntro')}</p>
     <div class="clients">
@@ -285,7 +338,7 @@
     </div>
     <p class="muted">{hint}</p>
   </section>
-  <section aria-label={tr('mcpCheck.title')}>
+  <section data-setting="app.mcpCheck" aria-label={tr('mcpCheck.title')}>
     <h3>{tr('mcpCheck.title')}</h3>
     <p class="muted">{tr('mcpCheck.intro')}</p>
     <button class="plain" disabled={checking} onclick={checkMcp}>{tr(checking ? 'mcpCheck.running' : 'mcpCheck.run')}</button>
@@ -328,6 +381,12 @@
   nav button { padding: var(--space-2) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-md); text-align: left; }
   nav button:hover { background: var(--hover); color: var(--text); }
   nav .on { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+  .search { width: 100%; height: 30px; margin-bottom: var(--space-1); padding: 0 var(--space-2); font-size: var(--font-sm); }
+  .hits { display: flex; flex-direction: column; padding-top: var(--space-3); }
+  .hit { display: flex; flex-direction: column; gap: var(--space-0-5); padding: var(--space-2) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text); text-align: left; }
+  .hit.on { background: var(--accent-soft); }
+  .hname { font-size: var(--font-md); font-weight: 600; }
+  .hpath { color: var(--text-3); font-size: var(--font-xs); }
   .content { min-width: 0; padding: 0 var(--space-5) var(--space-5); overflow-y: auto; }
   section + section { margin-top: var(--space-6); padding-top: var(--space-0-5); border-top: 1px solid var(--line); }
   h2 { margin: var(--space-2) 0; font-size: var(--font-lg); font-weight: 650; }

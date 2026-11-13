@@ -101,7 +101,7 @@
   <div class="config">
     <p class="intro">{tr('word.intro')}</p>
     {#if settings && config}
-      <h3>{tr('export.template')}</h3>
+      <h3 data-setting="vault.word.template">{tr('export.template')}</h3>
       <p class="hint">{tr(config.hasTemplate ? 'word.templateHere' : 'word.noTemplate')}</p>
       <div class="buttons">
         <button class="plain" onclick={chooseTemplate}>{tr(config.hasTemplate ? 'word.changeTemplate' : 'word.chooseTemplate')}</button>

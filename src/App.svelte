@@ -93,6 +93,8 @@
   function onKey(e: KeyboardEvent) {
     const key = e.key.toLowerCase();
     if (key === 'escape') {
+      // The settings search clears itself first.
+      if (e.target instanceof HTMLInputElement && e.target.dataset.clearOnEscape !== undefined && e.target.value) return;
       if (store.tutorial) store.closeTutorial();
       store.settings = store.exporting = store.about = store.shortcuts = false;
       store.palette = null;

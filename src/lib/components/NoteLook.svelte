@@ -70,7 +70,7 @@
 
 {#snippet field(key: string, label: Key, hint: Key, now: Setting, inherited: string, start: string, diagrams: boolean, section: 'look' | 'diagrams')}
   {@const id = `look-${key}`}
-  <div class="field">
+  <div class="field" data-setting={key === 'tema' ? 'note.theme' : 'note.diagramTheme'}>
     <label class="name" for={id}>{tr(label)}</label>
     {#if now.complex}
       <span class="complex">{tr('props.complex')}</span>

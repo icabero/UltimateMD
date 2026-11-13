@@ -3157,3 +3157,64 @@ test('Ctrl+Enter ticks tasks and the actions sort the selected lines', async ({ 
   await expect(page.getByRole('dialog', { name: 'Atajos de teclado' })).toContainText('Marcar o desmarcar como tarea');
   await expect(page.getByRole('dialog', { name: 'Atajos de teclado' })).toContainText('Ordenar las líneas seleccionadas');
 });
+
+test('the settings search finds a setting by name or synonym and highlights it', async ({ page }) => {
+  await openSettings(page);
+  const settings = page.getByRole('dialog', { name: 'Ajustes' });
+  const search = settings.getByRole('combobox', { name: 'Buscar en los ajustes' });
+  await search.fill('OSCURO');
+  const hit = settings.getByRole('option').first();
+  await expect(hit).toContainText('Tema de la app');
+  await expect(hit).toContainText('Ajustes › Apariencia');
+  await search.fill('dark');
+  await expect(settings.getByRole('option', { name: /Tema de la app/ })).toBeVisible();
+
+  await search.fill('zzzz');
+  await expect(settings.getByRole('status')).toContainText('Ningún ajuste coincide');
+  await search.press('Escape');
+  await expect(search).toHaveValue('');
+  await expect(settings).toBeVisible();
+
+  await search.fill('idioma');
+  await search.press('ArrowDown');
+  await search.press('ArrowUp');
+  await search.press('Enter');
+  await expect(search).toHaveValue('');
+  await expect(settings.locator('[data-setting="app.language"]')).toHaveClass(/setting-flash/);
+  await search.fill('zoom');
+  await search.press('Enter');
+  await expect(settings.getByRole('navigation').getByRole('button', { name: 'Apariencia' })).toHaveAttribute('aria-current', 'page');
+  await expect(settings.locator('[data-setting="app.zoom"]')).toHaveClass(/setting-flash/);
+});
+
+test('the settings search also opens the vault and note settings', async ({ page }) => {
+  await open(page, 'Inicio');
+  await openSettings(page);
+  const settings = page.getByRole('dialog', { name: 'Ajustes' });
+  const search = settings.getByRole('combobox', { name: 'Buscar en los ajustes' });
+
+  await search.fill('plantilla');
+  await expect(settings.getByRole('option').first()).toContainText(/Ajustes de \w+ › Word/);
+  await settings.getByRole('option').first().click();
+  await expect(page.getByRole('dialog', { name: /Ajustes de \w+/ })).toBeVisible();
+  await expect(page.locator('[data-setting="vault.word.template"]')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  await openSettings(page);
+  await search.fill('estilo de los diagramas');
+  const note = settings.getByRole('option', { name: /Nota ›/ });
+  await expect(note).toBeVisible();
+  await note.click();
+  await expect(settings).toHaveCount(0);
+  await expect(page.locator('[data-setting="note.diagramTheme"]')).toHaveClass(/setting-flash/);
+});
+
+test('picking an app theme applies at once', async ({ page }) => {
+  await openSettings(page);
+  const settings = page.getByRole('dialog', { name: 'Ajustes' });
+  await settings.getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
+  const bg = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim());
+  const before = await bg();
+  await settings.locator('.swatch[aria-pressed="false"]').first().click();
+  await expect.poll(bg).not.toBe(before);
+});
