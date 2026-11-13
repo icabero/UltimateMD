@@ -198,6 +198,14 @@
     </select>
     <p class="hint">{tr('spell.hint')}</p>
   </section>
+  <section data-setting="app.typewriter">
+    <h3>{tr('typewriter.title')}</h3>
+    <label class="follow">
+      <input type="checkbox" checked={store.typewriter} onchange={(e) => store.setTypewriter(e.currentTarget.checked)} />
+      {tr('typewriter.label')}
+    </label>
+    <p class="hint">{tr('typewriter.hint')}</p>
+  </section>
   <section data-setting="app.images">
     <h3>{tr('images.title')}</h3>
     <select aria-label={tr('images.title')} value={store.imagePlace} onchange={(e) => store.setImagePlace(e.currentTarget.value as ImagePlace)}>

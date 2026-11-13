@@ -33,6 +33,7 @@
     maximize: 'M6 6h12v12H6z',
     restore: 'M9 9h10v10H9zM6 15V6a1 1 0 0 1 1-1h8',
     panelLeft: 'M4 5h16v14H4zM9 5v14',
+    focus: 'M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5',
     panelRight: 'M4 5h16v14H4zM15 5v14',
     refresh: 'M20 11a8 8 0 0 0-14.9-4M4 13a8 8 0 0 0 14.9 4M5 3v4h4M19 21v-4h-4',
     pin: 'M9 4h6l-1 6 3 3H7l3-3zM12 13v7',

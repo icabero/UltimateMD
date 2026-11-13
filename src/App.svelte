@@ -59,6 +59,27 @@
     applyTheme(store.theme);
   });
 
+  // Concentration shows a note; without one there is nothing to focus on.
+  $effect(() => {
+    if (store.focus && (!tab || store.reader)) store.focus = false;
+  });
+
+  // The hint to leave shows for a few seconds, and again when the mouse goes to the top.
+  let hint = $state(false);
+  let hintTimer: ReturnType<typeof setTimeout> | undefined;
+  function showHint(time: number) {
+    hint = true;
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => (hint = false), time);
+  }
+  $effect(() => {
+    if (store.focus) showHint(4000);
+    else {
+      clearTimeout(hintTimer);
+      hint = false;
+    }
+  });
+
   // Linux's spell checker needs telling which dictionary to use; elsewhere this does nothing.
   const spelling = $derived(tab?.kind === 'md' ? spellLanguage(store.spellcheck, tab.content) : null);
   $effect(() => {
@@ -96,6 +117,12 @@
     if (key === 'escape') {
       // The settings search clears itself first.
       if (e.target instanceof HTMLInputElement && e.target.dataset.clearOnEscape !== undefined && e.target.value) return;
+      // With nothing else open, Escape leaves concentration; otherwise it only closes what is open.
+      if (store.focus && !store.tutorial && store.palette === null && !store.menu && !store.dialog && !document.querySelector('[role=dialog], .cm-tooltip-autocomplete, .cm-panel')) {
+        store.focus = false;
+        e.preventDefault();
+        return;
+      }
       if (store.tutorial) store.closeTutorial();
       store.settings = store.exporting = store.about = store.shortcuts = false;
       store.palette = null;
@@ -126,6 +153,9 @@
         store.toggleBar('left', true);
       },
       p: () => (store.palette = '>'),
+      enter: () => {
+        if (tab && !store.reader) store.focus = !store.focus;
+      },
       d: () => void store.openDaily(0),
       w: () => void store.closeAll(),
       e: () => store.toggleBar('left'),
@@ -176,14 +206,18 @@
 
 <svelte:window onkeydowncapture={onKey} onblur={() => store.saveAll()} onresize={() => store.setWindowWidth(innerWidth)} />
 
-<div class="app" style:grid-template-columns={columns} style:--frame-left={frame.own && IS_MAC ? '76px' : '0px'} style:--frame-right={frame.own && !IS_MAC ? '138px' : '0px'}>
+<div class="app" class:focus={store.focus} style:grid-template-columns={columns} style:--frame-left={frame.own && IS_MAC ? '76px' : '0px'} style:--frame-right={frame.own && !IS_MAC ? '138px' : '0px'}>
   {#if frame.own && !IS_MAC}<WindowControls />{/if}
   {#if store.showLeft}
     <Sidebar />
     <button class="grip" aria-label={tr('app.resize')} style:left="{sidebarWidth - 3}px" onpointerdown={resize}></button>
   {/if}
-  <main>
-    <Tabs />
+  <main onmousemove={(e) => { if (store.focus && !hint && e.clientY < 48) showHint(2500); }}>
+    {#if store.focus}
+      <button class="leave" class:shown={hint} tabindex={hint ? 0 : -1} onclick={() => (store.focus = false)}>{tr('focus.hint')}</button>
+    {:else}
+      <Tabs />
+    {/if}
     {#if tab?.conflict}
       <div class="banner" role="alert">
         <span>{tr('app.conflictBanner')}</span>
@@ -201,7 +235,7 @@
         <button class="dismiss" title={tr('common.close')} aria-label={tr('common.close')} onclick={() => (tab.outside = null)}>×</button>
       </div>
     {/if}
-    {#if tab && !tab.loose && !store.reader}<Breadcrumb {tab} />{/if}
+    {#if tab && !tab.loose && !store.reader && !store.focus}<Breadcrumb {tab} />{/if}
     <div class="content" style:--text-scale={store.reading.textScale} style:--prose-width={LINE_WIDTHS[store.reading.lineWidth]} style:--leading={LEADINGS[store.reading.leading] ?? 0}>
       {#if store.reader}
         {#key `${store.reader?.vaultId}:${store.reader?.folder}`}<Reader vaultId={store.reader?.vaultId ?? ""} folder={store.reader?.folder ?? ""} />{/key}
@@ -230,7 +264,7 @@
         </section>
       {/if}
     </div>
-    <footer>
+    <footer class:dim={store.focus}>
       {#if tab}
         <span class="where">{store.location(tab)} / {tab.path}</span>
         {#if tab.loose}
@@ -275,6 +309,15 @@
 
 <style>
   .app { position: relative; display: grid; height: 100vh; overflow: hidden; }
+  main { position: relative; }
+  .leave { position: absolute; top: var(--space-3); left: 50%; z-index: var(--z-raised); transform: translateX(-50%); padding: var(--space-1) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--raised); color: var(--text-2); font-size: var(--font-sm); opacity: 0; pointer-events: none; transition: opacity .3s; }
+  .leave.shown { opacity: 1; pointer-events: auto; }
+  .leave:focus-visible { opacity: 1; }
+  /* Concentration: the note alone, as wide as the reading width allows, without line numbers. */
+  .focus .content :global(.cm-content) { max-width: var(--prose-width, 720px); margin: 0 auto; }
+  .focus .content :global(.cm-gutters) { display: none; }
+  footer.dim { opacity: .35; transition: opacity .2s; }
+  footer.dim:hover { opacity: 1; }
   .grip { position: absolute; top: 0; bottom: 0; z-index: var(--z-raised); width: 6px; padding: 0; border: 0; background: none; cursor: col-resize; }
   .grip:hover { background: var(--line); }
   main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }

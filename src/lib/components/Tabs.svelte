@@ -126,6 +126,7 @@
       {/each}
       {#if active.kind === 'md'}
         <button class="icon" title={tr('tabs.export')} onclick={() => (store.exporting = true)}><Icon name="export" /></button>
+        <button class="icon" title={tr('focus.enter')} onclick={() => (store.focus = true)}><Icon name="focus" /></button>
         <button class="icon" class:on={store.showRight} aria-pressed={store.showRight} title={tr('panel.toggle')} onclick={() => store.toggleBar('right')}><Icon name="panelRight" /></button>
       {/if}
     </div>

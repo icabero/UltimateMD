@@ -108,6 +108,8 @@
       { id: 'panel.links', label: tr('cmd.links'), when: md && !tab?.loose, run: () => store.openPanel('links') },
       { id: 'bar.left', label: tr('cmd.toggleSidebar'), keys: ['Ctrl', 'Shift', 'E'], run: () => store.toggleBar('left') },
       { id: 'bar.right', label: tr('cmd.togglePanel'), keys: ['Ctrl', 'Shift', 'O'], when: md, run: () => store.toggleBar('right') },
+      { id: 'view.focus', label: tr(store.focus ? 'cmd.focusOff' : 'cmd.focus'), keys: ['Ctrl', 'Shift', 'Enter'], when: !!tab && !store.reader, run: () => (store.focus = !store.focus) },
+      { id: 'view.typewriter', label: tr(store.typewriter ? 'cmd.typewriterOff' : 'cmd.typewriterOn'), run: () => store.setTypewriter(!store.typewriter) },
       { id: 'tab.next', label: tr('cmd.nextTab'), keys: ['Ctrl', 'Tab'], when: store.tabs.length > 1, run: () => store.cycleTab(1) },
       { id: 'tab.close', label: tr('cmd.closeTab'), keys: ['Ctrl', 'W'], when: !!tab, run: () => tab && void store.close(tab) },
       { id: 'tab.closeAll', label: tr('cmd.closeAllTabs'), keys: ['Ctrl', 'Shift', 'W'], when: store.tabs.some((t) => !t.pinned), run: () => void store.closeAll() },

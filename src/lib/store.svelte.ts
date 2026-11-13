@@ -124,6 +124,7 @@ const TUTORIAL_KEY = 'ultimatemd.tutorial';
 const VIEW_KEY = 'ultimatemd.view';
 const LAYOUT_KEY = 'ultimatemd.layout';
 const READING_KEY = 'ultimatemd.reading';
+const TYPEWRITER_KEY = 'ultimatemd.typewriter';
 const IMAGES_KEY = 'ultimatemd.images';
 const RECENT_KEY = 'ultimatemd.recent';
 const FAVORITES_KEY = 'ultimatemd.favorites';
@@ -196,6 +197,14 @@ function loadReading(): Reading {
     return { ...fallback, ...JSON.parse(localStorage.getItem(READING_KEY) ?? '{}') };
   } catch {
     return fallback;
+  }
+}
+
+function loadTypewriter(): boolean {
+  try {
+    return localStorage.getItem(TYPEWRITER_KEY) === 'on';
+  } catch {
+    return false;
   }
 }
 
@@ -318,6 +327,10 @@ class Store {
   reveal = $state<Reveal | null>(null);
   layout = $state(loadLayout());
   reading = $state(loadReading());
+  /** Keeps the line being typed in the middle of the editor. Remembered. */
+  typewriter = $state(loadTypewriter());
+  /** Concentration mode: only the note shows. It hides bars without touching `layout`, so leaving restores them. Never remembered: the app always opens whole. */
+  focus = $state(false);
   imagePlace = $state<ImagePlace>(loadImagePlace());
   windowWidth = $state(innerWidth);
   /** A bar shown by hand while the window is too narrow for it. It folds again once the width changes enough. */
@@ -1056,15 +1069,22 @@ class Store {
   }
 
   get showLeft() {
+    if (this.focus) return false;
     return this.windowWidth >= LEFT_MIN ? this.layout.left : this.peek.left;
   }
 
   get showRight() {
+    if (this.focus) return false;
     return this.windowWidth >= RIGHT_MIN ? this.layout.right : this.peek.right;
   }
 
   /** Shows or hides a side bar. In a narrow window the change lasts until it widens. */
   toggleBar(side: 'left' | 'right', show?: boolean) {
+    // Asking for a bar leaves concentration; a plain toggle then has nothing more to do.
+    if (this.focus) {
+      this.focus = false;
+      if (show === undefined) return;
+    }
     const min = side === 'left' ? LEFT_MIN : RIGHT_MIN;
     const next = show ?? !(side === 'left' ? this.showLeft : this.showRight);
     if (this.windowWidth >= min) {
@@ -1072,6 +1092,15 @@ class Store {
       this.saveLayout();
     } else {
       this.peek[side] = next;
+    }
+  }
+
+  setTypewriter(on: boolean) {
+    this.typewriter = on;
+    try {
+      localStorage.setItem(TYPEWRITER_KEY, on ? 'on' : 'off');
+    } catch {
+      // Lasts for this session only.
     }
   }
 

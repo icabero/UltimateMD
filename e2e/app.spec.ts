@@ -3481,3 +3481,73 @@ test('in visual mode the headings fold too', async ({ page }) => {
   await page.locator('.cm-fold-mark.folded:visible').click();
   await expect(text).toContainText('Fin.');
 });
+
+test('focus mode shows only the note, leaves with Escape and restores the layout', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+Shift+o');
+  await expect(page.locator('aside:not(.panel)')).toBeVisible();
+  const panel = page.getByRole('tab', { name: 'Historial' });
+  await expect(panel).toBeVisible();
+  await page.keyboard.press('Control+Shift+Enter');
+  await expect(page.locator('aside:not(.panel)')).toHaveCount(0);
+  await expect(page.locator('.tabs[data-tauri-drag-region]')).toHaveCount(0);
+  await expect(panel).toHaveCount(0);
+  await expect(page.locator('.cm-content')).toBeVisible();
+  await expect(page.locator('.leave')).toHaveClass(/shown/);
+  // The hint fades away by itself; the mouse at the top brings it back.
+  await expect(page.locator('.leave')).not.toHaveClass(/shown/, { timeout: 8000 });
+  await page.mouse.move(400, 10);
+  await expect(page.locator('.leave')).toHaveClass(/shown/);
+  // With a dialog open Escape closes only the dialog.
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.press('Escape');
+  await expect(palette(page)).toHaveCount(0);
+  await expect(page.locator('aside:not(.panel)')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('aside:not(.panel)')).toBeVisible();
+  await expect(page.locator('.tabs[data-tauri-drag-region]')).toBeVisible();
+  await expect(panel).toBeVisible();
+  // The palette and the header button also enter it.
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('modo concentración');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('aside:not(.panel)')).toHaveCount(0);
+  await page.locator('.leave').click();
+  await expect(page.locator('aside:not(.panel)')).toBeVisible();
+  await page.getByTitle(/^Modo concentración/).click();
+  await expect(page.locator('aside:not(.panel)')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('aside:not(.panel)')).toBeVisible();
+});
+
+test('typewriter mode is a remembered setting that keeps the cursor line in the middle', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('máquina de escribir');
+  await expect(palette(page).getByRole('option').first()).toContainText('Activar la máquina de escribir');
+  await page.keyboard.press('Escape');
+  await openSettings(page);
+  const settings = page.getByRole('dialog', { name: 'Ajustes' });
+  await expect(settings.locator('[data-setting="app.typewriter"]')).toContainText('El texto se desplaza');
+  await settings.locator('[data-setting="app.typewriter"] input').check();
+  await settings.getByRole('combobox', { name: 'Buscar en los ajustes' }).fill('maquina');
+  await expect(settings.getByRole('option').first()).toContainText('Máquina de escribir');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ultimatemd.typewriter'))).toBe('on');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.cm-editor')).toHaveClass(/cm-typewriter/);
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+Home');
+  await page.keyboard.type('x\n'.repeat(80));
+  await page.keyboard.press('ControlOrMeta+Home');
+  for (let i = 0; i < 3; i++) await page.keyboard.press('PageDown');
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const view = document.querySelector('.cm-editor')!.getBoundingClientRect();
+        const caret = document.querySelector('.cm-cursor')?.getBoundingClientRect();
+        return caret ? Math.abs((caret.top + caret.bottom) / 2 - (view.top + view.bottom) / 2) : 9999;
+      }),
+    )
+    .toBeLessThan(30);
+});

@@ -53,6 +53,8 @@
     '.cm-scroller': { fontFamily: 'var(--mono)', fontSize: 'calc(13.5px * var(--text-scale, 1))', lineHeight: 'calc(1.65 + var(--leading, 0))', overflow: 'auto' },
     '.cm-content': { padding: '20px 0 40vh', caretColor: 'var(--accent)' },
     '.cm-line': { padding: '0 22px' },
+    // Typewriter mode: room above and below so the first and last lines can reach the middle.
+    '&.cm-typewriter .cm-content': { padding: '50vh 0' },
     '.cm-gutters': { background: 'var(--bg)', color: 'var(--text-3)', border: 'none', fontSize: 'var(--font-xs)' },
     '.cm-activeLine, .cm-activeLineGutter': { background: 'var(--hover)' },
     '.cm-cursor': { borderLeftColor: 'var(--accent)', borderLeftWidth: '2px' },
@@ -104,10 +106,27 @@
   const language = new Compartment();
   const mode = new Compartment();
   const spelling = new Compartment();
+  const typewriter = new Compartment();
   /** The language the shown note is checked in, and which note that was. */
   let spelledAs: string | null | undefined;
   let spelledKey = '';
   const PLAIN: Extension = [];
+
+  /** Scrolls so the line with the cursor sits in the middle of the editor. */
+  function centre(v: EditorView) {
+    // After the editor's own scroll to the cursor, which would otherwise win.
+    requestAnimationFrame(() => {
+      if (v.dom.isConnected) v.dispatch({ effects: EditorView.scrollIntoView(v.state.selection.main.head, { y: 'center' }) });
+    });
+  }
+
+  // A click moves the cursor where the reader already looks, so only typing and keys re-centre.
+  const TYPEWRITER: Extension = [
+    EditorView.editorAttributes.of({ class: 'cm-typewriter' }),
+    EditorView.updateListener.of((u) => {
+      if ((u.docChanged || u.selectionSet) && !u.transactions.some((t) => t.isUserEvent('select.pointer'))) centre(u.view);
+    }),
+  ];
   let builder = $state<{ initial: BuilderStart | null; replace: { from: number; to: number } | null } | null>(null);
   let shownKey = '';
   let shownRevision = 0;
@@ -208,6 +227,7 @@
         language.of(languageFor(current.kind)),
         mode.of(PLAIN),
         spelling.of(spellAttributes(null)),
+        typewriter.of(store.typewriter ? TYPEWRITER : PLAIN),
         found,
         outside,
         ...(current.kind === 'md' ? [wikilinks, tagMarks, mathMarks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions, tagCompletions], icons: false })] : []),
@@ -252,6 +272,11 @@
     }
     const wanted = current.kind === 'md' && current.view === 'visual' ? visualMode : PLAIN;
     if (mode.get(view.state) !== wanted) view.dispatch({ effects: mode.reconfigure(wanted) });
+    const centred = store.typewriter ? TYPEWRITER : PLAIN;
+    if (typewriter.get(view.state) !== centred) {
+      view.dispatch({ effects: typewriter.reconfigure(centred) });
+      if (store.typewriter) centre(view);
+    }
     const change = current.outside;
     if (change && change.seen !== outsideSeen) {
       outsideSeen = change.seen;
@@ -405,6 +430,7 @@
     tab.view;
     tab.outside;
     store.spellcheck;
+    store.typewriter;
     show(tab);
   });
 
@@ -417,7 +443,7 @@
 </script>
 
 <div class="editor">
-  {#if tab.kind === 'md'}<Toolbar view={() => view} ondiagram={openBuilder} onstyle={() => store.openPanel('properties')} />{/if}
+  {#if tab.kind === 'md' && !store.focus}<Toolbar view={() => view} ondiagram={openBuilder} onstyle={() => store.openPanel('properties')} />{/if}
   <div class="host" bind:this={host}></div>
 </div>
 {#if builder}

@@ -41,6 +41,7 @@ export const NOTE_GROUP_LABEL: Record<NoteGroup, Key> = { look: 'noteLook.title'
 export const APP_SETTINGS: SettingEntry[] = [
   { id: 'app.language', scope: 'app', section: 'general', label: 'settings.language', hint: 'find.languageHint', keywords: 'idioma language hizkuntza lengua castellano espanol english euskera basque traduccion' },
   { id: 'app.spell', scope: 'app', section: 'general', label: 'spell.title', hint: 'spell.hint', keywords: 'ortografia corrector spell spelling checker zuzentzailea' },
+  { id: 'app.typewriter', scope: 'app', section: 'general', label: 'typewriter.title', hint: 'typewriter.hint', keywords: 'maquina de escribir typewriter centrar centrado cursor linea concentracion enfoque focus escritura idazmakina erdian' },
   { id: 'app.images', scope: 'app', section: 'general', label: 'images.title', hint: 'images.hint', keywords: 'imagenes pegar images paste attachments adjuntos irudiak carpeta folder' },
   { id: 'app.log', scope: 'app', section: 'general', label: 'log.title', hint: 'log.intro', keywords: 'registro errores log errors diagnostico bug erregistroa akatsak' },
   { id: 'app.tutorial', scope: 'app', section: 'general', label: 'settings.tutorial', keywords: 'tutorial ayuda guia help guide laguntza' },

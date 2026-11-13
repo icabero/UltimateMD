@@ -7,6 +7,7 @@ export function keyLabel(key: string) {
   if (IS_MAC && key === 'Ctrl') return '⌘';
   if (IS_MAC && key === 'Alt') return '⌥';
   if (key === 'Click') return tr('keys.click');
+  if (key === 'Enter') return tr('keys.enter');
   if (key === 'Del') return tr('keys.delete');
   return key;
 }
@@ -43,6 +44,7 @@ export const SHORTCUTS: { title: Key; items: Shortcut[] }[] = [
       { label: 'shortcuts.nextView', keys: [['Ctrl', '\\']] },
       { label: 'cmd.toggleSidebar', keys: [['Ctrl', 'Shift', 'E']] },
       { label: 'cmd.togglePanel', keys: [['Ctrl', 'Shift', 'O']] },
+      { label: 'cmd.focus', keys: [['Ctrl', 'Shift', 'Enter']] },
       { label: 'shortcuts.moveTab', keys: [['Ctrl', 'Shift', '←'], ['Ctrl', 'Shift', '→']] },
       { label: 'cmd.zoomIn', keys: [['Ctrl', '+']] },
       { label: 'cmd.zoomOut', keys: [['Ctrl', '-']] },
