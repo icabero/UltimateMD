@@ -133,6 +133,15 @@
     set_vault_access: ({ id, mcp }) => {
       vaults.find((v) => v.id === id).mcp = mcp;
     },
+    set_vault_scripts: ({ id, allow }) => {
+      vaults.find((v) => v.id === id).allowScripts = allow;
+    },
+    set_vault_open: ({ id, open }) => {
+      vaults.find((v) => v.id === id).open = open;
+    },
+    rename_vault: ({ id, name }) => {
+      vaults.find((v) => v.id === id).name = name;
+    },
     mcp_info: () => ({ binary: 'C:\\Program Files\\UltimateMD\\ultimatemd-mcp.exe', available: true }),
     home_info: () => {
       const open = vaults.filter((v) => v.open);

@@ -65,6 +65,8 @@ export interface Reveal {
 }
 
 export type PanelTab = 'outline' | 'links' | 'properties' | 'history';
+/** The parts of a vault's settings screen. */
+export type VaultSection = 'general' | 'look' | 'diagrams' | 'word' | 'ai';
 
 /** Which side bars someone wants. A narrow window hides them anyway. */
 interface Layout {
@@ -297,15 +299,12 @@ class Store {
   preferredView = $state(loadView());
   dialog = $state<Dialog | null>(null);
   vaultThemes = $state<Record<string, VaultThemes>>({});
-  themeEditor = $state<string | null>(null);
+  /** The vault whose settings are open, and at which part. */
+  vaultSettings = $state<{ vaultId: string; section: VaultSection } | null>(null);
   /** The vault whose broken links are listed. */
   brokenLinks = $state<string | null>(null);
   /** The vault whose log of what the AI did is open. */
   aiLog = $state<string | null>(null);
-  /** The vault whose Word settings are open. */
-  wordScreen = $state<string | null>(null);
-  /** The vault whose diagram guide for the AI is being edited. */
-  guideScreen = $state<string | null>(null);
   /** A vault or folder being read top to bottom, in place of the editor. */
   reader = $state<{ vaultId: string; folder: string } | null>(null);
   /** Where a note from a template goes, while choosing the template. */
@@ -899,6 +898,12 @@ class Store {
     } catch (e) {
       this.fail(e);
     }
+  }
+
+  /** Everything a vault can set, in one screen; it takes the place of the app settings. */
+  openVaultSettings(vaultId: string, section: VaultSection = 'general') {
+    this.settings = false;
+    this.vaultSettings = { vaultId, section };
   }
 
   async setVaultOpen(id: string, open: boolean) {

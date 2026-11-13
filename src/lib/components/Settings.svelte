@@ -4,7 +4,7 @@
   import { dim, pop } from '../motion';
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
-  import { api, type DefaultAppInfo, type McpAccess, type McpCheck, type Vault } from '../api';
+  import { api, type DefaultAppInfo, type McpAccess, type McpCheck } from '../api';
   import { LANGUAGES, language, setLanguage, themeName, tr, type Key, type Language } from '../i18n.svelte';
   import { store } from '../store.svelte';
   import { THEMES, type Theme } from '../themes';
@@ -99,28 +99,6 @@
   const lightThemes = THEMES.filter((t) => t.mode === 'light');
   const darkThemes = THEMES.filter((t) => t.mode === 'dark');
   const following = $derived(store.themeChoice.fixed === null);
-
-  async function setAccess(vault: Vault, value: McpAccess) {
-    await api.setVaultAccess(vault.id, value).catch((e) => store.fail(e));
-    await store.loadVaults();
-  }
-
-  async function setScripts(vault: Vault, allow: boolean) {
-    await api.setVaultScripts(vault.id, allow).catch((e) => store.fail(e));
-    await store.loadVaults();
-  }
-
-  async function rename(vault: Vault) {
-    const name = await store.prompt(tr('sidebar.vaultName'), vault.name, tr('common.rename'));
-    if (name?.trim() && name.trim() !== vault.name) {
-      await api.renameVault(vault.id, name.trim()).catch((e) => store.fail(e));
-      await store.loadVaults();
-    }
-  }
-
-  async function remove(vault: Vault) {
-    if (await store.confirm(tr('settings.removeVault', { name: vault.name }), tr('common.remove'))) await store.removeVault(vault.id);
-  }
 
   async function copy() {
     await navigator.clipboard.writeText(snippet);
@@ -270,27 +248,17 @@
   {:else if section === 'vaults'}
   <section>
     <h3>{tr('settings.sectionVaults')}</h3>
+    <p class="muted">{tr('settings.vaultsIntro')}</p>
     {#each store.vaults as vault (vault.id)}
       <div class="vault">
         <div class="info">
-          <button class="name" title={tr('common.rename')} onclick={() => rename(vault)}>{vault.name}</button>
+          <span class="name">{vault.name}</span>
           <span class="path">{vault.path}</span>
-        </div>
-        <div class="seg" role="group" aria-label={tr('settings.mcpAccessOf', { name: vault.name })}>
-          {#each ACCESS as a}
-            <button class:on={vault.mcp === a.value} onclick={() => setAccess(vault, a.value)}>{tr(a.label)}</button>
-          {/each}
+          <span class="state">{tr(vault.open ? 'settings.vaultOpen' : 'settings.vaultClosed')} · {tr('settings.vaultAi', { access: tr(ACCESS.find((a) => a.value === vault.mcp)?.label ?? 'settings.accessOff') })}</span>
         </div>
         <div class="actions">
-          <label title={tr('settings.scriptsHint')}>
-            <input type="checkbox" checked={vault.allowScripts} onchange={(e) => setScripts(vault, e.currentTarget.checked)} />
-            {tr('settings.scripts')}
-          </label>
-          <span class="spacer"></span>
-          {#if vault.open}<button onclick={() => (store.themeEditor = vault.id)}>{tr('settings.themes')}</button>{/if}
-          {#if vault.open}<button onclick={() => { store.settings = false; store.wordScreen = vault.id; }}>{tr('word.open')}</button>{/if}
           <button onclick={() => store.setVaultOpen(vault.id, !vault.open)}>{tr(vault.open ? 'common.close' : 'common.open')}</button>
-          <button onclick={() => remove(vault)}>{tr('common.remove')}</button>
+          <button class="main" onclick={() => store.openVaultSettings(vault.id)}><Icon name="settings" size={14} /> {tr('settings.vaultSettings')}</button>
         </div>
       </div>
     {:else}
@@ -337,7 +305,7 @@
           {/if}
           {#if hidden.length}
             <p class="muted">{tr('mcpCheck.hidden', { list: hidden.map((v) => v.name).join(', ') })}</p>
-            <button class="plain" onclick={() => (section = 'vaults')}>{tr('mcpCheck.giveAccess')}</button>
+            <button class="plain" onclick={() => { if (hidden.length === 1) store.openVaultSettings(hidden[0].id, 'ai'); else section = 'vaults'; }}>{tr('mcpCheck.giveAccess')}</button>
           {/if}
           <p class="muted">{tr('mcpCheck.stillNot')}</p>
         {:else}
@@ -379,18 +347,18 @@
   .modes { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-2); color: var(--text-2); font-size: var(--font-sm); }
   .modes label { display: flex; align-items: center; gap: var(--space-1-5); }
   select { min-width: 170px; padding: var(--space-1) var(--space-1-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; }
-  .vault { padding: var(--space-2-5) 0; border-top: 1px solid var(--line); }
-  .info { display: flex; align-items: baseline; gap: var(--space-2-5); min-width: 0; margin-bottom: var(--space-2); }
-  .name { flex: none; padding: 0; border: 0; background: none; color: var(--text); font-size: var(--font-md); font-weight: 600; }
+  .vault { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2-5) 0; border-top: 1px solid var(--line); }
+  .info { display: flex; flex: 1; flex-direction: column; gap: var(--space-0-5); min-width: 0; }
+  .name { color: var(--text); font-size: var(--font-md); font-weight: 600; }
   .path { overflow: hidden; color: var(--text-3); font-size: var(--font-sm); white-space: nowrap; text-overflow: ellipsis; }
-  .seg, .clients { display: inline-flex; padding: var(--space-0-5); border-radius: var(--radius-md); background: var(--hover); flex-wrap: wrap; }
-  .seg button, .clients button { padding: var(--space-1) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); }
-  .seg .on, .clients .on { background: var(--raised); color: var(--text); box-shadow: var(--shadow-sm); }
-  .actions { display: flex; align-items: center; gap: var(--space-1-5); margin-top: var(--space-2); color: var(--text-2); font-size: var(--font-sm); }
-  .actions label { display: flex; align-items: center; gap: var(--space-1-5); }
+  .state { color: var(--text-2); font-size: var(--font-xs); }
+  .clients { display: inline-flex; padding: var(--space-0-5); border-radius: var(--radius-md); background: var(--hover); flex-wrap: wrap; }
+  .clients button { padding: var(--space-1) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); }
+  .clients .on { background: var(--raised); color: var(--text); box-shadow: var(--shadow-sm); }
+  .actions { display: flex; flex: none; align-items: center; gap: var(--space-1-5); }
+  .actions .main { display: flex; align-items: center; gap: var(--space-1); color: var(--text); }
   .actions button, .code button { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); }
   .actions button:hover, .code button:hover { background: var(--hover); color: var(--text); }
-  .spacer { flex: 1; }
   .code { position: relative; margin: var(--space-2-5) 0 var(--space-1-5); }
   pre { margin: 0; padding: var(--space-3) 76px var(--space-3) var(--space-3); overflow-x: auto; border-radius: var(--radius-md); background: var(--panel); font: var(--font-sm)/1.5 var(--mono); }
   .code button { position: absolute; top: 8px; right: 8px; background: var(--raised); }

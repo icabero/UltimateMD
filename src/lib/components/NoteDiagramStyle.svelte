@@ -21,7 +21,7 @@
 
   function makeTheme() {
     onclose();
-    store.themeEditor = tab.vaultId;
+    store.openVaultSettings(tab.vaultId, 'look');
   }
 </script>
 

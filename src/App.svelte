@@ -14,7 +14,7 @@
   import Preview from './lib/components/Preview.svelte';
   import Settings from './lib/components/Settings.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
-  import ThemeEditor from './lib/components/ThemeEditor.svelte';
+  import VaultSettings from './lib/components/VaultSettings.svelte';
   import Tutorial from './lib/components/Tutorial.svelte';
   import Shortcuts from './lib/components/Shortcuts.svelte';
   import OutsideChanges from './lib/components/OutsideChanges.svelte';
@@ -25,8 +25,6 @@
   import { manageDialogFocus } from './lib/dialogFocus';
   import News from './lib/components/News.svelte';
   import ConflictMerge from './lib/components/ConflictMerge.svelte';
-  import WordScreen from './lib/components/WordScreen.svelte';
-  import DiagramGuide from './lib/components/DiagramGuide.svelte';
   import Reader from './lib/components/Reader.svelte';
   import GitScreen from './lib/components/GitScreen.svelte';
   import BrokenLinks from './lib/components/BrokenLinks.svelte';
@@ -95,7 +93,6 @@
       if (store.tutorial) store.closeTutorial();
       store.settings = store.exporting = store.about = store.shortcuts = false;
       store.palette = null;
-      store.themeEditor = null;
       return;
     }
     if (!(e.ctrlKey || e.metaKey)) return;
@@ -250,9 +247,7 @@
 {#if store.about}<About />{/if}
 {#if store.shortcuts}<Shortcuts />{/if}
 {#if store.outsideDiff && tab?.outside}<OutsideChanges {tab} />{/if}
-{#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
-{#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
-{#if store.guideScreen}<DiagramGuide vaultId={store.guideScreen} />{/if}
+{#if store.vaultSettings}<VaultSettings vaultId={store.vaultSettings.vaultId} section={store.vaultSettings.section} />{/if}
 {#if store.gitScreen}<GitScreen vaultId={store.gitScreen} />{/if}
 {#if store.merging && tab?.conflict}<ConflictMerge {tab} />{/if}
 {#if store.news}<News version={store.news} />{/if}

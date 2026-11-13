@@ -52,10 +52,9 @@
       { label: tr('sidebar.newFolder'), icon: 'folderPlus', run: () => void newFolder(vault.id, '') },
       { label: tr('reader.readVault'), icon: 'eye', separator: true, run: () => (store.reader = { vaultId: vault.id, folder: '' }) },
       { label: tr('broken.open'), icon: 'link', run: () => (store.brokenLinks = vault.id) },
-      { label: tr('word.openSettings'), icon: 'word', run: () => (store.wordScreen = vault.id) },
-      { label: tr('guide.open'), icon: 'diagram', run: () => (store.guideScreen = vault.id) },
       { label: tr('aiLog.open'), icon: 'list', run: () => (store.aiLog = vault.id) },
       { label: tr('menu.reveal'), icon: 'folder', separator: true, run: () => store.revealInFolder(vault.id, '') },
+      { label: tr('vaultSettings.open'), icon: 'settings', run: () => store.openVaultSettings(vault.id) },
       { label: tr('sidebar.closeVault'), icon: 'close', run: () => void store.setVaultOpen(vault.id, false) },
     ]);
   }
@@ -172,7 +171,7 @@
             <button class="icon small" title={tr('sidebar.newNote')} onclick={() => newNote(vault.id, '')}><Icon name="plus" size={14} /></button>
             <button class="icon small" title={tr('sidebar.newFolder')} onclick={() => newFolder(vault.id, '')}><Icon name="folderPlus" size={14} /></button>
             <button class="icon small" title={tr('reader.readVault')} onclick={() => (store.reader = { vaultId: vault.id, folder: '' })}><Icon name="eye" size={14} /></button>
-            <button class="icon small" title={tr('word.openSettings')} onclick={() => (store.wordScreen = vault.id)}><Icon name="word" size={14} /></button>
+            <button class="icon small" title={tr('vaultSettings.open')} onclick={() => store.openVaultSettings(vault.id)}><Icon name="settings" size={14} /></button>
             {#if store.git[vault.id]}
               {@const git = store.git[vault.id]!}
               {@const label = tr('git.open', { branch: git.branch ?? tr('git.detached'), n: git.changes.length })}

@@ -626,7 +626,10 @@ test('the AI connection can be tested from the settings', async ({ page }) => {
   await expect(check.getByRole('listitem')).toHaveText(['Trabajo Lectura']);
   await expect(check.getByRole('status')).toContainText('tienen el acceso desactivado: Personal.');
   await check.getByRole('button', { name: 'Cambiar el acceso' }).click();
-  await expect(page.getByRole('group', { name: 'Acceso MCP de Personal' })).toBeVisible();
+  // A single vault without access opens straight at its AI part.
+  const personal = page.getByRole('dialog', { name: 'Ajustes de Personal' });
+  await expect(personal.getByRole('group', { name: 'Acceso MCP de Personal' })).toBeVisible();
+  await personal.getByRole('button', { name: 'Ir a los ajustes de la app' }).click();
 
   await page.evaluate(() => {
     (window as any).__mcpCheck = { ok: false, version: null, vaults: [], failed: 'silent', error: 'config file is not valid JSON' };
@@ -1408,13 +1411,15 @@ test('an HTML export keeps the animation; the builder can turn it on', async ({ 
   await expect(page.locator('.cm-content')).toContainText('```mermaid animado');
 });
 
-test('settings change MCP access and give a valid Windows config', async ({ page }) => {
-  await page.getByTitle('Ajustes y MCP').click();
-  await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();
-  const group = page.getByRole('group', { name: 'Acceso MCP de Trabajo' });
+test('a vault sets what the AI may do, and the app gives a valid Windows config', async ({ page }) => {
+  const screen = await vaultSettings(page, 'Trabajo', 'Inteligencia artificial');
+  const group = screen.getByRole('group', { name: 'Acceso MCP de Trabajo' });
   await group.getByRole('button', { name: 'Lectura y escritura' }).click();
   await expect(group.getByRole('button', { name: 'Lectura y escritura' })).toHaveClass(/on/);
+  await expect(screen.getByRole('status')).toContainText('crear y cambiar notas');
 
+  await screen.getByRole('button', { name: 'Ir a los ajustes de la app' }).click();
+  await expect(screen).toHaveCount(0);
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Inteligencia artificial' }).click();
   await page.getByRole('button', { name: 'Claude Desktop' }).click();
   const config = JSON.parse((await page.locator('.code pre').textContent())!);
@@ -1791,10 +1796,7 @@ test('diagrams can use their own theme and are redrawn when it changes', async (
 
 test('a theme can be created, edited and made the vault default', async ({ page }) => {
   await open(page, 'Inicio');
-  await page.getByTitle('Ajustes y MCP').click();
-  await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();
-  await page.getByRole('button', { name: 'Temas' }).first().click();
-  const editor = page.getByRole('dialog', { name: /Temas de Trabajo/ });
+  const editor = await vaultSettings(page, 'Trabajo', 'Apariencia');
   await editor.getByRole('button', { name: 'Nuevo tema' }).click();
   await page.getByRole('textbox').last().fill('Mi Marca');
   await page.keyboard.press('Enter');
@@ -1811,10 +1813,7 @@ test('a theme can be created, edited and made the vault default', async ({ page 
 });
 
 test('a theme can be edited as JSON and bad JSON is refused', async ({ page }) => {
-  await page.getByTitle('Ajustes y MCP').click();
-  await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Vaults' }).click();
-  await page.getByRole('button', { name: 'Temas' }).nth(1).click();
-  const editor = page.getByRole('dialog', { name: /Temas de Personal/ });
+  const editor = await vaultSettings(page, 'Personal', 'Apariencia');
   await editor.getByRole('button', { name: 'Mar' }).click();
   await editor.getByRole('button', { name: 'Editar JSON' }).click();
   await editor.getByRole('textbox', { name: 'JSON del tema' }).fill('{ roto');
@@ -1832,6 +1831,43 @@ async function firstRun(page: Page) {
 
 const tutorial = (page: Page) => page.getByRole('dialog', { name: 'Tutorial' });
 const openSettings = (page: Page) => page.getByTitle('Ajustes y MCP').click();
+
+/** A vault's settings, opened from the gear beside its name in the sidebar. */
+async function vaultSettings(page: Page, vault: string, section?: string) {
+  const region = page.getByRole('region', { name: vault });
+  await region.hover();
+  await region.getByTitle('Ajustes del vault').click();
+  const screen = page.getByRole('dialog', { name: `Ajustes de ${vault}` });
+  if (section) await screen.getByRole('navigation').getByRole('button', { name: section, exact: true }).click();
+  return screen;
+}
+
+test('a vault is renamed, closed and opened again from its settings', async ({ page }) => {
+  const screen = await vaultSettings(page, 'Personal');
+  await screen.getByLabel('Nombre').fill('Casa');
+  await screen.getByLabel('Nombre').press('Enter');
+  const renamed = page.getByRole('dialog', { name: 'Ajustes de Casa' });
+  await expect(renamed).toBeVisible();
+  await expect(renamed).toContainText('/v/Personal');
+
+  await renamed.getByRole('button', { name: 'Cerrar vault' }).click();
+  await expect(page.locator('aside').getByRole('region', { name: 'Casa' })).toHaveCount(0);
+  await renamed.getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
+  await expect(renamed).toContainText('Este vault está cerrado');
+  await renamed.getByRole('button', { name: 'Abrir vault' }).click();
+  await expect(renamed.getByRole('button', { name: 'Nuevo tema' })).toBeVisible();
+  await expect(page.locator('aside').getByRole('region', { name: 'Casa' })).toBeVisible();
+});
+
+test('the app settings list the vaults and send each one to its own settings', async ({ page }) => {
+  await openSettings(page);
+  await settingsSection(page, 'Vaults');
+  const settings = page.getByRole('dialog', { name: 'Ajustes', exact: true });
+  await expect(settings).toContainText('Abierto · IA: Lectura');
+  await settings.getByRole('button', { name: 'Ajustes', exact: true }).first().click();
+  await expect(settings).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Ajustes de Trabajo' }).getByRole('navigation').getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page');
+});
 
 test('the tutorial appears on the first run and only then', async ({ page }) => {
   await expect(tutorial(page)).toHaveCount(0);
@@ -2441,7 +2477,8 @@ test('the style dialog sends you to make your own theme', async ({ page }) => {
   await open(page, 'Inicio');
   await page.getByRole('button', { name: 'Estilo', exact: true }).click();
   await page.getByRole('button', { name: 'Crear un tema con mis colores' }).click();
-  await expect(page.getByRole('dialog', { name: /Temas de Trabajo/ })).toBeVisible();
+  const screen = page.getByRole('dialog', { name: 'Ajustes de Trabajo' });
+  await expect(screen.getByRole('navigation').getByRole('button', { name: 'Apariencia' })).toHaveAttribute('aria-current', 'page');
 });
 
 test('a chosen diagram style reaches the export, a plain one stays in the print look', async ({ page }) => {
@@ -2550,12 +2587,7 @@ test('the pastel pink theme can be chosen for the whole app', async ({ page }) =
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'rosa');
 });
 
-const wordScreen = async (page: Page) => {
-  await openSettings(page);
-  await settingsSection(page, 'Vaults');
-  await page.getByRole('button', { name: 'Word', exact: true }).first().click();
-  return page.getByRole('dialog', { name: 'Word en Trabajo' });
-};
+const wordScreen = (page: Page) => vaultSettings(page, 'Trabajo', 'Word');
 
 test('the Word screen shows what the template suggests and saves changes', async ({ page }) => {
   const screen = await wordScreen(page);
@@ -2570,15 +2602,20 @@ test('the Word screen shows what the template suggests and saves changes', async
   expect(await page.evaluate(() => (window as any).__wordMarkdown)).toContain('###### Nivel 6');
 });
 
-test('the Word screen opens from the vault in the sidebar', async ({ page }) => {
-  const vault = page.getByRole('region', { name: 'Trabajo' });
-  await vault.hover();
-  await vault.getByTitle('Ajustes de Word de este vault').click();
-  await expect(page.getByRole('dialog', { name: 'Word en Trabajo' })).toBeVisible();
-  await page.keyboard.press('Escape');
+test('the vault settings open from the sidebar menu and the palette, at the part asked for', async ({ page }) => {
+  const screen = page.getByRole('dialog', { name: 'Ajustes de Trabajo' });
+  const current = (name: string) => expect(screen.getByRole('navigation').getByRole('button', { name, exact: true })).toHaveAttribute('aria-current', 'page');
   await page.locator('aside').getByRole('button', { name: 'Trabajo' }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Ajustes de Word de este vault' }).click();
-  await expect(page.getByRole('dialog', { name: 'Word en Trabajo' })).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Ajustes del vault' }).click();
+  await current('General');
+  await page.keyboard.press('Escape');
+  await expect(screen).toHaveCount(0);
+
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('ajustes de word');
+  await page.keyboard.press('Enter');
+  await current('Word');
 });
 
 test('the Word screen warns about levels the template does not number', async ({ page }) => {
@@ -2608,9 +2645,9 @@ test('a vault with its own template offers it first when exporting', async ({ pa
 const guides = (page: Page) => page.evaluate(() => (window as any).__test.guides);
 
 test('a vault keeps a guide for the diagrams an AI draws, starting from its style', async ({ page }) => {
-  await page.locator('aside').getByRole('button', { name: 'Trabajo', exact: true }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Estilo de diagramas para la IA' }).click();
-  const screen = page.getByRole('dialog', { name: 'Estilo de diagramas de Trabajo' });
+  const screen = await vaultSettings(page, 'Trabajo', 'Diagramas');
+  await screen.getByLabel('Tema de los diagramas del vault').selectOption('medianoche');
+  await expect.poll(() => page.evaluate(() => (window as any).__test.vaultThemes.a?.defaultDiagramTheme)).toBe('medianoche');
   await expect(screen.getByRole('region', { name: 'Así dibuja la app los diagramas de este vault' }).locator('svg')).toBeVisible();
 
   await screen.getByRole('button', { name: 'Partir del estilo actual' }).click();

@@ -1,13 +1,14 @@
 <script lang="ts">
-  // A vault's guide for the diagrams an AI draws over MCP. It saves itself as
-  // it is written, like a note.
-  import { dim, pop } from '../motion';
-  import { onMount } from 'svelte';
+  // How a vault's diagrams look, as a part of its settings screen: the theme
+  // the app draws them with, and the guide an AI reads over MCP before drawing
+  // one. The guide saves itself as it is written, like a note.
+  import { onDestroy, onMount } from 'svelte';
   import Icon from './Icon.svelte';
   import { api } from '../api';
   import { guideDraft } from '../diagramGuide';
   import { renderDiagram } from '../diagrams';
-  import { tr } from '../i18n.svelte';
+  import { themeName, tr } from '../i18n.svelte';
+  import { THEMES } from '../themes';
   import { store } from '../store.svelte';
 
   let { vaultId }: { vaultId: string } = $props();
@@ -24,6 +25,12 @@
 
   const vault = $derived(store.vault(vaultId));
   const look = $derived(store.vaultDiagramLook(vaultId));
+  const data = $derived(store.vaultThemes[vaultId]);
+
+  async function setTheme(id: string) {
+    await api.setVaultDiagramTheme(vaultId, id || null).catch((e) => store.fail(e));
+    await store.loadVaultThemes(vaultId);
+  }
 
   onMount(() => {
     api.diagramGuide(vaultId).then(
@@ -63,23 +70,35 @@
     await save();
   }
 
-  async function close() {
-    if (!saved) await save();
-    store.guideScreen = null;
-  }
+  onDestroy(() => {
+    if (!saved) void save();
+  });
 </script>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && !store.dialog) void close(); }} />
-
-<button in:dim class="scrim top" aria-label={tr('common.close')} onclick={close}></button>
-<div in:pop class="modal" role="dialog" aria-label={tr('guide.title', { name: vault?.name ?? '' })}>
+<div class="diagrams">
   <div class="edit">
-    <header>
-      <h2>{tr('guide.title', { name: vault?.name ?? '' })}</h2>
-      <button class="icon" title={tr('common.close')} onclick={close}><Icon name="close" /></button>
-    </header>
+    <p>{tr('diagrams.intro')}</p>
+    <label class="theme">{tr('themes.vaultDiagrams')}
+      <select value={data?.defaultDiagramTheme ?? ''} onchange={(e) => setTheme(e.currentTarget.value)}>
+        <option value="">{tr('noteStyle.inheritNote')}</option>
+        <option value="boceto">{tr('noteStyle.sketch')}</option>
+        {#if data?.themes.length}
+          <optgroup label={tr('themes.fromVault')}>
+            {#each data.themes as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
+          </optgroup>
+        {/if}
+        <optgroup label={tr('themes.included')}>
+          {#each THEMES as t (t.id)}<option value={t.id}>{themeName(t)}</option>{/each}
+        </optgroup>
+      </select>
+    </label>
+    <p class="hint">{tr('diagrams.themeHint')}</p>
+
+    <h3>{tr('guide.open')}</h3>
     <p>{tr('guide.intro')}</p>
-    {#if vault?.mcp === 'off'}<p class="warn" role="status">{tr('guide.mcpOff')}</p>{/if}
+    {#if vault?.mcp === 'off'}
+      <p class="warn" role="status">{tr('guide.mcpOff')} <button class="link" onclick={() => store.openVaultSettings(vaultId, 'ai')}>{tr('guide.giveAccess')}</button></p>
+    {/if}
     <textarea aria-label={tr('guide.title', { name: vault?.name ?? '' })} placeholder={tr('guide.placeholder')} disabled={!loaded}
       bind:value={text} oninput={edited} spellcheck="true"></textarea>
     <div class="bar">
@@ -98,15 +117,17 @@
 </div>
 
 <style>
-  .top { z-index: var(--z-nested-scrim); }
-  .modal { position: fixed; top: 50%; left: 50%; z-index: var(--z-nested); display: grid; grid-template-columns: 1fr 300px; width: min(960px, calc(100vw - 32px)); height: min(640px, calc(100vh - 32px)); overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-lg); transform: translate(-50%, -50%); }
-  .edit { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0; padding: var(--space-2) var(--space-5) var(--space-4); }
-  header { display: flex; align-items: center; justify-content: space-between; }
-  h2 { margin: var(--space-2) 0 0; font-size: var(--font-lg); font-weight: 650; }
-  h3 { margin: var(--space-2) 0; font-size: var(--font-sm); font-weight: 650; }
+  .diagrams { display: grid; grid-template-columns: 1fr 280px; height: 100%; min-height: 0; }
+  .edit { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0; padding: 0 var(--space-5) var(--space-4) 0; overflow-y: auto; }
+  h3 { margin: var(--space-3) 0 0; font-size: var(--font-sm); font-weight: 650; }
+  .aside h3 { margin: var(--space-2) 0; }
+  .theme { display: flex; align-items: center; gap: var(--space-2); color: var(--text-2); font-size: var(--font-sm); }
+  select { padding: var(--space-1) var(--space-1-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; }
+  .link { padding: 0; border: 0; background: none; color: var(--accent-text); font-size: var(--font-sm); }
+  .link:hover { text-decoration: underline; }
   p { margin: 0; color: var(--text-2); font-size: var(--font-sm); line-height: 1.5; }
   .warn { color: var(--warn); }
-  textarea { flex: 1; min-height: 0; padding: var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: var(--font-md)/1.55 var(--mono); resize: none; }
+  textarea { flex: 1; min-height: 180px; padding: var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: var(--font-md)/1.55 var(--mono); resize: none; }
   .bar { display: flex; align-items: center; gap: var(--space-1-5); }
   .plain { display: flex; align-items: center; gap: var(--space-1-5); padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: none; color: var(--text); font-size: var(--font-sm); }
   .plain:hover { background: var(--hover); }

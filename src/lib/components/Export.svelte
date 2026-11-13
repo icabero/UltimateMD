@@ -387,7 +387,7 @@
           <div class="buttons">
             <button class="plain" onclick={importTemplate}>{tr('export.import')}</button>
             {#if template && template !== VAULT_TEMPLATE}<button class="plain" onclick={() => runAction(() => api.saveTemplateCopy(template))}>{tr('export.saveCopy')}</button>{/if}
-            {#if !tab.loose}<button class="plain" onclick={() => { store.exporting = false; store.wordScreen = tab.vaultId; }}>{tr('word.openSettings')}</button>{/if}
+            {#if !tab.loose}<button class="plain" onclick={() => { store.exporting = false; store.openVaultSettings(tab.vaultId, 'word'); }}>{tr('word.openSettings')}</button>{/if}
             {#if template && template !== EXAMPLE && template !== VAULT_TEMPLATE}
               <button class="plain" onclick={renameTemplate}>{tr('common.rename')}</button>
               <button class="plain" onclick={deleteTemplate}>{tr('common.delete')}</button>

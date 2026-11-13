@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { dim, pop } from '../motion';
+  // The vault's own themes, as a part of its settings screen.
   import Icon from './Icon.svelte';
   import { api, type ThemeFile } from '../api';
   import { themeName, tr, type Key } from '../i18n.svelte';
@@ -31,7 +31,6 @@
   let draft = $state<ThemeFile | null>(null);
   let json = $state<string | null>(null);
 
-  const vaultName = $derived(store.vault(vaultId)?.name ?? '');
   const data = $derived(store.vaultThemes[vaultId]);
   const themes = $derived(data?.themes ?? []);
   const look = $derived(draft ? resolveTheme(draft) : null);
@@ -92,11 +91,6 @@
     draft = selected = null;
   }
 
-  async function setDiagramDefault(id: string) {
-    await api.setVaultDiagramTheme(vaultId, id || null).catch((e) => store.fail(e));
-    await store.loadVaultThemes(vaultId);
-  }
-
   async function setDefault(id: string) {
     await api.setVaultDefaultTheme(vaultId, id || null).catch((e) => store.fail(e));
     await store.loadVaultThemes(vaultId);
@@ -111,29 +105,11 @@
   }
 </script>
 
-<button in:dim class="scrim top" aria-label={tr('common.close')} onclick={() => (store.themeEditor = null)}></button>
-<div in:pop class="modal" role="dialog" aria-label={tr('themes.of', { name: vaultName })}>
-  <header>
-    <h2>{tr('themes.of', { name: vaultName })}</h2>
-    <button class="icon" title={tr('common.close')} onclick={() => (store.themeEditor = null)}><Icon name="close" /></button>
-  </header>
-
+<div class="themes">
+  <p class="intro">{tr('themes.intro')}</p>
   <label class="default">{tr('themes.vaultDefault')}
     <select value={data?.defaultTheme ?? ''} onchange={(e) => setDefault(e.currentTarget.value)}>
       <option value="">{tr('themes.appDefault')}</option>
-      <optgroup label={tr('themes.fromVault')}>
-        {#each themes as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
-      </optgroup>
-      <optgroup label={tr('themes.included')}>
-        {#each THEMES as t (t.id)}<option value={t.id}>{themeName(t)}</option>{/each}
-      </optgroup>
-    </select>
-  </label>
-
-  <label class="default">{tr('themes.vaultDiagrams')}
-    <select value={data?.defaultDiagramTheme ?? ''} onchange={(e) => setDiagramDefault(e.currentTarget.value)}>
-      <option value="">{tr('noteStyle.inheritNote')}</option>
-      <option value="boceto">{tr('noteStyle.sketch')}</option>
       <optgroup label={tr('themes.fromVault')}>
         {#each themes as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
       </optgroup>
@@ -203,10 +179,8 @@
 </div>
 
 <style>
-  .top { z-index: var(--z-nested-scrim); }
-  .modal { position: fixed; top: 50%; left: 50%; z-index: var(--z-nested); width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: var(--space-2) var(--space-5) var(--space-4); overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-lg); transform: translate(-50%, -50%); }
-  header { display: flex; align-items: center; justify-content: space-between; }
-  h2 { margin: var(--space-2) 0; font-size: var(--font-lg); font-weight: 650; }
+  .themes { max-width: 680px; }
+  .intro { margin: 0 0 var(--space-3); color: var(--text-2); font-size: var(--font-sm); line-height: 1.5; }
   h3 { margin: var(--space-3-5) 0 var(--space-1-5); font-size: var(--font-sm); font-weight: 650; }
   label { color: var(--text-2); font-size: var(--font-sm); }
   select { padding: var(--space-1) var(--space-1-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; }
