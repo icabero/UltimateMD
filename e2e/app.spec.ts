@@ -1213,6 +1213,56 @@ test('a missing heading says so and the editor follows links with Ctrl+click', a
   await expect(page.locator('.cm-activeLine')).toHaveText('## Segunda parte');
 });
 
+test('resting on a link shows the start of its note, and a click opens it', async ({ page }) => {
+  await linking(page);
+  const card = page.getByRole('tooltip');
+  await prose(page).getByText('Larga#Segunda parte').hover();
+  await expect(card).toContainText('Larga#Segunda parte');
+  await expect(card).toContainText('Larga.md');
+  await expect(card).toContainText('Segunda parte');
+  await expect(card).not.toContainText('La frase clave');
+  // The card stays while the pointer is on it.
+  await card.hover();
+  await page.waitForTimeout(500);
+  await expect(card).toBeVisible();
+  await card.click();
+  await expect(page.locator('.cm-activeLine')).toHaveText('## Segunda parte');
+  await expect(card).toHaveCount(0);
+});
+
+test('the card closes with Escape, and shows with the keyboard focus', async ({ page }) => {
+  await linking(page);
+  const card = page.getByRole('tooltip');
+  await prose(page).getByText('Larga^clave').hover();
+  await expect(card).toContainText('La frase clave.');
+  await page.keyboard.press('Escape');
+  await expect(card).toHaveCount(0);
+  await page.mouse.move(5, 5);
+  await prose(page).getByText('Larga^clave').focus();
+  await expect(card).toContainText('La frase clave.');
+  await prose(page).getByText('Larga^clave').blur();
+  await expect(card).toHaveCount(0);
+});
+
+test('a link to a missing note offers to create it from the card', async ({ page }) => {
+  await open(page, 'Inicio');
+  await prose(page).getByText('Falta').hover();
+  const card = page.getByRole('tooltip');
+  await expect(card).toContainText('Esta nota no existe');
+  await card.getByRole('button', { name: 'Crearla' }).click();
+  await expect(page.locator('main footer')).toContainText('Trabajo / Falta.md');
+  expect(await disk(page, 'a', 'Falta.md')).not.toBeUndefined();
+});
+
+test('the editor shows the card for a [[link]] too', async ({ page }) => {
+  await linking(page);
+  await page.getByRole('tab', { name: /Fuente/ }).click();
+  await page.locator('.cm-wikilink', { hasText: 'Larga^clave' }).hover();
+  await expect(page.getByRole('tooltip')).toContainText('La frase clave.');
+  await page.locator('.cm-content').hover({ position: { x: 5, y: 5 } });
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+});
+
 test('typing [[note# suggests its headings', async ({ page }) => {
   await linking(page);
   await typeInEditor(page, '\n[[Larga#Seg');

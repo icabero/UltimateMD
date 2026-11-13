@@ -941,4 +941,9 @@ export const en: Record<Key, string> = {
   'cmd.sortLines': 'Sort the selected lines (A→Z)',
   'editor.sortHint': 'Select several lines to sort them.',
   'toolbar.formula': 'Math formula ($x^2$)',
+  'linkcard.missing': 'This note does not exist',
+  'linkcard.create': 'Create it',
+  'linkcard.label': 'Preview of “{name}”',
+  'linkcard.empty': 'Empty note',
+  'linkcard.diagram': 'Diagram',
 };

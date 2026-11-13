@@ -8,6 +8,7 @@
   import { fillEmbeds } from '../embeds';
   import { renderDiagram, toPng, toSvgBytes } from '../diagrams';
   import { findTerms } from '../fold';
+  import { hideLinkCard, watchLinks } from '../linkCard';
   import { tr } from '../i18n.svelte';
   import { outline, renderMarkdown, type Heading } from '../markdown';
   import { store, type Tab } from '../store.svelte';
@@ -228,6 +229,7 @@
     if (!a) return;
     const href = a.getAttribute('href') ?? '';
     e.preventDefault();
+    hideLinkCard();
     // Footnotes keep their own ids within the preview.
     if (/^#fn/.test(href)) {
       root.getElementById(decodeURIComponent(href.slice(1)))?.scrollIntoView();
@@ -250,6 +252,7 @@
     root.append(style, body);
     body.addEventListener('click', onClick);
     body.addEventListener('contextmenu', imageMenu);
+    watchLinks(body, () => tab.vaultId, () => tab.path);
   });
 
   $effect(() => {

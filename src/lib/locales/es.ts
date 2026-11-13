@@ -940,4 +940,9 @@ export const es = {
   'cmd.sortLines': 'Ordenar las líneas seleccionadas (A→Z)',
   'editor.sortHint': 'Selecciona varias líneas para ordenarlas.',
   'toolbar.formula': 'Fórmula matemática ($x^2$)',
+  'linkcard.missing': 'Esta nota no existe',
+  'linkcard.create': 'Crearla',
+  'linkcard.label': 'Vista previa de «{name}»',
+  'linkcard.empty': 'Nota vacía',
+  'linkcard.diagram': 'Diagrama',
 };

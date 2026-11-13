@@ -941,4 +941,9 @@ export const eu: Record<Key, string> = {
   'cmd.sortLines': 'Ordenatu hautatutako lerroak (A→Z)',
   'editor.sortHint': 'Hautatu hainbat lerro ordenatzeko.',
   'toolbar.formula': 'Formula matematikoa ($x^2$)',
+  'linkcard.missing': 'Ohar hau ez dago',
+  'linkcard.create': 'Sortu',
+  'linkcard.label': '«{name}» oharraren aurrebista',
+  'linkcard.empty': 'Ohar hutsa',
+  'linkcard.diagram': 'Diagrama',
 };
