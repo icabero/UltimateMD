@@ -20,6 +20,9 @@ const DIAGRAM_FENCE = /^(`{3,}|~{3,})\s*(mermaid|d2)(?:\s+(.*))?$/i;
 
 /** Asks the editor to open the diagram under the cursor. */
 export const EDIT_DIAGRAM = 'umd-edit-diagram';
+/** What the palette asks of the editor: tick the lines as tasks, or sort them. */
+export const TOGGLE_TASK = 'umd-toggle-task';
+export const SORT_LINES = 'umd-sort-lines';
 const FRONTMATTER = /^---\r?\n[\s\S]*?\n---[ \t]*(\r?\n|$)/;
 const HIDDEN_MARKS = new Set(['EmphasisMark', 'StrikethroughMark']);
 

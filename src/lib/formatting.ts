@@ -119,3 +119,94 @@ export function countSelection(state: EditorState) {
   }
   return chars ? { words, chars } : null;
 }
+
+const TASK = /^(\s*)([-*+]|\d+[.)])\s+\[([ xX])\](?=\s|$)/;
+const ITEM = /^(\s*)([-*+]|\d+[.)])\s+/;
+
+/**
+ * What the lines become as tasks. If all of them already are, they are checked,
+ * or unchecked when they all were checked; otherwise the ones that are not
+ * tasks become unchecked ones and the tasks stay as they are. Blank lines are
+ * left alone, unless that is the only line.
+ */
+export function taskLines(lines: string[]): string[] {
+  const filled = lines.filter((l) => l.trim() !== '');
+  const tasks = filled.map((l) => TASK.exec(l));
+  const everyTask = filled.length > 0 && tasks.every(Boolean);
+  const allChecked = everyTask && tasks.every((m) => m![3] !== ' ');
+  return lines.map((line) => {
+    if (line.trim() === '' && lines.length > 1) return line;
+    const task = TASK.exec(line);
+    if (task) {
+      if (!everyTask) return line;
+      const at = task[0].length - 2;
+      return line.slice(0, at) + (allChecked ? ' ' : 'x') + line.slice(at + 1);
+    }
+    const item = ITEM.exec(line);
+    if (item) return `${item[0]}[ ] ${line.slice(item[0].length)}`;
+    const indent = /^\s*/.exec(line)![0];
+    return `${indent}- [ ] ${line.slice(indent.length)}`;
+  });
+}
+
+/** The first and last line a range touches; a range ending at the start of a line leaves that line out. */
+function linesOf(state: EditorState, from: number, to: number): [number, number] {
+  const first = state.doc.lineAt(from).number;
+  const last = state.doc.lineAt(to);
+  return [first, to > from && to === last.from && last.number > first ? last.number - 1 : last.number];
+}
+
+/** Turns the lines with the cursor or the selection into tasks, or ticks and unticks them. */
+export function toggleTask(view: EditorView) {
+  const { state } = view;
+  const numbers = new Set<number>();
+  for (const range of state.selection.ranges) {
+    const [first, last] = linesOf(state, range.from, range.to);
+    for (let n = first; n <= last; n++) numbers.add(n);
+  }
+  const ordered = [...numbers].sort((a, b) => a - b).map((n) => state.doc.line(n));
+  const next = taskLines(ordered.map((l) => l.text));
+  // Only the part that differs is replaced, so the cursor stays where it was in the text.
+  const changes = ordered.flatMap((line, i) => {
+    const before = line.text;
+    const after = next[i];
+    if (after === before) return [];
+    let start = 0;
+    while (start < before.length && before[start] === after[start]) start++;
+    let end = 0;
+    while (end < before.length - start && end < after.length - start && before[before.length - 1 - end] === after[after.length - 1 - end]) end++;
+    return [{ from: line.from + start, to: line.to - end, insert: after.slice(start, after.length - end) }];
+  });
+  if (changes.length) view.dispatch({ changes, userEvent: 'input' });
+  view.focus();
+}
+
+/** A to Z, numbers by value and ignoring accents and case: «Árbol» goes among the A and «nota 2» before «nota 10». */
+export function sortedLines(lines: string[]): string[] {
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  return [...lines].sort((a, b) => collator.compare(a, b) || (a < b ? -1 : a > b ? 1 : 0));
+}
+
+/** Sorts the lines of each selection, in one change that undoes at once. False when no selection covers two lines. */
+export function sortSelectedLines(view: EditorView) {
+  const { state } = view;
+  const changes: { from: number; to: number; insert: string }[] = [];
+  let found = false;
+  let done = 0;
+  for (const range of state.selection.ranges) {
+    const [first, last] = linesOf(state, range.from, range.to);
+    // Two selections can share a line; the first one keeps it.
+    if (last <= first || first <= done) continue;
+    found = true;
+    done = last;
+    const from = state.doc.line(first).from;
+    const to = state.doc.line(last).to;
+    const lines: string[] = [];
+    for (let n = first; n <= last; n++) lines.push(state.doc.line(n).text);
+    const insert = sortedLines(lines).join(state.lineBreak);
+    if (insert !== state.sliceDoc(from, to)) changes.push({ from, to, insert });
+  }
+  if (changes.length) view.dispatch({ changes, userEvent: 'input' });
+  view.focus();
+  return found;
+}

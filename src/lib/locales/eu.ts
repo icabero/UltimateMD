@@ -935,4 +935,9 @@ export const eu: Record<Key, string> = {
   'vaultSettings.orderHint': 'Oharrak eta karpetak zuhaitzean, irakurtzean eta esportatzean nola ordenatzen diren. Karpetak beti lehenengo doaz. Eskuzko ordenan, arrastatu ohar edo karpeta bat bere karpetako besteen artean, edo erabili Igo eta Jaitsi bere menuan. Ez da fitxategirik berrizendatzen.',
   'app.count': '{words} hitz · {chars} karaktere',
   'app.countSelected': '{total} hitzetik {words} · {chars} karaktere',
+  'shortcuts.toggleTask': 'Markatu edo desmarkatu zeregin gisa',
+  'shortcuts.sortLines': 'Ordenatu hautatutako lerroak (A→Z)',
+  'cmd.toggleTask': 'Markatu edo desmarkatu lerroak zeregin gisa',
+  'cmd.sortLines': 'Ordenatu hautatutako lerroak (A→Z)',
+  'editor.sortHint': 'Hautatu hainbat lerro ordenatzeko.',
 };

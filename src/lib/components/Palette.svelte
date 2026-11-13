@@ -6,7 +6,7 @@
   import { outline } from '../markdown';
   import { store, type ViewMode } from '../store.svelte';
   import { THEMES } from '../themes';
-  import { EDIT_DIAGRAM } from '../visual';
+  import { EDIT_DIAGRAM, SORT_LINES, TOGGLE_TASK } from '../visual';
   import { keyLabel } from '../shortcuts';
 
   let { initial = '' }: { initial?: string } = $props();
@@ -24,6 +24,7 @@
   const words = $derived(fold(mode === 'notes' ? query : query.slice(1)).replace(/\s+/g, ''));
   const tab = $derived(store.active);
   const md = $derived(tab?.kind === 'md');
+  const editing = $derived(md && tab?.view !== 'preview');
 
   /** Subsequence match, ignoring case and accents. Tighter matches rank higher; `bonus` favours a part of the text. */
   function score(text: string, q: string, bonusFrom = 0) {
@@ -89,6 +90,8 @@
       { id: 'search', label: tr('cmd.searchAll'), keys: ['Ctrl', 'Shift', 'F'], run: () => { store.searching = true; store.toggleBar('left', true); } },
       { id: 'note.export', label: tr('cmd.export'), keys: ['Ctrl', 'E'], when: md, run: () => (store.exporting = true) },
       { id: 'note.diagram', label: tr('cmd.diagram'), when: md, run: () => document.querySelector('.cm-editor')?.dispatchEvent(new CustomEvent(EDIT_DIAGRAM)) },
+      { id: 'edit.task', label: tr('cmd.toggleTask'), keys: ['Ctrl', 'Enter'], when: editing, run: () => document.querySelector('.cm-editor')?.dispatchEvent(new CustomEvent(TOGGLE_TASK)) },
+      { id: 'edit.sort', label: tr('cmd.sortLines'), keys: ['Alt', 'Shift', 'S'], when: editing, run: () => document.querySelector('.cm-editor')?.dispatchEvent(new CustomEvent(SORT_LINES)) },
       view('visual', 'tabs.visual'),
       view('edit', 'tabs.edit'),
       view('split', 'tabs.split'),

@@ -4,7 +4,7 @@ import { EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { describe, expect, it } from 'vitest';
 import { parseSource, toSource, type Diagram } from './diagramBuilder';
-import { countSelection, countText, fenceAt, insertBlock, insertLink, prefixLines, wrap } from './formatting';
+import { countSelection, countText, fenceAt, insertBlock, insertLink, prefixLines, sortSelectedLines, sortedLines, taskLines, toggleTask, wrap } from './formatting';
 import { htmlToMarkdown } from './paste';
 import { TAG } from './tags';
 import { WIKILINK, linkAt } from './wikilinks';
@@ -138,5 +138,45 @@ describe('counting the selection', () => {
     expect(countSelection(editor('uno ¦dos').state)).toBeNull();
     expect(countSelection(editor('¦ña 🙂¦').state)).toEqual({ words: 2, chars: 4 });
     expect(countText('  ')).toEqual({ words: 0, chars: 2 });
+  });
+});
+
+describe('tasks and sorted lines', () => {
+  it('ticks and unticks tasks, and turns items and plain lines into tasks', () => {
+    expect(taskLines(['- [ ] a'])).toEqual(['- [x] a']);
+    expect(taskLines(['  * [X] a'])).toEqual(['  * [ ] a']);
+    expect(taskLines(['- a'])).toEqual(['- [ ] a']);
+    expect(taskLines(['3. a'])).toEqual(['3. [ ] a']);
+    expect(taskLines(['  a'])).toEqual(['  - [ ] a']);
+    expect(taskLines([''])).toEqual(['- [ ] ']);
+  });
+
+  it('treats several lines as a whole: tick all, untick all, or only turn the rest into tasks', () => {
+    expect(taskLines(['- [ ] a', '- [x] b'])).toEqual(['- [x] a', '- [x] b']);
+    expect(taskLines(['- [x] a', '', '- [x] b'])).toEqual(['- [ ] a', '', '- [ ] b']);
+    expect(taskLines(['- [x] a', '- b', 'c'])).toEqual(['- [x] a', '- [ ] b', '- [ ] c']);
+  });
+
+  it('changes only the selected lines, keeping the cursor in its text', () => {
+    const view = editor('uno\ndo¦s\ntres');
+    toggleTask(view);
+    expect(text(view)).toBe('uno\n- [ ] dos\ntres');
+    expect(view.state.selection.main.head).toBe('uno\n- [ ] do'.length);
+    const range = editor('¦a\nb\n¦c');
+    toggleTask(range);
+    expect(text(range)).toBe('- [ ] a\n- [ ] b\nc');
+  });
+
+  it('sorts A to Z, by number value and without minding accents or case', () => {
+    expect(sortedLines(['nota 10', 'Zeta', 'nota 2', 'árbol', 'Beta', 'abeja'])).toEqual(['abeja', 'árbol', 'Beta', 'nota 2', 'nota 10', 'Zeta']);
+  });
+
+  it('sorts the selected lines in one change', () => {
+    const view = editor('x\n¦c\nb\na\n¦d');
+    expect(sortSelectedLines(view)).toBe(true);
+    expect(text(view)).toBe('x\na\nb\nc\nd');
+    const cursor = editor('b\n¦a');
+    expect(sortSelectedLines(cursor)).toBe(false);
+    expect(text(cursor)).toBe('b\na');
   });
 });

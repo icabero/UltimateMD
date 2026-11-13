@@ -934,4 +934,9 @@ export const es = {
   'vaultSettings.orderHint': 'Cómo se ordenan las notas y carpetas en el árbol, en la lectura y al exportar. Las carpetas van siempre primero. En orden a mano, arrastra una nota o carpeta entre las de su misma carpeta, o usa Subir y Bajar en su menú. Ningún archivo cambia de nombre.',
   'app.count': '{words} palabras · {chars} caracteres',
   'app.countSelected': '{words} de {total} palabras · {chars} caracteres',
+  'shortcuts.toggleTask': 'Marcar o desmarcar como tarea',
+  'shortcuts.sortLines': 'Ordenar las líneas seleccionadas (A→Z)',
+  'cmd.toggleTask': 'Marcar o desmarcar las líneas como tarea',
+  'cmd.sortLines': 'Ordenar las líneas seleccionadas (A→Z)',
+  'editor.sortHint': 'Selecciona varias líneas para ordenarlas.',
 };

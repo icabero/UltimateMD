@@ -3053,3 +3053,31 @@ test('the status bar counts the selection, and all of the note when there is non
   await expect(footer).toContainText(/(^|\s)1 de \d+ palabras/);
   await expect(footer).toContainText('· 4 caracteres');
 });
+
+test('Ctrl+Enter ticks tasks and the actions sort the selected lines', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('zeta\nÁrbol\nnota 10\nnota 2\nabeja');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.locator('.cm-line').last()).toHaveText('- [ ] abeja');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.locator('.cm-line').last()).toHaveText('- [x] abeja');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.locator('.cm-line').last()).toHaveText('- [ ] abeja');
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.press('Alt+Shift+s');
+  // The task, with its dash, comes first; the rest by number value and ignoring the accent.
+  await expect(page.locator('.cm-content')).toHaveText('- [ ] abejaÁrbolnota 2nota 10zeta');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(page.locator('.cm-content')).toHaveText('zetaÁrbolnota 10nota 2- [ ] abeja');
+  // Without a selection of several lines, it says what to do.
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('Ordenar las líneas');
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Selecciona varias líneas para ordenarlas.')).toBeVisible();
+  await page.keyboard.press('Control+/');
+  await expect(page.getByRole('dialog', { name: 'Atajos de teclado' })).toContainText('Marcar o desmarcar como tarea');
+  await expect(page.getByRole('dialog', { name: 'Atajos de teclado' })).toContainText('Ordenar las líneas seleccionadas');
+});

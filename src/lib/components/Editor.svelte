@@ -16,11 +16,11 @@
   import { fenceLine, parseStyle, splitFence } from '../diagramStyle';
   import { findTerms } from '../fold';
   import { htmlToMarkdown } from '../paste';
-  import { countSelection, fenceAt, insertBlock, insertLink, wrap } from '../formatting';
+  import { countSelection, fenceAt, insertBlock, insertLink, sortSelectedLines, toggleTask, wrap } from '../formatting';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
   import { baseName } from '../paths';
-  import { EDIT_DIAGRAM, visualMode } from '../visual';
+  import { EDIT_DIAGRAM, SORT_LINES, TOGGLE_TASK, visualMode } from '../visual';
   import { headingCompletions, linkAt, noteCompletions, wikilinks } from '../wikilinks';
   import { spellLanguage } from '../spellcheck';
   import { tagCompletions, tagMarks } from '../tags';
@@ -120,7 +120,15 @@
     { key: 'Mod-b', run: command((v) => wrap(v, '**', tr('toolbar.text'))) },
     { key: 'Mod-i', run: command((v) => wrap(v, '*', tr('toolbar.text'))) },
     { key: 'Mod-k', run: command((v) => insertLink(v, tr('toolbar.linkText'))) },
+    { key: 'Alt-Shift-s', run: (v: EditorView) => tab.kind === 'md' && (sortLines(v), true) },
+    // In a note only: elsewhere Ctrl+Enter keeps opening a line below, as CodeMirror does.
+    { key: 'Mod-Enter', run: (v: EditorView) => tab.kind === 'md' && command(toggleTask)(v) },
   ];
+
+  /** Sorts the selected lines, or says what to select when there are none to sort. */
+  function sortLines(v: EditorView) {
+    if (!sortSelectedLines(v)) store.notify(tr('editor.sortHint'));
+  }
 
   const followWithCtrl = EditorView.domEventHandlers({
     mousedown(event, target) {
@@ -329,6 +337,8 @@
   onMount(() => {
     view = new EditorView({ parent: host });
     view.dom.addEventListener(EDIT_DIAGRAM, openBuilder);
+    view.dom.addEventListener(TOGGLE_TASK, () => view && tab.kind === 'md' && toggleTask(view));
+    view.dom.addEventListener(SORT_LINES, () => view && tab.kind === 'md' && sortLines(view));
     const scroller = view.scrollDOM;
     scroller.addEventListener('scroll', () => {
       const max = scroller.scrollHeight - scroller.clientHeight;

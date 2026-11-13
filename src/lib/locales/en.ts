@@ -935,4 +935,9 @@ export const en: Record<Key, string> = {
   'vaultSettings.orderHint': 'How notes and folders are ordered in the tree, when reading and when exporting. Folders always come first. With a hand order, drag a note or folder among those in its own folder, or use Move up and Move down in its menu. No file is renamed.',
   'app.count': '{words} words · {chars} characters',
   'app.countSelected': '{words} of {total} words · {chars} characters',
+  'shortcuts.toggleTask': 'Tick or untick as a task',
+  'shortcuts.sortLines': 'Sort the selected lines (A→Z)',
+  'cmd.toggleTask': 'Tick or untick the lines as a task',
+  'cmd.sortLines': 'Sort the selected lines (A→Z)',
+  'editor.sortHint': 'Select several lines to sort them.',
 };
