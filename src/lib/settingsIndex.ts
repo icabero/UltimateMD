@@ -71,6 +71,10 @@ export const VAULT_SETTINGS: SettingEntry[] = [
   { id: 'vault.word.template', scope: 'vault', section: 'word', label: 'export.template', hint: 'find.templateHint', keywords: 'plantilla template dotx docx word modelo txantiloia' },
   { id: 'vault.daily', scope: 'vault', section: 'daily', label: 'vaultSettings.daily', hint: 'daily.folderHint', keywords: 'diario diaria hoy today daily journal fecha date carpeta nombre plantilla egunkaria gaur' },
   { id: 'vault.ai', scope: 'vault', section: 'ai', label: 'vaultSettings.ai', hint: 'vaultSettings.aiIntro', keywords: 'ia ai mcp acceso access leer escribir read write claude permisos permissions sarbidea' },
+  { id: 'vault.guide', scope: 'vault', section: 'diagrams', label: 'guide.open', hint: 'guide.intro', keywords: 'estilo diagramas guia ia claude style diagrams guide ai mcp colores colors diagramen estiloa' },
+  { id: 'vault.daily.folder', scope: 'vault', section: 'daily', label: 'daily.folder', hint: 'daily.folderHint', keywords: 'diario diaria carpeta notas diarias daily folder journal eguneroko karpeta' },
+  { id: 'vault.daily.format', scope: 'vault', section: 'daily', label: 'daily.format', keywords: 'diario diaria nombre fecha formato daily name date format eguneroko izena data' },
+  { id: 'vault.daily.template', scope: 'vault', section: 'daily', label: 'daily.template', hint: 'daily.templateHint', keywords: 'diario diaria plantilla daily template journal eguneroko txantiloia' },
   { id: 'vault.aiLog', scope: 'vault', section: 'ai', label: 'aiLog.open', hint: 'vaultSettings.aiLogHint', keywords: 'registro historial ia ai log history cambios changes mcp erregistroa' },
   { id: 'vault.connect', scope: 'vault', section: 'ai', label: 'vaultSettings.connect', hint: 'vaultSettings.connectHint', keywords: 'conectar mcp ia ai claude cursor connect konektatu' },
 ];

@@ -177,7 +177,7 @@
         <WordScreen {vaultId} />
       {:else if section === 'daily'}
         {#if daily}
-          <section>
+          <section data-setting="vault.daily.folder">
             <p class="hint lead">{tr('daily.intro')}</p>
             <label class="field">
               <span>{tr('daily.folder')}</span>
@@ -185,7 +185,7 @@
             </label>
             <p class="hint" id="daily-folder-hint">{tr('daily.folderHint')}</p>
           </section>
-          <section>
+          <section data-setting="vault.daily.format">
             <label class="field">
               <span>{tr('daily.format')}</span>
               <select aria-describedby="daily-format-hint" value={daily.format} onchange={(e) => saveDaily({ format: e.currentTarget.value as DailyFormat })}>
@@ -194,7 +194,7 @@
             </label>
             <p class="hint" id="daily-format-hint">{tr(FORMAT_LABEL[daily.format])}</p>
           </section>
-          <section>
+          <section data-setting="vault.daily.template">
             <label class="field">
               <span>{tr('daily.template')}</span>
               <select aria-describedby="daily-template-hint" value={daily.template ?? ''} onchange={(e) => saveDaily({ template: e.currentTarget.value || null })}>

@@ -4,6 +4,7 @@
   import { insertBlock, insertLink, prefixLines, tableMarkdown, wrap } from '../formatting';
   import { tr, type Key } from '../i18n.svelte';
   import { startNoteLink } from '../wikilinks';
+  import { store, type MenuItem } from '../store.svelte';
 
   let { view, ondiagram, onstyle }: { view: () => EditorView | null; ondiagram: () => void; onstyle: () => void } = $props();
 
@@ -22,22 +23,32 @@
     [
       { title: 'toolbar.bold', text: 'B', run: (v) => wrap(v, '**', placeholder()) },
       { title: 'toolbar.italic', text: 'I', run: (v) => wrap(v, '*', placeholder()) },
-      { title: 'toolbar.strike', text: 'S', run: (v) => wrap(v, '~~', placeholder()) },
-      { title: 'toolbar.inlineCode', icon: 'code', run: (v) => wrap(v, '`', placeholder()) },
-      { title: 'toolbar.formula', text: 'Σ', run: (v) => wrap(v, '$', 'x^2') },
     ],
     [
       { title: 'toolbar.bullets', icon: 'list', run: (v) => prefixLines(v, '- ') },
       { title: 'toolbar.numbers', icon: 'numbers', run: (v) => prefixLines(v, (i) => `${i + 1}. `) },
       { title: 'toolbar.tasks', icon: 'tasks', run: (v) => prefixLines(v, '- [ ] ') },
-      { title: 'toolbar.quote', icon: 'quote', run: (v) => prefixLines(v, '> ') },
     ],
     [
       { title: 'toolbar.link', icon: 'link', run: (v) => insertLink(v, tr('toolbar.linkText')) },
       { title: 'toolbar.table', icon: 'table', run: (v) => insertBlock(v, tableMarkdown(tr('toolbar.column'))) },
-      { title: 'toolbar.rule', icon: 'rule', run: (v) => insertBlock(v, '---') },
     ],
   ];
+
+  /** The rarely used ones, behind "More" so the bar keeps to what is written all the time. */
+  const MORE: Tool[] = [
+    { title: 'toolbar.strike', icon: 'strike', run: (v) => wrap(v, '~~', placeholder()) },
+    { title: 'toolbar.inlineCode', icon: 'code', run: (v) => wrap(v, '`', placeholder()) },
+    { title: 'toolbar.formula', icon: 'sigma', run: (v) => wrap(v, '$', 'x^2') },
+    { title: 'toolbar.quote', icon: 'quote', run: (v) => prefixLines(v, '> ') },
+    { title: 'toolbar.rule', icon: 'rule', run: (v) => insertBlock(v, '---') },
+  ];
+
+  function more(e: MouseEvent) {
+    const items: MenuItem[] = MORE.map((tool) => ({ label: tr(tool.title, tool.params), icon: tool.icon, run: () => use(tool) }));
+    items.push({ label: tr('toolbar.styleTitle'), icon: 'palette', separator: true, run: onstyle });
+    store.openMenu(e, items);
+  }
 
   /** The menu is an action, not a state: it goes back to its label each time. */
   function setHeading(menu: HTMLSelectElement) {
@@ -71,8 +82,8 @@
   {/each}
   <div class="actions">
     <button class="labelled" onmousedown={(e) => e.preventDefault()} onclick={() => { const v = view(); if (v) startNoteLink(v); }}><Icon name="file" size={15} /> {tr('toolbar.noteLink')}</button>
-    <button class="labelled" onmousedown={(e) => e.preventDefault()} onclick={ondiagram}><Icon name="diagram" size={15} /> {tr('toolbar.diagram')}</button>
-    <button class="labelled" title={tr('toolbar.styleTitle')} onmousedown={(e) => e.preventDefault()} onclick={onstyle}><Icon name="palette" size={15} /> {tr('toolbar.style')}</button>
+    <button class="labelled" title={tr('cmd.diagram')} onmousedown={(e) => e.preventDefault()} onclick={ondiagram}><Icon name="diagram" size={15} /> {tr('toolbar.diagram')}</button>
+    <button class="labelled" aria-haspopup="menu" onmousedown={(e) => e.preventDefault()} onclick={more}><Icon name="more" size={15} /> {tr('more.title')}</button>
   </div>
 </div>
 

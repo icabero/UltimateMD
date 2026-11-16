@@ -446,7 +446,7 @@ test('spelling is checked in the language of the app, of the note or none', asyn
   await expect(content).toHaveAttribute('lang', 'en');
   await expect.poll(() => page.evaluate(() => (window as any).__spellcheck)).toEqual(['en_US']);
 
-  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  await page.locator('aside').getByTitle('Ajustes de la app').click();
   await page.getByRole('combobox', { name: 'Corrector ortográfico' }).selectOption('Desactivado');
   await page.keyboard.press('Escape');
   await expect(content).toHaveAttribute('spellcheck', 'false');
@@ -477,7 +477,7 @@ test('what goes wrong is written to a log that the settings show', async ({ page
   await page.evaluate(() => (window as any).__test.openFiles(['/fuera/borrado.md']));
   await expect(page.getByRole('status')).toContainText('No se pudo abrir');
   await page.evaluate(() => void Promise.reject(new Error('fallo sin atrapar')));
-  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  await page.locator('aside').getByTitle('Ajustes de la app').click();
   const section = page.getByRole('region', { name: 'Registro de errores' });
   await section.getByRole('button', { name: 'Ver' }).click();
   await expect(section.locator('pre')).toContainText('[error] promise: Error: fallo sin atrapar');
@@ -586,8 +586,10 @@ test('the file tree and its menu work with the keyboard alone', async ({ page })
 });
 
 test('a dialog takes the focus, keeps Tab inside and gives the focus back', async ({ page }) => {
-  const opener = page.locator('aside').getByTitle('Acerca de');
+  const opener = page.locator('aside header').getByRole('button', { name: 'Más' });
   await opener.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('a');
   await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'Acerca de' });
   await expect(dialog).toHaveAttribute('aria-modal', 'true');
@@ -615,7 +617,7 @@ test('code blocks name their language and copy, and line spacing can be chosen',
 
   const height = () => prose(page).locator('h1').evaluate((el) => parseFloat(getComputedStyle(el.parentElement!).lineHeight));
   const before = await height();
-  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  await page.locator('aside').getByTitle('Ajustes de la app').click();
   await page.getByRole('button', { name: 'Apariencia' }).click();
   await page.getByLabel('Interlineado').selectOption('Amplio');
   await page.keyboard.press('Escape');
@@ -644,7 +646,7 @@ test('an example vault is created to learn with, and empty places suggest what t
 });
 
 test('the AI connection can be tested from the settings', async ({ page }) => {
-  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  await page.locator('aside').getByTitle('Ajustes de la app').click();
   await page.getByRole('button', { name: 'Inteligencia artificial' }).click();
   const check = page.getByRole('region', { name: 'Probar la conexión' });
   await check.getByRole('button', { name: 'Probar' }).click();
@@ -932,7 +934,7 @@ test('a vault card picks up the note edited last', async ({ page }) => {
 test('the start screen offers its actions and another tip', async ({ page }) => {
   const home = page.locator('.home');
   await expect(home.getByRole('button', { name: /Abrir nota/ }).locator('kbd')).toHaveText([CTRL, 'P']);
-  await home.getByRole('button', { name: /Acciones/ }).click();
+  await home.getByRole('button', { name: /Buscar una acción/ }).click();
   await expect(page.getByRole('dialog', { name: 'Abrir nota' }).getByRole('combobox')).toHaveValue('>');
   await page.keyboard.press('Escape');
   const tip = home.getByRole('note', { name: 'Consejo:' });
@@ -995,7 +997,7 @@ test('the properties form edits the frontmatter and keeps the cursor', async ({ 
 test('a property name is checked before it is added', async ({ page }) => {
   await open(page, 'Otra');
   await page.keyboard.press('Control+Shift+p');
-  await page.keyboard.type('propiedades');
+  await page.keyboard.type('ajustes de esta nota');
   await page.keyboard.press('Enter');
   const form = notePanel(page);
   await form.getByLabel('Nombre', { exact: true }).fill('mal:nombre');
@@ -1061,7 +1063,7 @@ test('on Windows and Linux the app draws the window buttons and saves before clo
 
 test('the system title bar can come back from settings', async ({ page }) => {
   await onPlatform(page, 'Win32');
-  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByTitle('Ajustes de la app').click();
   const settings = page.getByRole('dialog', { name: 'Ajustes' });
   await settings.getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
   await settings.getByLabel('Usar la barra de título del sistema').check();
@@ -1157,7 +1159,7 @@ test('the interface zooms with Ctrl + and Ctrl −, and remembers it', async ({ 
 
 test('text size and line width change notes on screen but not exports', async ({ page }) => {
   await open(page, 'Inicio');
-  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByTitle('Ajustes de la app').click();
   const settings = page.getByRole('dialog', { name: 'Ajustes' });
   await settings.getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
   await settings.getByLabel('Tamaño del texto de las notas').selectOption({ label: 'Grande' });
@@ -1387,7 +1389,7 @@ test('a pasted screenshot is saved in the vault and linked', async ({ page }) =>
 });
 
 test('dropped images keep their name, never replace a file and can go beside the note', async ({ page }) => {
-  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByTitle('Ajustes de la app').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByLabel('Imágenes pegadas o arrastradas').selectOption('note');
   await page.keyboard.press('Escape');
   await open(page, 'dir');
@@ -1527,7 +1529,7 @@ test('changing theme restyles the app and keeps the edit in progress', async ({ 
   await open(page, 'Inicio');
   await typeInEditor(page, 'en curso');
   await expect(prose(page).locator('.diagram > svg')).toBeVisible();
-  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByTitle('Ajustes de la app').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
   await page.getByRole('button', { name: /Medianoche/ }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'medianoche');
@@ -1545,7 +1547,7 @@ test('following the system uses the theme chosen for each mode', async ({ page }
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'claro');
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'oscuro');
-  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByTitle('Ajustes de la app').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
   await page.getByLabel('Modo oscuro').selectOption('bosque');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'bosque');
@@ -1593,7 +1595,7 @@ test('a loose file can become part of a vault', async ({ page }) => {
 });
 
 test('settings explain how to set the default app on Windows', async ({ page }) => {
-  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByTitle('Ajustes de la app').click();
   await expect(page.getByRole('button', { name: 'Abrir aplicaciones predeterminadas' })).toBeVisible();
 });
 
@@ -1639,7 +1641,7 @@ test('a note with nothing to fix says so before exporting', async ({ page }) => 
 });
 
 test('export to HTML gives a self-contained page in the print look', async ({ page }) => {
-  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByTitle('Ajustes de la app').click();
   await page.getByRole('dialog', { name: 'Ajustes' }).getByRole('navigation').getByRole('button', { name: 'Apariencia' }).click();
   await page.getByRole('button', { name: /Medianoche/ }).click();
   await page.getByTitle('Cerrar', { exact: true }).click();
@@ -1919,7 +1921,7 @@ async function firstRun(page: Page) {
 }
 
 const tutorial = (page: Page) => page.getByRole('dialog', { name: 'Tutorial' });
-const openSettings = (page: Page) => page.getByTitle('Ajustes y MCP').click();
+const openSettings = (page: Page) => page.getByTitle('Ajustes de la app').click();
 
 /** A vault's settings, opened from the gear beside its name in the sidebar. */
 async function vaultSettings(page: Page, vault: string, section?: string) {
@@ -1961,9 +1963,9 @@ test('the app settings list the vaults and send each one to its own settings', a
 test('the tutorial appears on the first run and only then', async ({ page }) => {
   await expect(tutorial(page)).toHaveCount(0);
   await firstRun(page);
-  await expect(tutorial(page)).toContainText('Paso 1 de 8');
-  for (let i = 0; i < 7; i++) await page.getByRole('button', { name: 'Siguiente' }).click();
-  await expect(tutorial(page)).toContainText('Paso 8 de 8');
+  await expect(tutorial(page)).toContainText('Paso 1 de 9');
+  for (let i = 0; i < 8; i++) await page.getByRole('button', { name: 'Siguiente' }).click();
+  await expect(tutorial(page)).toContainText('Paso 9 de 9');
   await page.getByRole('button', { name: 'Empezar' }).click();
   await expect(tutorial(page)).toHaveCount(0);
   await page.reload();
@@ -1975,12 +1977,12 @@ test('the tutorial can be skipped, walked back and reopened', async ({ page }) =
   await firstRun(page);
   await page.getByRole('button', { name: 'Siguiente' }).click();
   await page.getByRole('button', { name: 'Atrás' }).click();
-  await expect(tutorial(page)).toContainText('Paso 1 de 8');
+  await expect(tutorial(page)).toContainText('Paso 1 de 9');
   await page.keyboard.press('Escape');
   await expect(tutorial(page)).toHaveCount(0);
   await openSettings(page);
   await page.getByRole('button', { name: 'Ver el tutorial' }).click();
-  await expect(tutorial(page)).toContainText('Paso 1 de 8');
+  await expect(tutorial(page)).toContainText('Paso 1 de 9');
 });
 
 test('the language changes at once and is remembered', async ({ page }) => {
@@ -1997,7 +1999,7 @@ test('the language changes at once and is remembered', async ({ page }) => {
 test('the tutorial lets you pick the language on its first step', async ({ page }) => {
   await firstRun(page);
   await page.getByLabel('Idioma').selectOption({ label: 'Euskara' });
-  await expect(page.getByRole('dialog', { name: 'Tutoriala' })).toContainText('1. urratsa / 8');
+  await expect(page.getByRole('dialog', { name: 'Tutoriala' })).toContainText('1. urratsa / 9');
 });
 
 test('the installer language applies until the user chooses another', async ({ page }) => {
@@ -2033,6 +2035,12 @@ test('exports follow the language of the interface', async ({ page }) => {
   const plan = await page.evaluate(() => (window as any).__pdf);
   expect(plan).toMatchObject({ language: 'en', contents: 'Contents' });
 });
+
+/** The note's diagram style lives behind the toolbar's More menu. */
+const noteStyle = async (page: Page) => {
+  await page.getByRole('toolbar').getByRole('button', { name: 'Más' }).click();
+  await page.getByRole('menuitem', { name: 'Estilo de los diagramas' }).click();
+};
 
 const editorText = (page: Page) => page.locator('.cm-content');
 
@@ -2224,7 +2232,10 @@ test('versions compare as numbers', () => {
   expect(isNewer('0.1', '0.1.1')).toBe(false);
 });
 
-const about = (page: Page) => page.getByTitle('Acerca de').click();
+const about = async (page: Page) => {
+  await page.locator('aside header').getByRole('button', { name: 'Más' }).click();
+  await page.getByRole('menuitem', { name: 'Acerca de UltimateMD' }).click();
+};
 const release = (page: Page, tag: string) =>
   page.route('https://api.github.com/**', (route) =>
     route.fulfill({ json: { tag_name: tag }, headers: { 'access-control-allow-origin': '*' } }));
@@ -2613,7 +2624,7 @@ test('a diagram goes by its own style, then its note, then its vault', async ({ 
   await expect(settings).toBeHidden();
   await expect.poll(() => svgOf(page).innerHTML()).toContain(fillOf('bosque'));
 
-  await page.getByRole('button', { name: 'Estilo', exact: true }).click();
+  await noteStyle(page);
   const panel = notePanel(page);
   await expect(panel.getByRole('tab', { name: 'Nota', exact: true })).toHaveAttribute('aria-selected', 'true');
   const field = panel.locator('.field', { hasText: 'Estilo de los diagramas' });
@@ -2642,7 +2653,7 @@ test('a diagram goes by its own style, then its note, then its vault', async ({ 
 
 test('the Nota tab says where the theme comes from and links to the vault settings', async ({ page }) => {
   await open(page, 'Inicio');
-  await page.getByRole('button', { name: 'Estilo', exact: true }).click();
+  await noteStyle(page);
   const panel = notePanel(page);
   const field = panel.locator('.field', { hasText: 'Tema de la nota' });
   await expect(field).toContainText('Del vault: el tema de la app');
@@ -2658,7 +2669,7 @@ test('the Nota tab says where the theme comes from and links to the vault settin
 
 test('a loose file has no vault parts in the Nota tab', async ({ page }) => {
   await openFiles(page, '/fuera/nota.md');
-  await page.getByRole('button', { name: 'Estilo', exact: true }).click();
+  await noteStyle(page);
   const panel = notePanel(page);
   await expect(panel.getByLabel('Estilo de los diagramas', { exact: true })).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Ajustes del vault' })).toHaveCount(0);
@@ -2669,7 +2680,7 @@ test('a loose file has no vault parts in the Nota tab', async ({ page }) => {
 
 test('the Nota tab sends you to make your own theme', async ({ page }) => {
   await open(page, 'Inicio');
-  await page.getByRole('button', { name: 'Estilo', exact: true }).click();
+  await noteStyle(page);
   await notePanel(page).getByRole('button', { name: 'Crear un tema con mis colores' }).click();
   await expect(page.getByRole('dialog', { name: 'Ajustes de Trabajo' }).getByRole('button', { name: 'Nuevo tema' })).toBeVisible();
 });
@@ -2905,8 +2916,9 @@ test('a vault can be read top to bottom as one document', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Leyendo Trabajo' })).toHaveCount(0);
 });
 
-test('the eye beside a vault reads it top to bottom', async ({ page }) => {
-  await page.locator('aside').getByRole('button', { name: 'Leer el vault de arriba abajo' }).first().click();
+test('the vault More menu reads it top to bottom', async ({ page }) => {
+  await page.locator('aside').getByRole('button', { name: 'Más', exact: true }).nth(1).click();
+  await page.getByRole('menuitem', { name: 'Leer el vault de arriba abajo' }).click();
   await expect(page.getByRole('heading', { name: 'Leyendo Trabajo' })).toBeVisible();
 });
 
@@ -3040,7 +3052,7 @@ test('the main screens pass an accessibility check', async ({ page }) => {
   await expect(page.locator('aside')).toContainText('Ver [[Destino]]');
   await check('search');
   await page.keyboard.press('Escape');
-  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByTitle('Ajustes de la app').click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await check('settings');
   await page.keyboard.press('Escape');
@@ -3144,11 +3156,12 @@ test('closing several tabs with unsaved changes asks once', async ({ page }) => 
 // The order of the tree (#45).
 const personalRows = (page: Page) => page.locator('aside section.vault[aria-label="Personal"] [data-row][data-depth="1"]');
 const sortPersonal = async (page: Page, name: string) => {
-  await page.locator('aside section.vault[aria-label="Personal"]').getByRole('button', { name: 'Ordenar', exact: true }).click();
+  await page.locator('aside section.vault[aria-label="Personal"]').getByRole('button', { name: 'Más', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Ordenar las notas' }).click();
   await page.getByRole('menuitem', { name }).click();
 };
 
-test('the tree can be ordered by name or by date, from the vault header', async ({ page }) => {
+test('the tree can be ordered by name or by date, from the vault More menu', async ({ page }) => {
   await expect(personalRows(page)).toHaveText(['Otra', 'Propia', 'Rara']);
   await sortPersonal(page, 'Nombre (Z → A)');
   await expect(personalRows(page)).toHaveText(['Rara', 'Propia', 'Otra']);
@@ -3321,7 +3334,7 @@ test('Hoy opens the note of the day, makes it once and never replaces it', async
   const path = `Diario/${day.y}-${day.m}-${day.d}.md`;
   const region = page.getByRole('region', { name: 'Trabajo' });
   await region.hover();
-  await region.getByTitle('Hoy: abrir la nota de hoy').click();
+  await region.getByTitle('Abrir la nota de hoy').click();
   await expect(page.locator('main footer')).toContainText(`Trabajo / ${path}`);
   expect(await disk(page, 'a', path)).toBe(`# ${day.title}\n\n`);
   // The tree shows the new note under its folder.
@@ -3329,7 +3342,7 @@ test('Hoy opens the note of the day, makes it once and never replaces it', async
   // What the user wrote stays when Hoy is pressed again.
   await page.evaluate(([p]) => (window as any).__test.externalWrite('a', p, '# Mi día\n\nEscrito a mano\n'), [path]);
   await region.hover();
-  await region.getByTitle('Hoy: abrir la nota de hoy').click();
+  await region.getByTitle('Abrir la nota de hoy').click();
   await expect(page.locator('main footer')).toContainText(path);
   expect(await disk(page, 'a', path)).toBe('# Mi día\n\nEscrito a mano\n');
 });
@@ -3527,7 +3540,8 @@ test('focus mode shows only the note, leaves with Escape and restores the layout
   await expect(page.locator('aside:not(.panel)')).toHaveCount(0);
   await page.locator('.leave').click();
   await expect(page.locator('aside:not(.panel)')).toBeVisible();
-  await page.getByTitle(/^Modo concentración/).click();
+  await page.locator('.views').getByRole('button', { name: 'Más' }).click();
+  await page.getByRole('menuitem', { name: /^Modo concentración/ }).click();
   await expect(page.locator('aside:not(.panel)')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.locator('aside:not(.panel)')).toBeVisible();
@@ -3716,7 +3730,7 @@ test('the drawing can be kept open and folded away, and split mode does not need
 });
 
 test('the drawing while typing can be turned off in the settings', async ({ page }) => {
-  await page.locator('aside').getByTitle('Ajustes y MCP').click();
+  await page.locator('aside').getByTitle('Ajustes de la app').click();
   const setting = page.locator('[data-setting="app.diagramPeek"]');
   await expect(setting).toContainText('En el modo Markdown, dibuja el diagrama en una ventana pequeña');
   await setting.getByRole('checkbox', { name: 'Vista previa del diagrama al escribir' }).uncheck();
@@ -3816,7 +3830,7 @@ test('the quick menu works in visual mode and can be turned off in the settings'
   await page.keyboard.type('\n/cita');
   await expect(completion(page)).toContainText('Cita');
   await page.keyboard.press('Escape');
-  await page.getByTitle('Ajustes y MCP').click();
+  await page.getByTitle('Ajustes de la app').click();
   const settings = page.getByRole('dialog', { name: 'Ajustes' });
   await settings.getByLabel('Menú rápido con /').uncheck();
   await page.keyboard.press('Escape');
@@ -3931,4 +3945,63 @@ test('a cover is found beside the note or from the vault, by the same rules as i
   await open(page, 'Raiz');
   await expect(page.locator('.note-cover')).toHaveCount(1);
   await expect(page.locator('.note-icon')).toHaveText('🔥');
+});
+
+test('the rarely used formats are in the More menu of the toolbar and keep the selection', async ({ page }) => {
+  await open(page, 'Inicio');
+  await typeInEditor(page, '\nhola');
+  await page.keyboard.press('Shift+Home');
+  await expect(page.getByRole('toolbar').getByRole('button', { name: 'Tachado' })).toHaveCount(0);
+  await page.getByRole('toolbar').getByRole('button', { name: 'Más' }).click();
+  const menu = page.getByRole('menu');
+  await expect(menu.getByRole('menuitem')).toHaveText(['Tachado', 'Código', 'Fórmula matemática ($x^2$)', 'Cita', 'Línea separadora', 'Estilo de los diagramas']);
+  await menu.getByRole('menuitem', { name: 'Tachado' }).click();
+  await expect(editorText(page)).toContainText('~~hola~~');
+});
+
+test('the More menus open with the keyboard and give the focus back', async ({ page }) => {
+  await open(page, 'Inicio');
+  const more = page.locator('aside header').getByRole('button', { name: 'Más' });
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menu').getByRole('menuitem', { name: 'Ver el tutorial' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(more).toBeFocused();
+});
+
+test('the vault More menu holds what the header no longer shows', async ({ page }) => {
+  const region = page.locator('aside section.vault[aria-label="Trabajo"]');
+  await expect(region.getByRole('button', { name: 'Ordenar', exact: true })).toHaveCount(0);
+  await expect(region.getByTitle('Ajustes del vault')).toBeVisible();
+  await region.getByRole('button', { name: 'Más' }).click();
+  await page.getByRole('menuitem', { name: 'Nueva carpeta' }).click();
+  await expect(page.getByText('Nombre de la carpeta')).toBeVisible();
+});
+
+test('the focus mode is in the note More menu', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.locator('.views').getByRole('button', { name: 'Más' }).click();
+  await page.getByRole('menuitem', { name: /^Modo concentración/ }).click();
+  await expect(page.locator('.app.focus')).toHaveCount(1);
+});
+
+test('the palette reaches the daily notes settings and the AI diagram style', async ({ page }) => {
+  await open(page, 'Inicio');
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('Notas diarias de este vault');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Ajustes de Trabajo' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+Shift+p');
+  await page.keyboard.type('Estilo de diagramas para la IA');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('textbox', { name: 'Estilo de diagramas de Trabajo' })).toBeVisible();
+});
+
+test('the tutorial says where the vault and note settings are', async ({ page }) => {
+  await firstRun(page);
+  for (let i = 0; i < 7; i++) await page.getByRole('button', { name: 'Siguiente' }).click();
+  await expect(tutorial(page)).toContainText('Cada ajuste, en su sitio');
+  await expect(tutorial(page)).toContainText('pestaña «Nota»');
 });

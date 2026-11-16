@@ -94,7 +94,7 @@
     </label>
     <p class="hint" id="diagrams-theme-hint">{tr('diagrams.themeHint')}</p>
 
-    <h3>{tr('guide.open')}</h3>
+    <h3 data-setting="vault.guide">{tr('guide.open')}</h3>
     <p id="guide-intro">{tr('guide.intro')}</p>
     {#if vault?.mcp === 'off'}
       <p class="warn" role="status">{tr('guide.mcpOff')} <button class="link" onclick={() => store.openVaultSettings(vaultId, 'ai')}>{tr('guide.giveAccess')}</button></p>

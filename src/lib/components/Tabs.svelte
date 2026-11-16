@@ -49,6 +49,16 @@
     store.openMenu(e, items);
   }
 
+  /** What is done to the note on screen now and then: the same actions as in the palette. */
+  function noteMenu(e: MouseEvent, tab: Tab) {
+    const items: MenuItem[] = [
+      { label: tr('cmd.focus'), icon: 'focus', keys: ['Ctrl', 'Shift', 'Enter'], run: () => (store.focus = true) },
+      { label: tr(store.typewriter ? 'cmd.typewriterOff' : 'cmd.typewriterOn'), icon: 'edit', run: () => store.setTypewriter(!store.typewriter) },
+    ];
+    if (!tab.loose) items.push({ label: tr('cmd.saveAsTemplate'), icon: 'tasks', separator: true, run: () => void store.saveAsTemplate(tab) });
+    store.openMenu(e, items);
+  }
+
   function onKey(e: KeyboardEvent, tab: Tab, index: number) {
     const tabs = [...(e.currentTarget as HTMLElement).closest('[role=tablist]')!.querySelectorAll<HTMLElement>('[role=tab]')];
     if (e.key === 'Enter' || e.key === ' ') select(tab);
@@ -127,8 +137,8 @@
       {/each}
       {#if active.kind === 'md'}
         <button class="icon" title={tr('tabs.export')} onclick={() => (store.exporting = true)}><Icon name="export" /></button>
-        <button class="icon" title={tr('focus.enter')} onclick={() => (store.focus = true)}><Icon name="focus" /></button>
         <button class="icon" class:on={store.showRight} aria-pressed={store.showRight} title={tr('panel.toggle')} onclick={() => store.toggleBar('right')}><Icon name="panelRight" /></button>
+        <button class="icon" title={tr('more.title')} aria-label={tr('more.title')} aria-haspopup="menu" onclick={(e) => noteMenu(e, active)}><Icon name="more" /></button>
       {/if}
     </div>
   {/if}

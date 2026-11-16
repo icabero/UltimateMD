@@ -4,10 +4,11 @@
   import { fold } from '../fold';
   import { themeName, tr, type Key } from '../i18n.svelte';
   import { outline } from '../markdown';
-  import { store, type ViewMode } from '../store.svelte';
+  import { store, type VaultSection, type ViewMode } from '../store.svelte';
   import { THEMES } from '../themes';
   import { EDIT_DIAGRAM, SORT_LINES, TOGGLE_TASK } from '../visual';
   import { keyLabel } from '../shortcuts';
+  import { flashSetting } from '../settingsIndex';
   import { FOLD_ALL, UNFOLD_ALL } from '../folding';
 
   let { initial = '' }: { initial?: string } = $props();
@@ -81,6 +82,21 @@
     run: () => tab && store.setView(tab, mode),
   });
 
+  /** A vault setting, opened where it lives and outlined so it is easy to spot. */
+  const vaultSetting = (section: VaultSection, id?: string) => () => {
+    if (!tab) return;
+    store.openVaultSettings(tab.vaultId, section);
+    if (id) flashSetting(id);
+  };
+
+  /** Folders are made in the vault of the note on screen, or in the first one open. */
+  async function newFolder() {
+    const vaultId = tab?.vaultId ?? store.openVaults[0]?.id;
+    if (!vaultId) return;
+    const name = await store.prompt(tr('sidebar.folderName'), '', tr('common.create'));
+    if (name?.trim()) await store.createFolder(vaultId, '', name.trim());
+  }
+
   const commands = $derived<Command[]>(
     [
       { id: 'note.new', label: tr('cmd.newNote'), keys: ['Ctrl', 'N'], run: () => void store.newNote() },
@@ -88,11 +104,17 @@
       { id: 'note.today', label: tr('daily.open'), keys: ['Ctrl', 'Shift', 'D'], when: store.openVaults.length > 0, run: () => void store.openDaily(0) },
       { id: 'note.yesterday', label: tr('daily.yesterday'), when: store.openVaults.length > 0, run: () => void store.openDaily(-1) },
       { id: 'note.tomorrow', label: tr('daily.tomorrow'), when: store.openVaults.length > 0, run: () => void store.openDaily(1) },
+      { id: 'note.folder', label: tr('sidebar.newFolder'), when: store.openVaults.length > 0, run: () => void newFolder() },
       { id: 'note.saveTemplate', label: tr('cmd.saveAsTemplate'), when: md && !tab?.loose, run: () => tab && void store.saveAsTemplate(tab) },
       { id: 'note.open', label: tr('cmd.openNote'), keys: ['Ctrl', 'P'], run: () => switchTo('') },
       { id: 'note.heading', label: tr('cmd.goToHeading'), when: md, run: () => switchTo('#') },
       { id: 'search', label: tr('cmd.searchAll'), keys: ['Ctrl', 'Shift', 'F'], run: () => { store.searching = true; store.toggleBar('left', true); } },
       { id: 'note.export', label: tr('cmd.export'), keys: ['Ctrl', 'E'], when: md, run: () => (store.exporting = true) },
+      { id: 'note.favorite', label: tr(tab && store.isFavorite(tab.vaultId, tab.path) ? 'sidebar.removeFavorite' : 'sidebar.addFavorite'), when: !!tab && !tab.loose, run: () => tab && store.toggleFavorite(tab.vaultId, tab.path) },
+      { id: 'note.copyLink', label: tr('menu.copyLink'), when: md && !tab?.loose, run: () => tab && store.copyLink(tab.vaultId, tab.path) },
+      { id: 'note.rename', label: tr('common.rename'), when: !!tab && !tab.loose, run: () => tab && void store.renamePrompt(tab.vaultId, tab.path) },
+      { id: 'note.reveal', label: tr('menu.reveal'), when: !!tab, run: () => tab && store.revealInFolder(tab.vaultId, tab.path) },
+      { id: 'tab.pin', label: tr(tab?.pinned ? 'tabs.unpin' : 'tabs.pin'), when: !!tab, run: () => tab && store.togglePin(tab) },
       { id: 'note.diagram', label: tr('cmd.diagram'), when: md, run: () => document.querySelector('.cm-editor')?.dispatchEvent(new CustomEvent(EDIT_DIAGRAM)) },
       { id: 'edit.task', label: tr('cmd.toggleTask'), keys: ['Ctrl', 'Enter'], when: editing, run: () => document.querySelector('.cm-editor')?.dispatchEvent(new CustomEvent(TOGGLE_TASK)) },
       { id: 'edit.sort', label: tr('cmd.sortLines'), keys: ['Alt', 'Shift', 'S'], when: editing, run: () => document.querySelector('.cm-editor')?.dispatchEvent(new CustomEvent(SORT_LINES)) },
@@ -104,6 +126,7 @@
       view('preview', 'tabs.preview'),
       { id: 'panel.outline', label: tr('cmd.outline'), when: md, run: () => store.openPanel('outline') },
       { id: 'panel.properties', label: tr('cmd.properties'), when: md, run: () => store.openPanel('properties') },
+      { id: 'panel.diagramStyle', label: tr('cmd.noteDiagramStyle'), when: md, run: () => store.openPanel('properties') },
       { id: 'panel.history', label: tr('cmd.history'), when: md && !tab?.loose, run: () => store.openPanel('history') },
       { id: 'panel.links', label: tr('cmd.links'), when: md && !tab?.loose, run: () => store.openPanel('links') },
       { id: 'bar.left', label: tr('cmd.toggleSidebar'), keys: ['Ctrl', 'Shift', 'E'], run: () => store.toggleBar('left') },
@@ -123,12 +146,18 @@
       ...THEMES.map((t) => ({ id: `theme.${t.id}`, label: tr('cmd.theme', { name: themeName(t) }), run: () => store.setThemeChoice({ fixed: t.id }) })),
       { id: 'vault.broken', label: tr('broken.open'), when: !!tab && !tab.loose, run: () => tab && (store.brokenLinks = tab.vaultId) },
       { id: 'vault.aiLog', label: tr('aiLog.open'), when: !!tab && !tab.loose, run: () => tab && (store.aiLog = tab.vaultId) },
-      { id: 'vault.read', label: tr('cmd.readVault'), when: !!tab && !tab.loose, run: () => tab && (store.reader = { vaultId: tab.vaultId, folder: '' }) },
+      { id: 'vault.read', label: tr('reader.readVault'), when: !!tab && !tab.loose, run: () => tab && (store.reader = { vaultId: tab.vaultId, folder: '' }) },
       { id: 'vault.settings', label: tr('cmd.vaultSettings'), when: !!tab && !tab.loose, run: () => tab && store.openVaultSettings(tab.vaultId) },
       { id: 'vault.themes', label: tr('cmd.vaultThemes'), when: !!tab && !tab.loose, run: () => tab && store.openVaultSettings(tab.vaultId, 'look') },
       { id: 'vault.diagrams', label: tr('cmd.vaultDiagrams'), when: !!tab && !tab.loose, run: () => tab && store.openVaultSettings(tab.vaultId, 'diagrams') },
       { id: 'vault.word', label: tr('cmd.wordSettings'), when: !!tab && !tab.loose, run: () => tab && store.openVaultSettings(tab.vaultId, 'word') },
+      { id: 'vault.guide', label: tr('guide.open'), when: !!tab && !tab.loose, run: vaultSetting('diagrams', 'vault.guide') },
+      { id: 'vault.daily', label: tr('cmd.vaultDaily'), when: !!tab && !tab.loose, run: vaultSetting('daily') },
+      { id: 'vault.order', label: tr('sort.open'), when: !!tab && !tab.loose, run: vaultSetting('general', 'vault.order') },
+      { id: 'vault.git', label: tr('git.title', { name: store.vault(tab?.vaultId ?? '')?.name ?? '' }), when: !!tab && !tab.loose && !!store.git[tab.vaultId], run: () => tab && (store.gitScreen = tab.vaultId) },
       { id: 'vault.ai', label: tr('cmd.vaultAi'), when: !!tab && !tab.loose, run: () => tab && store.openVaultSettings(tab.vaultId, 'ai') },
+      { id: 'vault.create', label: tr('sidebar.createVault'), run: () => store.createVaultDialog() },
+      { id: 'vault.open', label: tr('sidebar.openFolder'), run: () => store.openVaultDialog() },
       { id: 'app.settings', label: tr('cmd.settings'), run: () => (store.settings = true) },
       { id: 'app.shortcuts', label: tr('cmd.shortcuts'), keys: ['Ctrl', '/'], run: () => (store.shortcuts = true) },
       { id: 'app.news', label: tr('news.open'), run: () => void store.showNews() },

@@ -49,4 +49,21 @@ describe('settings search', () => {
     const ids = [...APP_SETTINGS, ...VAULT_SETTINGS, ...NOTE_SETTINGS].map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it('finds the vault settings that have no screen of their own', () => {
+    expect(names('es', 'estilo diagramas ia')).toContain('vault.guide');
+    expect(names('en', 'daily template')).toContain('vault.daily.template');
+    expect(names('eu', 'eguneroko karpeta')).toContain('vault.daily.folder');
+  });
+
+  it('has an entry for every setting a screen marks', () => {
+    const sources = import.meta.glob<string>('./components/*.svelte', { query: '?raw', import: 'default', eager: true });
+    const marked = new Set<string>();
+    for (const source of Object.values(sources)) {
+      for (const m of source.matchAll(/data-setting="([a-z][\w.]*)"/g)) marked.add(m[1]);
+    }
+    expect(marked.size).toBeGreaterThan(20);
+    const ids = new Set([...APP_SETTINGS, ...VAULT_SETTINGS, ...NOTE_SETTINGS].map((e) => e.id));
+    expect([...marked].filter((id) => !ids.has(id))).toEqual([]);
+  });
 });

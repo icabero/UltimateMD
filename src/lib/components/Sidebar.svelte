@@ -72,16 +72,18 @@
     }));
   }
 
-  function sortMenu(e: MouseEvent, id: string) {
-    store.openMenu(e, sortItems(id));
-  }
-
   function vaultMenu(e: MouseEvent, vault: Vault) {
+    // The sort menu opens where this one did, also when it came from the keyboard.
+    let [x, y] = [e.clientX, e.clientY];
+    if (!x && !y && e.target instanceof Element) {
+      const box = e.target.getBoundingClientRect();
+      [x, y] = [box.left + 12, box.bottom - 4];
+    }
     store.openMenu(e, [
-      { label: tr('sort.open'), icon: 'sort', run: () => setTimeout(() => (store.menu = { x: e.clientX, y: e.clientY, items: sortItems(vault.id) })) },
+      { label: tr('sort.open'), icon: 'sort', run: () => setTimeout(() => (store.menu = { x, y, items: sortItems(vault.id) })) },
       { label: tr('sidebar.newNote'), icon: 'plus', run: () => void newNote(vault.id, '') },
       { label: tr('cmd.fromTemplate'), icon: 'tasks', run: () => store.newNoteFromTemplate(vault.id, '') },
-      { label: tr('daily.today'), icon: 'calendar', run: () => void store.openDaily(0, vault.id) },
+      { label: tr('daily.open'), icon: 'calendar', run: () => void store.openDaily(0, vault.id) },
       { label: tr('sidebar.newFolder'), icon: 'folderPlus', run: () => void newFolder(vault.id, '') },
       { label: tr('reader.readVault'), icon: 'eye', separator: true, run: () => (store.reader = { vaultId: vault.id, folder: '' }) },
       { label: tr('broken.open'), icon: 'link', run: () => (store.brokenLinks = vault.id) },
@@ -89,6 +91,18 @@
       { label: tr('menu.reveal'), icon: 'folder', separator: true, run: () => store.revealInFolder(vault.id, '') },
       { label: tr('vaultSettings.open'), icon: 'settings', run: () => store.openVaultSettings(vault.id) },
       { label: tr('sidebar.closeVault'), icon: 'close', run: () => void store.setVaultOpen(vault.id, false) },
+    ]);
+  }
+
+  /** What the app offers that is not about one vault: help, news and the list of actions. */
+  function appMenu(e: MouseEvent) {
+    store.openMenu(e, [
+      { label: tr('shortcuts.actions'), icon: 'list', keys: ['Ctrl', 'Shift', 'P'], run: () => (store.palette = '>') },
+      { label: tr('cmd.shortcuts'), icon: 'keyboard', keys: ['Ctrl', '/'], run: () => (store.shortcuts = true) },
+      { label: tr('cmd.tutorial'), icon: 'info', separator: true, run: () => (store.tutorial = true) },
+      { label: tr('news.open'), icon: 'file', run: () => void store.showNews() },
+      { label: tr('sample.create'), icon: 'plus', run: () => void store.createSampleVault() },
+      { label: tr('cmd.about'), icon: 'info', separator: true, run: () => (store.about = true) },
     ]);
   }
 
@@ -154,8 +168,8 @@
   <header data-tauri-drag-region>
     <span class="brand" data-tauri-drag-region>Ultimate<b>MD</b></span>
     <button class="icon" title={tr('sidebar.searchTitle')} class:on={store.searching} onclick={() => (store.searching = !store.searching)}><Icon name="search" /></button>
-    <button class="icon" title={tr('sidebar.settingsTitle')} onclick={() => (store.settings = true)}><Icon name="settings" /></button>
-    <button class="icon" title={tr('about.title')} onclick={() => (store.about = true)}><Icon name="info" /></button>
+    <button class="icon" title={tr('cmd.settings')} onclick={() => (store.settings = true)}><Icon name="settings" /></button>
+    <button class="icon" title={tr('more.title')} aria-label={tr('more.title')} aria-haspopup="menu" onclick={appMenu}><Icon name="more" /></button>
     <button class="icon" title={tr('sidebar.hide')} onclick={() => store.toggleBar('left', false)}><Icon name="panelLeft" /></button>
   </header>
 
@@ -202,10 +216,7 @@
               <button class="icon small warn" title={tr('watch.badge')} onclick={() => store.reread(vault.id)}><Icon name="refresh" size={14} /></button>
             {/if}
             <button class="icon small" title={tr('sidebar.newNote')} onclick={() => newNote(vault.id, '')}><Icon name="plus" size={14} /></button>
-            <button class="icon small" title={tr('daily.today')} aria-label={tr('daily.today')} onclick={() => void store.openDaily(0, vault.id)}><Icon name="calendar" size={14} /></button>
-            <button class="icon small" title={tr('sidebar.newFolder')} onclick={() => newFolder(vault.id, '')}><Icon name="folderPlus" size={14} /></button>
-            <button class="icon small" title={tr('sort.title')} aria-label={tr('sort.title')} onclick={(e) => sortMenu(e, vault.id)}><Icon name="sort" size={14} /></button>
-            <button class="icon small" title={tr('reader.readVault')} onclick={() => (store.reader = { vaultId: vault.id, folder: '' })}><Icon name="eye" size={14} /></button>
+            <button class="icon small" title={tr('daily.open')} aria-label={tr('daily.open')} onclick={() => void store.openDaily(0, vault.id)}><Icon name="calendar" size={14} /></button>
             <button class="icon small" title={tr('vaultSettings.open')} onclick={() => store.openVaultSettings(vault.id)}><Icon name="settings" size={14} /></button>
             {#if store.git[vault.id]}
               {@const git = store.git[vault.id]!}
@@ -214,6 +225,7 @@
                 <Icon name="branch" size={14} />{#if git.changes.length}<span class="count">{git.changes.length}</span>{/if}
               </button>
             {/if}
+            <button class="icon small" title={tr('more.title')} aria-label={tr('more.title')} aria-haspopup="menu" onclick={(e) => vaultMenu(e, vault)}><Icon name="more" size={14} /></button>
           </div>
           {#if !collapsed[vault.id]}
             {#each store.trees[vault.id] ?? [] as node (node.path)}
