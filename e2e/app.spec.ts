@@ -3426,7 +3426,7 @@ test('a section folds under its heading, with the keys and the arrow in the gutt
   await page.keyboard.press('Control+Shift+o');
   await notePanel(page).getByRole('navigation', { name: 'Esquema' }).getByRole('button', { name: 'Dos' }).click();
   await expect(text).toContainText('Fin.');
-  await page.keyboard.press('Control+Shift+BracketLeft');
+  await page.keyboard.press('ControlOrMeta+Shift+BracketLeft');
   await expect(text).not.toContainText('Fin.');
   await expect(text).toContainText('## Dos');
   await expect(page.locator('.cm-foldPlaceholder')).toBeVisible();
@@ -3448,9 +3448,9 @@ test('the frontmatter folds, and everything folds from the palette', async ({ pa
   await page.locator('.cm-content').click();
   await page.keyboard.press('ControlOrMeta+Home');
   await expect(text).toContainText('tema: claro');
-  await page.keyboard.press('Control+Shift+BracketLeft');
+  await page.keyboard.press('ControlOrMeta+Shift+BracketLeft');
   await expect(text).not.toContainText('tema: claro');
-  await page.keyboard.press('Control+Shift+BracketRight');
+  await page.keyboard.press('ControlOrMeta+Shift+BracketRight');
   await expect(text).toContainText('tema: claro');
   await page.keyboard.press('Control+Shift+p');
   await page.keyboard.type('plegar todo');
@@ -3501,7 +3501,7 @@ test('in visual mode the headings fold too', async ({ page }) => {
   const text = editorText(page);
   await expect(page.locator('.cm-lineNumbers')).toBeHidden();
   await page.locator('.cm-v-h2').click();
-  await page.keyboard.press('Control+Shift+BracketLeft');
+  await page.keyboard.press('ControlOrMeta+Shift+BracketLeft');
   await expect(text).not.toContainText('Fin.');
   await expect(page.locator('.cm-v-h2')).toBeVisible();
   await page.locator('.cm-fold-mark.folded:visible').click();
@@ -3825,7 +3825,8 @@ test('the quick menu inserts a formula and opens the diagram builder', async ({ 
 test('the quick menu works in visual mode and can be turned off in the settings', async ({ page }) => {
   await open(page, 'Inicio');
   await page.getByTitle('Visual', { exact: true }).click();
-  await page.locator('.cm-content').click();
+  // On the last line: the middle of the note can be the drawn diagram.
+  await page.locator('.cm-line').last().click();
   await page.keyboard.press('ControlOrMeta+End');
   await page.keyboard.type('\n/cita');
   await expect(completion(page)).toContainText('Cita');

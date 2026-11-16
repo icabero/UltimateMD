@@ -2,7 +2,7 @@
 // frontmatter can be folded too. The arrows are quiet: they show when the
 // pointer is over the gutter or the cursor is on the line, and stay on a line
 // whose text is hidden, so that the hidden text is never forgotten.
-import { codeFolding, ensureSyntaxTree, foldable, foldEffect, foldGutter, foldKeymap, foldService, foldedRanges } from '@codemirror/language';
+import { codeFolding, ensureSyntaxTree, foldable, foldEffect, foldCode, foldGutter, foldService, unfoldCode, foldedRanges } from '@codemirror/language';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { tr } from './i18n.svelte';
@@ -90,9 +90,14 @@ export function folding(kind: string): Extension {
       },
     }),
     foldGutter({ markerDOM: marker }),
-    // Without CodeMirror's Ctrl+Alt+[ and ]: on Windows AltGr arrives as Ctrl+Alt, and
-    // Spanish and other keyboards type [ and ] with it, so typing a [[link]] folded the note.
-    keymap.of(foldKeymap.filter((binding) => !binding.key?.startsWith('Ctrl-Alt-'))),
+    // The keys the shortcuts list shows: Ctrl+Shift+[ and ] (⌘⇧ on macOS, where CodeMirror's
+    // own keymap uses ⌘⌥ instead). Not CodeMirror's Ctrl+Alt+[ and ]: on Windows AltGr arrives
+    // as Ctrl+Alt, and Spanish and other keyboards type [ and ] with it, so typing a [[link]]
+    // folded the note. Folding everything is in the palette.
+    keymap.of([
+      { key: 'Mod-Shift-[', run: foldCode },
+      { key: 'Mod-Shift-]', run: unfoldCode },
+    ]),
     look,
   ];
 }
