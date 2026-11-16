@@ -128,8 +128,9 @@ describe('versions', () => {
   it('finds the news a version should show', () => {
     expect(series('v0.7.3')).toBe('0.7');
     expect(newsFor('0.7.2')).toBe('0.7');
+    expect(newsFor('0.8.0')).toBe('0.8');
     expect(newsFor('0.6.0')).toBeNull();
-    expect(newsFor('1.2.0')).toBe('0.7');
+    expect(newsFor('1.2.0')).toBe('0.8');
   });
 });
 
