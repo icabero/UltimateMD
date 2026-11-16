@@ -132,33 +132,34 @@
         <section data-setting="vault.name">
           <label class="field">
             <span>{tr('vaultSettings.name')}</span>
-            <input type="text" value={vault.name} onchange={(e) => rename(e.currentTarget.value)} onkeydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+            <input type="text" aria-describedby="vault-name-hint" value={vault.name} onchange={(e) => rename(e.currentTarget.value)} onkeydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
           </label>
-          <p class="hint">{tr('vaultSettings.nameHint')}</p>
+          <p class="hint" id="vault-name-hint">{tr('vaultSettings.nameHint')}</p>
         </section>
         <section data-setting="vault.folder">
           <h3>{tr('vaultSettings.folder')}</h3>
           <p class="path">{vault.path}</p>
+          <p class="hint" id="vault-folder-hint">{tr('vaultSettings.folderHint')}</p>
           <button class="plain" onclick={() => store.revealInFolder(vaultId, '')}><Icon name="folder" size={14} /> {tr('menu.reveal')}</button>
         </section>
         {#if vault.open}
           <section data-setting="vault.order">
             <label class="field">
               <span>{tr('vaultSettings.order')}</span>
-              <select value={store.order(vaultId)} onchange={(e) => store.setOrder(vaultId, e.currentTarget.value as SortMode)}>
+              <select aria-describedby="vault-order-hint" value={store.order(vaultId)} onchange={(e) => store.setOrder(vaultId, e.currentTarget.value as SortMode)}>
                 {#each ORDERS as o (o.value)}<option value={o.value}>{tr(o.label)}</option>{/each}
               </select>
             </label>
-            <p class="hint">{tr('vaultSettings.orderHint')}</p>
+            <p class="hint" id="vault-order-hint">{tr('vaultSettings.orderHint')}</p>
           </section>
         {/if}
         <section data-setting="vault.scripts">
           <h3>{tr('vaultSettings.safety')}</h3>
           <label class="check">
-            <input type="checkbox" checked={vault.allowScripts} onchange={(e) => setScripts(e.currentTarget.checked)} />
+            <input type="checkbox" aria-describedby="vault-scripts-hint" checked={vault.allowScripts} onchange={(e) => setScripts(e.currentTarget.checked)} />
             {tr('settings.scripts')}
           </label>
-          <p class="hint">{tr('settings.scriptsHint')}</p>
+          <p class="hint" id="vault-scripts-hint">{tr('settings.scriptsHint')}</p>
         </section>
         <section data-setting="vault.list">
           <h3>{tr('vaultSettings.inList')}</h3>
@@ -180,40 +181,40 @@
             <p class="hint lead">{tr('daily.intro')}</p>
             <label class="field">
               <span>{tr('daily.folder')}</span>
-              <input type="text" value={daily.folder} onchange={(e) => saveDaily({ folder: e.currentTarget.value })} onkeydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+              <input type="text" aria-describedby="daily-folder-hint" value={daily.folder} onchange={(e) => saveDaily({ folder: e.currentTarget.value })} onkeydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
             </label>
-            <p class="hint">{tr('daily.folderHint')}</p>
+            <p class="hint" id="daily-folder-hint">{tr('daily.folderHint')}</p>
           </section>
           <section>
             <label class="field">
               <span>{tr('daily.format')}</span>
-              <select value={daily.format} onchange={(e) => saveDaily({ format: e.currentTarget.value as DailyFormat })}>
+              <select aria-describedby="daily-format-hint" value={daily.format} onchange={(e) => saveDaily({ format: e.currentTarget.value as DailyFormat })}>
                 {#each FORMATS as f (f)}<option value={f}>{dailyName(today, f)}</option>{/each}
               </select>
             </label>
-            <p class="hint">{tr(FORMAT_LABEL[daily.format])}</p>
+            <p class="hint" id="daily-format-hint">{tr(FORMAT_LABEL[daily.format])}</p>
           </section>
           <section>
             <label class="field">
               <span>{tr('daily.template')}</span>
-              <select value={daily.template ?? ''} onchange={(e) => saveDaily({ template: e.currentTarget.value || null })}>
+              <select aria-describedby="daily-template-hint" value={daily.template ?? ''} onchange={(e) => saveDaily({ template: e.currentTarget.value || null })}>
                 <option value="">{tr('daily.noTemplateOption')}</option>
                 {#each templates as t (t)}<option value={t}>{t}</option>{/each}
                 {#if daily.template && !templates.includes(daily.template)}<option value={daily.template}>{daily.template}</option>{/if}
               </select>
             </label>
-            <p class="hint">{tr('daily.templateHint')}</p>
+            <p class="hint" id="daily-template-hint">{tr('daily.templateHint')}</p>
           </section>
         {/if}
       {:else}
         <section data-setting="vault.ai">
           <p class="hint lead">{tr('vaultSettings.aiIntro')}</p>
-          <div class="seg" role="group" aria-label={tr('settings.mcpAccessOf', { name })}>
+          <div class="seg" role="group" aria-label={tr('settings.mcpAccessOf', { name })} aria-describedby="vault-ai-hint">
             {#each ACCESS as a (a.value)}
               <button class:on={vault.mcp === a.value} aria-pressed={vault.mcp === a.value} onclick={() => setAccess(a.value)}>{tr(a.label)}</button>
             {/each}
           </div>
-          <p class="hint" role="status">{tr(access.hint)}</p>
+          <p class="hint" id="vault-ai-hint" role="status">{tr(access.hint)}</p>
         </section>
         <section data-setting="vault.aiLog">
           <h3>{tr('aiLog.open')}</h3>

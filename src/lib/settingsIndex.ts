@@ -61,7 +61,7 @@ export const APP_SETTINGS: SettingEntry[] = [
 /** The settings of one vault; the screen that holds them is opened with the vault's id. */
 export const VAULT_SETTINGS: SettingEntry[] = [
   { id: 'vault.name', scope: 'vault', section: 'general', label: 'vaultSettings.name', hint: 'vaultSettings.nameHint', keywords: 'nombre renombrar name rename izena' },
-  { id: 'vault.folder', scope: 'vault', section: 'general', label: 'vaultSettings.folder', keywords: 'carpeta ruta disco path folder reveal mostrar karpeta' },
+  { id: 'vault.folder', scope: 'vault', section: 'general', label: 'vaultSettings.folder', hint: 'vaultSettings.folderHint', keywords: 'carpeta ruta disco path folder reveal mostrar karpeta' },
   { id: 'vault.order', scope: 'vault', section: 'general', label: 'vaultSettings.order', hint: 'vaultSettings.orderHint', keywords: 'orden ordenar sort order alfabetico fecha modificadas recientes sailkapena' },
   { id: 'vault.scripts', scope: 'vault', section: 'general', label: 'vaultSettings.safety', hint: 'settings.scriptsHint', keywords: 'scripts html seguridad safety security javascript segurtasuna' },
   { id: 'vault.list', scope: 'vault', section: 'general', label: 'vaultSettings.inList', hint: 'vaultSettings.openHint', keywords: 'abrir cerrar quitar eliminar open close remove delete barra lateral sidebar kendu' },

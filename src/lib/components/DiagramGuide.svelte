@@ -79,7 +79,7 @@
   <div class="edit">
     <p>{tr('diagrams.intro')}</p>
     <label class="theme">{tr('themes.vaultDiagrams')}
-      <select value={data?.defaultDiagramTheme ?? ''} onchange={(e) => setTheme(e.currentTarget.value)}>
+      <select aria-describedby="diagrams-theme-hint" value={data?.defaultDiagramTheme ?? ''} onchange={(e) => setTheme(e.currentTarget.value)}>
         <option value="">{tr('noteStyle.inheritNote')}</option>
         <option value="boceto">{tr('noteStyle.sketch')}</option>
         {#if data?.themes.length}
@@ -92,21 +92,21 @@
         </optgroup>
       </select>
     </label>
-    <p class="hint">{tr('diagrams.themeHint')}</p>
+    <p class="hint" id="diagrams-theme-hint">{tr('diagrams.themeHint')}</p>
 
     <h3>{tr('guide.open')}</h3>
-    <p>{tr('guide.intro')}</p>
+    <p id="guide-intro">{tr('guide.intro')}</p>
     {#if vault?.mcp === 'off'}
       <p class="warn" role="status">{tr('guide.mcpOff')} <button class="link" onclick={() => store.openVaultSettings(vaultId, 'ai')}>{tr('guide.giveAccess')}</button></p>
     {/if}
-    <textarea aria-label={tr('guide.title', { name: vault?.name ?? '' })} placeholder={tr('guide.placeholder')} disabled={!loaded}
+    <textarea aria-describedby="guide-intro guide-where" aria-label={tr('guide.title', { name: vault?.name ?? '' })} placeholder={tr('guide.placeholder')} disabled={!loaded}
       bind:value={text} oninput={edited} spellcheck="true"></textarea>
     <div class="bar">
       <button class="plain" onclick={fromStyle} disabled={!loaded}><Icon name="diagram" size={14} /> {tr('guide.fromStyle')}</button>
       {#if text.trim()}<button class="plain" onclick={() => { text = ''; void save(); }}>{tr('common.remove')}</button>{/if}
       <span class="status" role="status">{error || (saved && text.trim() ? tr('app.statusSaved') : '')}</span>
     </div>
-    <p class="hint">{tr('guide.where')}</p>
+    <p class="hint" id="guide-where">{tr('guide.where')}</p>
   </div>
   <div class="aside" role="region" aria-label={tr('guide.sample')}>
     <h3>{tr('guide.sample')}</h3>

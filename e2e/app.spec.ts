@@ -654,7 +654,7 @@ test('the AI connection can be tested from the settings', async ({ page }) => {
   await check.getByRole('button', { name: 'Cambiar el acceso' }).click();
   // A single vault without access opens straight at its AI part.
   const personal = page.getByRole('dialog', { name: 'Ajustes de Personal' });
-  await expect(personal.getByRole('group', { name: 'Acceso MCP de Personal' })).toBeVisible();
+  await expect(personal.getByRole('group', { name: 'Acceso de la IA a Personal' })).toBeVisible();
   await personal.getByRole('button', { name: 'Ir a los ajustes de la app' }).click();
 
   await page.evaluate(() => {
@@ -1489,7 +1489,7 @@ test('an HTML export keeps the animation; the builder can turn it on', async ({ 
 
 test('a vault sets what the AI may do, and the app gives a valid Windows config', async ({ page }) => {
   const screen = await vaultSettings(page, 'Trabajo', 'Inteligencia artificial');
-  const group = screen.getByRole('group', { name: 'Acceso MCP de Trabajo' });
+  const group = screen.getByRole('group', { name: 'Acceso de la IA a Trabajo' });
   await group.getByRole('button', { name: 'Lectura y escritura' }).click();
   await expect(group.getByRole('button', { name: 'Lectura y escritura' })).toHaveClass(/on/);
   await expect(screen.getByRole('status')).toContainText('crear y cambiar notas');
@@ -1886,6 +1886,19 @@ test('a theme can be created, edited and made the vault default', async ({ page 
   const saved = await page.evaluate(() => (window as any).__test.vaultThemes.a);
   expect(saved.defaultTheme).toBe('mi-marca');
   expect(saved.themes[0].colors.bg).toBe('#102030');
+});
+
+test('settings explain themselves: a visible line, a button for an empty vault and a risk note', async ({ page }) => {
+  await open(page, 'Inicio');
+  const screen = await vaultSettings(page, 'Trabajo', 'Apariencia');
+  await expect(screen.getByText('Este vault aún no tiene tema propio.')).toBeVisible();
+  await expect(screen.getByLabel('Tema por defecto del vault')).toHaveAccessibleDescription(/se leerán con este tema/);
+  await screen.getByRole('button', { name: 'Crear uno' }).click();
+  await page.getByRole('textbox').last().fill('Otra');
+  await page.keyboard.press('Enter');
+  await expect(screen.getByText('Los colores que no cambies se toman de este tema.')).toBeVisible();
+  await screen.getByRole('navigation').getByRole('button', { name: 'General', exact: true }).click();
+  await expect(screen.getByLabel('Permitir scripts en archivos HTML')).toHaveAccessibleDescription(/Actívalo solo si confías/);
 });
 
 test('a theme can be edited as JSON and bad JSON is refused', async ({ page }) => {

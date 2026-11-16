@@ -185,49 +185,50 @@
   {:else if section === 'general'}
   <section data-setting="app.language">
     <h3>{tr('settings.language')}</h3>
-    <select aria-label={tr('settings.language')} value={language()} onchange={(e) => setLanguage(e.currentTarget.value as Language)}>
+    <select aria-label={tr('settings.language')} aria-describedby="hint-language" value={language()} onchange={(e) => setLanguage(e.currentTarget.value as Language)}>
       {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
     </select>
+    <p class="hint flush" id="hint-language">{tr('find.languageHint')}</p>
   </section>
   <section data-setting="app.spell">
     <h3>{tr('spell.title')}</h3>
-    <select aria-label={tr('spell.title')} value={store.spellcheck} onchange={(e) => store.setSpellcheck(e.currentTarget.value as SpellSetting)}>
+    <select aria-label={tr('spell.title')} aria-describedby="hint-spell" value={store.spellcheck} onchange={(e) => store.setSpellcheck(e.currentTarget.value as SpellSetting)}>
       <option value="app">{tr('spell.app')}</option>
       {#each SPELL_LANGUAGES as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
       <option value="off">{tr('spell.off')}</option>
     </select>
-    <p class="hint">{tr('spell.hint')}</p>
+    <p class="hint flush" id="hint-spell">{tr('spell.hint')}</p>
   </section>
   <section data-setting="app.typewriter">
     <h3>{tr('typewriter.title')}</h3>
     <label class="follow">
-      <input type="checkbox" checked={store.typewriter} onchange={(e) => store.setTypewriter(e.currentTarget.checked)} />
+      <input type="checkbox" aria-describedby="hint-typewriter" checked={store.typewriter} onchange={(e) => store.setTypewriter(e.currentTarget.checked)} />
       {tr('typewriter.label')}
     </label>
-    <p class="hint">{tr('typewriter.hint')}</p>
+    <p class="hint" id="hint-typewriter">{tr('typewriter.hint')}</p>
   </section>
   <section data-setting="app.diagramPeek">
     <h3>{tr('peek.title')}</h3>
     <label class="follow">
-      <input type="checkbox" checked={store.diagramPeek} onchange={(e) => store.setDiagramPeek(e.currentTarget.checked)} />
+      <input type="checkbox" aria-describedby="hint-peek" checked={store.diagramPeek} onchange={(e) => store.setDiagramPeek(e.currentTarget.checked)} />
       {tr('peek.setting')}
     </label>
-    <p class="hint">{tr('peek.settingHint')}</p>
+    <p class="hint" id="hint-peek">{tr('peek.settingHint')}</p>
   </section>
   <section data-setting="app.slash">
     <label class="follow">
-      <input type="checkbox" checked={store.slashMenu} onchange={(e) => store.setSlashMenu(e.currentTarget.checked)} />
+      <input type="checkbox" aria-describedby="hint-slash" checked={store.slashMenu} onchange={(e) => store.setSlashMenu(e.currentTarget.checked)} />
       {tr('slash.setting')}
     </label>
-    <p class="hint">{tr('slash.settingHint')}</p>
+    <p class="hint" id="hint-slash">{tr('slash.settingHint')}</p>
   </section>
   <section data-setting="app.images">
     <h3>{tr('images.title')}</h3>
-    <select aria-label={tr('images.title')} value={store.imagePlace} onchange={(e) => store.setImagePlace(e.currentTarget.value as ImagePlace)}>
+    <select aria-label={tr('images.title')} aria-describedby="hint-images" value={store.imagePlace} onchange={(e) => store.setImagePlace(e.currentTarget.value as ImagePlace)}>
       <option value="vault">{tr('images.vault', { folder: IMAGE_FOLDER })}</option>
       <option value="note">{tr('images.note')}</option>
     </select>
-    <p class="hint">{tr('images.hint')}</p>
+    <p class="hint flush" id="hint-images">{tr('images.hint')}</p>
   </section>
   <section data-setting="app.log" aria-label={tr('log.title')}>
     <h3>{tr('log.title')}</h3>
@@ -268,15 +269,17 @@
   {:else if section === 'appearance'}
   <section>
     <h3>{tr('settings.appearance')}</h3>
+    <p class="hint flush">{tr('find.themeHint')}</p>
     <div class="themes" data-setting="app.theme">
       {#each THEMES as t (t.id)}
         {@render swatch(t, store.theme.id === t.id, () => store.setThemeChoice({ fixed: t.id }))}
       {/each}
     </div>
     <label class="follow" data-setting="app.followSystem">
-      <input type="checkbox" checked={following} onchange={(e) => store.setThemeChoice({ fixed: e.currentTarget.checked ? null : store.theme.id })} />
+      <input type="checkbox" aria-describedby="hint-follow" checked={following} onchange={(e) => store.setThemeChoice({ fixed: e.currentTarget.checked ? null : store.theme.id })} />
       {tr('settings.followSystem')}
     </label>
+    <p class="hint" id="hint-follow">{tr('find.followHint')}</p>
     {#if following}
       <div class="modes">
         <label>{tr('settings.lightMode')}
@@ -292,6 +295,7 @@
       </div>
     {/if}
     <h3>{tr('reading.title')}</h3>
+    <p class="hint flush">{tr('find.readingHint')}</p>
     <div class="reading" data-setting="app.reading">
       <label>{tr('reading.textSize')}
         <select value={String(store.reading.textScale)} onchange={(e) => store.setReading({ textScale: Number(e.currentTarget.value) })}>
@@ -315,10 +319,10 @@
       <p class="hint">{tr('reading.zoomHint')}</p>
     </div>
     <label class="follow" data-setting="app.nativeFrame">
-      <input type="checkbox" checked={frame.native} onchange={(e) => frame.setNative(e.currentTarget.checked)} />
+      <input type="checkbox" aria-describedby="hint-frame" checked={frame.native} onchange={(e) => frame.setNative(e.currentTarget.checked)} />
       {tr('settings.nativeFrame')}
     </label>
-    <p class="hint">{tr('settings.nativeFrameHint')}</p>
+    <p class="hint" id="hint-frame">{tr('settings.nativeFrameHint')}</p>
   </section>
 
   {:else if section === 'vaults'}
@@ -425,6 +429,7 @@
   .reading .zoom { display: flex; grid-column: 1 / -1; align-items: center; gap: var(--space-3); color: var(--text-2); font-size: var(--font-sm); }
   .reading .hint { grid-column: 1 / -1; margin: 0; }
   .hint { margin: var(--space-1) 0 0 var(--space-5); color: var(--text-3); font-size: var(--font-xs); line-height: 1.4; }
+  .hint.flush { margin-left: 0; }
   .follow { display: flex; align-items: center; gap: var(--space-1-5); margin-top: var(--space-3); color: var(--text-2); font-size: var(--font-sm); }
   .modes { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-2); color: var(--text-2); font-size: var(--font-sm); }
   .modes label { display: flex; align-items: center; gap: var(--space-1-5); }

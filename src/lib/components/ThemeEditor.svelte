@@ -41,6 +41,14 @@
     return pairs.filter(([, color]) => contrast(color, bg) < AA).map(([name]) => name);
   });
 
+  /** The colours of a theme by id, for the little preview beside the vault's default. */
+  const defaultColors = $derived.by(() => {
+    const id = data?.defaultTheme;
+    const file = themes.find((t) => t.id === id);
+    const found = file ? resolveTheme(file) : THEMES.find((t) => t.id === id);
+    return (found ?? store.theme).colors;
+  });
+
   function pick(theme: ThemeFile) {
     selected = theme.id;
     draft = $state.snapshot(theme);
@@ -108,7 +116,7 @@
 <div class="themes">
   <p class="intro">{tr('themes.intro')}</p>
   <label class="default">{tr('themes.vaultDefault')}
-    <select value={data?.defaultTheme ?? ''} onchange={(e) => setDefault(e.currentTarget.value)}>
+    <select aria-describedby="themes-default-hint" value={data?.defaultTheme ?? ''} onchange={(e) => setDefault(e.currentTarget.value)}>
       <option value="">{tr('themes.appDefault')}</option>
       <optgroup label={tr('themes.fromVault')}>
         {#each themes as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
@@ -117,7 +125,11 @@
         {#each THEMES as t (t.id)}<option value={t.id}>{themeName(t)}</option>{/each}
       </optgroup>
     </select>
+    <span class="chips" role="img" aria-label={tr('themes.preview')} style:background={defaultColors.bg} style:border-color={defaultColors.line}>
+      <i style:background={defaultColors.text}></i><i style:background={defaultColors.accent}></i>
+    </span>
   </label>
+  <p class="hint" id="themes-default-hint">{tr('themes.vaultDefaultHint')}</p>
 
   <div class="columns">
     <nav>
@@ -131,24 +143,28 @@
       <div class="form">
         {#if json === null}
           <label class="row">{tr('themes.base')}
-            <select bind:value={draft.base}>
+            <select aria-describedby="themes-base-hint" bind:value={draft.base}>
               {#each THEMES as t}<option value={t.id}>{themeName(t)}</option>{/each}
             </select>
           </label>
+          <p class="hint" id="themes-base-hint">{tr('themes.baseHint')}</p>
           <label class="row">{tr('themes.reading')}
-            <select bind:value={draft.prose}>
+            <select aria-describedby="themes-prose-hint" bind:value={draft.prose}>
               <option value={undefined}>{tr('themes.likeBase')}</option>
               <option value="serif">Serif</option>
               <option value="sans">Sans</option>
             </select>
           </label>
+          <p class="hint" id="themes-prose-hint">{tr('themes.readingHint')}</p>
           <h3>{tr('themes.colors')}</h3>
+          <p class="hint">{tr('themes.colorsHint')}</p>
           <div class="grid">
             {#each FIELDS as f}
               <label class="color">{tr(f.label)}<input type="color" value={look.colors[f.key]} oninput={(e) => setColor(f.key, e.currentTarget.value)} /></label>
             {/each}
           </div>
           <h3>{tr('themes.diagrams')}</h3>
+          <p class="hint">{tr('themes.diagramsHint')}</p>
           <div class="grid">
             {#each DIAGRAM_FIELDS as f}
               <label class="color">{tr(f.label)}<input type="color" value={diagramColors(look)[f.key]} oninput={(e) => setDiagramColor(f.key, e.currentTarget.value)} /></label>
@@ -171,6 +187,12 @@
           <button class="main" onclick={save}>{tr('common.save')}</button>
         </div>
       </div>
+    {:else if !themes.length}
+      <div class="empty">
+        <p>{tr('themes.noneYet')}</p>
+        <p class="hint">{tr('themes.noneHint')}</p>
+        <button class="main" onclick={create}>{tr('themes.createOne')}</button>
+      </div>
     {:else}
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- our own translation, with markup -->
       <p class="empty">{@html tr('themes.empty')}</p>
@@ -184,7 +206,8 @@
   h3 { margin: var(--space-3-5) 0 var(--space-1-5); font-size: var(--font-sm); font-weight: 650; }
   label { color: var(--text-2); font-size: var(--font-sm); }
   select { padding: var(--space-1) var(--space-1-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; }
-  .default { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+  .default { display: flex; align-items: center; gap: var(--space-2); margin-bottom: 0; }
+  .default + .hint { margin-bottom: var(--space-3); }
   .columns { display: grid; grid-template-columns: 150px 1fr; gap: var(--space-4); }
   nav { display: flex; flex-direction: column; gap: var(--space-0-5); }
   nav button { display: flex; align-items: center; gap: var(--space-1-5); padding: var(--space-1-5) var(--space-2); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); text-align: left; }
@@ -202,6 +225,9 @@
   .actions button { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); }
   .actions .main { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
   .spacer { flex: 1; }
+  .hint { margin: var(--space-1) 0 var(--space-2); color: var(--text-2); font-size: var(--font-xs); line-height: 1.4; }
+  .chips { display: inline-flex; gap: var(--space-0-5); padding: var(--space-1); border: 1px solid; border-radius: var(--radius-sm); }
+  .chips i { width: 14px; height: 6px; border-radius: var(--radius-2xs); }
   .empty { margin: 0; color: var(--text-2); font-size: var(--font-sm); line-height: 1.5; }
   .empty :global(code) { font: var(--font-xs) var(--mono); }
 </style>

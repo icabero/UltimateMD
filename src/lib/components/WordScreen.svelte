@@ -109,6 +109,7 @@
       </div>
 
       <h3>{tr('word.headings')}</h3>
+      <p class="hint">{tr('word.headingsHint')}</p>
       {#each LEVELS as n}
         <label class="row">{tr('export.heading', { n })}
           <select value={settings.headings[n - 1] ?? ''} onchange={(e) => { settings!.headings[n - 1] = e.currentTarget.value || null; schedule(); }}>
@@ -122,6 +123,7 @@
       {/if}
 
       <h3>{tr('word.text')}</h3>
+      <p class="hint">{tr('word.textHint')}</p>
       <label class="row">{tr('word.body')}
         <select value={settings.body ?? ''} onchange={(e) => { settings!.body = e.currentTarget.value || null; schedule(); }}>
           <option value="">{auto(config.info.body)}</option>
@@ -130,6 +132,7 @@
       </label>
 
       <h3>{tr('word.tables')}</h3>
+      <p class="hint">{tr('word.tablesHint')}</p>
       <div class="row">
         <label for="word-fill">{tr('word.headerColor')}</label>
         <span class="pair">
@@ -142,11 +145,13 @@
       </label>
 
       <h3>{tr('word.images')}</h3>
+      <p class="hint">{tr('word.imagesHint')}</p>
       <label class="row">{tr('word.maxWidth')}
         <input class="number" type="number" min="50" max="1000" step="10" placeholder={tr('word.fullWidth')} value={settings.imageMaxWidth ?? ''} oninput={(e) => { settings!.imageMaxWidth = number(e.currentTarget.value); schedule(); }} />
       </label>
 
       <h3>{tr('word.code')}</h3>
+      <p class="hint">{tr('word.codeHint')}</p>
       <label class="row">{tr('word.codeTextSize')}
         <input class="number" type="number" min="6" max="24" step="0.5" placeholder={tr('word.likeText')} value={settings.codeTextSize ?? ''} oninput={(e) => { settings!.codeTextSize = number(e.currentTarget.value); schedule(); }} />
       </label>

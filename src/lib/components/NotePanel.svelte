@@ -81,7 +81,7 @@
   <div class="head" data-tauri-drag-region>
     <div class="tabs" role="tablist">
       {#each TABS as t (t.id)}
-        <button role="tab" title={tr(t.label)} aria-selected={store.layout.panelTab === t.id} class:on={store.layout.panelTab === t.id} onclick={() => store.openPanel(t.id)}>{tr(t.label)}</button>
+        <button role="tab" aria-selected={store.layout.panelTab === t.id} class:on={store.layout.panelTab === t.id} onclick={() => store.openPanel(t.id)}>{tr(t.label)}</button>
       {/each}
     </div>
     <button class="icon small" title={tr('panel.hide')} onclick={() => store.toggleBar('right', false)}><Icon name="close" size={14} /></button>
