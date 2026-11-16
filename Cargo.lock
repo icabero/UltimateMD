@@ -6472,7 +6472,7 @@ dependencies = [
 
 [[package]]
 name = "ultimatemd"
-version = "0.7.2"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "notify-debouncer-full",
@@ -6494,7 +6494,7 @@ dependencies = [
 
 [[package]]
 name = "ultimatemd-core"
-version = "0.7.2"
+version = "0.8.0"
 dependencies = [
  "directories",
  "dunce",
@@ -6517,7 +6517,7 @@ dependencies = [
 
 [[package]]
 name = "ultimatemd-mcp"
-version = "0.7.2"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "rmcp",
@@ -6531,7 +6531,7 @@ dependencies = [
 
 [[package]]
 name = "ultimatemd-pdf"
-version = "0.7.2"
+version = "0.8.0"
 dependencies = [
  "image",
  "imagesize 0.15.0",
