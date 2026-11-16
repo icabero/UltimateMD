@@ -3,31 +3,36 @@
   import { Annotation, Compartment, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
   import { Decoration, EditorView, drawSelection, highlightActiveLine, keymap, lineNumbers, type DecorationSet } from '@codemirror/view';
   import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-  import { HighlightStyle, indentOnInput, syntaxHighlighting, bracketMatching, ensureSyntaxTree, syntaxTree } from '@codemirror/language';
+  import { HighlightStyle, foldEffect, foldAll, unfoldAll, unfoldEffect, indentOnInput, syntaxHighlighting, bracketMatching, ensureSyntaxTree, syntaxTree } from '@codemirror/language';
   import { autocompletion } from '@codemirror/autocomplete';
+  import { slashCompletions, slashIcons, slashKeys } from '../slashMenu';
   import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
   import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
   import { html } from '@codemirror/lang-html';
   import { languages } from '@codemirror/language-data';
   import { tags as t } from '@lezer/highlight';
   import DiagramBuilder, { type BuilderResult, type BuilderStart } from './DiagramBuilder.svelte';
-  import NoteDiagramStyle from './NoteDiagramStyle.svelte';
+  import DiagramPeek, { type Box } from './DiagramPeek.svelte';
   import Toolbar from './Toolbar.svelte';
   import { parseSource } from '../diagramBuilder';
-  import { fenceLine, parseStyle, splitFence } from '../diagramStyle';
+  import { fenceLine, parseStyle, splitFence, type DiagramStyle } from '../diagramStyle';
   import { findTerms } from '../fold';
+  import { FOLD_ALL, UNFOLD_ALL, folding, rememberFolds, restoreFolds } from '../folding';
   import { htmlToMarkdown } from '../paste';
-  import { fenceAt, insertBlock, insertLink, wrap } from '../formatting';
+  import { countSelection, fenceAt, insertBlock, insertLink, sortSelectedLines, toggleTask, wrap } from '../formatting';
+  import { moveInTable } from '../tables';
   import { tr } from '../i18n.svelte';
   import { store, type Tab } from '../store.svelte';
   import { baseName } from '../paths';
-  import { frontmatterChange, frontmatterValue } from '../themes';
-  import { EDIT_DIAGRAM, visualMode } from '../visual';
+  import { EDIT_DIAGRAM, SORT_LINES, TOGGLE_TASK, visualMode } from '../visual';
   import { headingCompletions, linkAt, noteCompletions, wikilinks } from '../wikilinks';
   import { spellLanguage } from '../spellcheck';
   import { tagCompletions, tagMarks } from '../tags';
+  import { mathMarks } from '../mathSource';
 
-  let { tab, onscroll }: { tab: Tab; onscroll?: (ratio: number) => void } = $props();
+  import { places, type Place } from '../place';
+
+  let { tab, onscroll }: { tab: Tab; onscroll?: (place: Place) => void } = $props();
 
   const external = Annotation.define<boolean>();
   const highlight = HighlightStyle.define([
@@ -52,6 +57,8 @@
     '.cm-scroller': { fontFamily: 'var(--mono)', fontSize: 'calc(13.5px * var(--text-scale, 1))', lineHeight: 'calc(1.65 + var(--leading, 0))', overflow: 'auto' },
     '.cm-content': { padding: '20px 0 40vh', caretColor: 'var(--accent)' },
     '.cm-line': { padding: '0 22px' },
+    // Typewriter mode: room above and below so the first and last lines can reach the middle.
+    '&.cm-typewriter .cm-content': { padding: '50vh 0' },
     '.cm-gutters': { background: 'var(--bg)', color: 'var(--text-3)', border: 'none', fontSize: 'var(--font-xs)' },
     '.cm-activeLine, .cm-activeLineGutter': { background: 'var(--hover)' },
     '.cm-cursor': { borderLeftColor: 'var(--accent)', borderLeftWidth: '2px' },
@@ -97,18 +104,37 @@
 
   let host: HTMLDivElement;
   let view: EditorView | null = null;
+  let shownView: Tab['view'] | null = null;
+  /** The scroll position set by code, so that its own scroll event is not taken for the reader's. */
+  let expected: number | null = null;
   // Editor states of the tabs not shown. Never drawn, so not reactive.
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const states = new Map<string, EditorState>();
   const language = new Compartment();
   const mode = new Compartment();
   const spelling = new Compartment();
+  const typewriter = new Compartment();
   /** The language the shown note is checked in, and which note that was. */
   let spelledAs: string | null | undefined;
   let spelledKey = '';
   const PLAIN: Extension = [];
+
+  /** Scrolls so the line with the cursor sits in the middle of the editor. */
+  function centre(v: EditorView) {
+    // After the editor's own scroll to the cursor, which would otherwise win.
+    requestAnimationFrame(() => {
+      if (v.dom.isConnected) v.dispatch({ effects: EditorView.scrollIntoView(v.state.selection.main.head, { y: 'center' }) });
+    });
+  }
+
+  // A click moves the cursor where the reader already looks, so only typing and keys re-centre.
+  const TYPEWRITER: Extension = [
+    EditorView.editorAttributes.of({ class: 'cm-typewriter' }),
+    EditorView.updateListener.of((u) => {
+      if ((u.docChanged || u.selectionSet) && !u.transactions.some((t) => t.isUserEvent('select.pointer'))) centre(u.view);
+    }),
+  ];
   let builder = $state<{ initial: BuilderStart | null; replace: { from: number; to: number } | null } | null>(null);
-  let styling = $state(false);
   let shownKey = '';
   let shownRevision = 0;
 
@@ -123,7 +149,22 @@
     { key: 'Mod-b', run: command((v) => wrap(v, '**', tr('toolbar.text'))) },
     { key: 'Mod-i', run: command((v) => wrap(v, '*', tr('toolbar.text'))) },
     { key: 'Mod-k', run: command((v) => insertLink(v, tr('toolbar.linkText'))) },
+    { key: 'Alt-Shift-s', run: (v: EditorView) => tab.kind === 'md' && (sortLines(v), true) },
+    // Inside a table these move its row or column; anywhere else the keys keep their other meaning (a line moves up or down).
+    { key: 'Alt-ArrowUp', run: (v: EditorView) => tab.kind === 'md' && moveInTable(v, 'row', -1) },
+    { key: 'Alt-ArrowDown', run: (v: EditorView) => tab.kind === 'md' && moveInTable(v, 'row', 1) },
+    { key: 'Alt-ArrowLeft', run: (v: EditorView) => tab.kind === 'md' && moveInTable(v, 'column', -1) },
+    { key: 'Alt-ArrowRight', run: (v: EditorView) => tab.kind === 'md' && moveInTable(v, 'column', 1) },
+    // In a note only: elsewhere Ctrl+Enter keeps opening a line below, as CodeMirror does.
+    // Closes the drawing that follows a diagram, when there is one.
+    { key: 'Escape', run: () => closePeek() },
+    { key: 'Mod-Enter', run: (v: EditorView) => tab.kind === 'md' && command(toggleTask)(v) },
   ];
+
+  /** Sorts the selected lines, or says what to select when there are none to sort. */
+  function sortLines(v: EditorView) {
+    if (!sortSelectedLines(v)) store.notify(tr('editor.sortHint'));
+  }
 
   const followWithCtrl = EditorView.domEventHandlers({
     mousedown(event, target) {
@@ -186,7 +227,7 @@
     return EditorState.create({
       doc: current.content,
       extensions: [
-        lineNumbers(), history(), drawSelection(), highlightActiveLine(), indentOnInput(), bracketMatching(),
+        lineNumbers(), folding(current.kind), history(), drawSelection(), highlightActiveLine(), indentOnInput(), bracketMatching(),
         highlightSelectionMatches(), search({ top: true }),
         // Screen readers announce the text box by the note it holds.
         EditorView.contentAttributes.of({ 'aria-label': tr('editor.label', { name: baseName(current.path) }) }),
@@ -195,25 +236,71 @@
         language.of(languageFor(current.kind)),
         mode.of(PLAIN),
         spelling.of(spellAttributes(null)),
+        typewriter.of(store.typewriter ? TYPEWRITER : PLAIN),
         found,
         outside,
-        ...(current.kind === 'md' ? [wikilinks, tagMarks, followWithCtrl, pasteMarkdown, dropImages, autocompletion({ override: [noteCompletions, headingCompletions, tagCompletions], icons: false })] : []),
+        ...(current.kind === 'md' ? [wikilinks, tagMarks, mathMarks, followWithCtrl, pasteMarkdown, dropImages, slashKeys, autocompletion({ override: [slashCompletions(() => openBuilder()), noteCompletions, headingCompletions, tagCompletions], icons: false, addToOptions: [slashIcons] })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((tr) => tr.annotation(external))) store.edit(tab, u.state.doc.toString());
-          if (u.docChanged || u.selectionSet) publishPosition(u.state);
+          if (u.docChanged || u.selectionSet || u.transactions.some((x) => x.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)))) rememberFolds(tab.key, u.state);
+          if (u.docChanged || u.selectionSet || u.geometryChanged || u.viewportChanged) schedulePeek();
+          if (u.docChanged || u.selectionSet) {
+            publishPosition(u.state);
+            publishSelection(u.state);
+          }
         }),
       ],
     });
   }
 
+  /** The line at the top of the editor and how far down it the top falls. */
+  function topPlace(target: EditorView): Place {
+    const y = Math.max(target.scrollDOM.scrollTop - target.documentPadding.top, 0);
+    const block = target.lineBlockAtHeight(y);
+    const line = target.state.doc.lineAt(block.from).number;
+    return { line, frac: block.height > 0 ? Math.min(Math.max((y - block.top) / block.height, 0), 0.99) : 0 };
+  }
+
+  /** Puts a place of the note at the top of the editor. */
+  function scrollToPlace(place: Place) {
+    if (!view || view.scrollDOM.clientHeight === 0) return;
+    const doc = view.state.doc;
+    const block = view.lineBlockAt(doc.line(Math.min(Math.max(place.line, 1), doc.lines)).from);
+    view.scrollDOM.scrollTop = Math.round(block.top + place.frac * block.height + view.documentPadding.top);
+    expected = view.scrollDOM.scrollTop;
+  }
+
+  /** Back to where the reader was after a view or a tab change, once the editor has measured itself. */
+  function restore(key: string) {
+    const place = places.get(key);
+    if (!view || !place) return;
+    const again = () => {
+      if (tab.key === key && tab.view !== 'preview') scrollToPlace(place);
+    };
+    // Lines far from the screen have only estimated heights: let the editor bring the line in and measure it first.
+    const doc = view.state.doc;
+    const from = doc.line(Math.min(Math.max(place.line, 1), doc.lines)).from;
+    view.dispatch({ effects: EditorView.scrollIntoView(from, { y: 'start', yMargin: 0 }) });
+    requestAnimationFrame(() => {
+      again();
+      requestAnimationFrame(again);
+    });
+  }
+
   function show(current: Tab) {
     if (!view) return;
+    const moved = shownKey !== current.key || shownView !== current.view;
+    shownView = current.view;
     if (shownKey !== current.key) {
       if (shownKey) states.set(shownKey, view.state);
-      view.setState(states.get(current.key) ?? makeState(current));
+      view.setState(states.get(current.key) ?? restoreFolds(current.key, makeState(current)));
       shownKey = current.key;
+      peek = null;
+      pinned = false;
+      dismissed = null;
       shownRevision = current.revision;
       publishPosition(view.state);
+      publishSelection(view.state);
     }
     // An edit made outside this editor stays undoable. Only the part that
     // differs is replaced, so the cursor and the scroll stay where they were.
@@ -234,6 +321,11 @@
     }
     const wanted = current.kind === 'md' && current.view === 'visual' ? visualMode : PLAIN;
     if (mode.get(view.state) !== wanted) view.dispatch({ effects: mode.reconfigure(wanted) });
+    const centred = store.typewriter ? TYPEWRITER : PLAIN;
+    if (typewriter.get(view.state) !== centred) {
+      view.dispatch({ effects: typewriter.reconfigure(centred) });
+      if (store.typewriter) centre(view);
+    }
     const change = current.outside;
     if (change && change.seen !== outsideSeen) {
       outsideSeen = change.seen;
@@ -245,6 +337,7 @@
       spelledKey = shownKey;
       view.dispatch({ effects: spelling.reconfigure(spellAttributes(lang)) });
     }
+    if (moved && current.view !== 'preview') restore(current.key);
   }
 
   /** Marks misspelt words in a note's language; code and HTML files are left alone. */
@@ -252,6 +345,88 @@
     return EditorView.contentAttributes.of(
       lang ? { spellcheck: 'true', lang, autocorrect: 'off', autocapitalize: 'off' } : { spellcheck: 'false' },
     );
+  }
+
+  // The drawing of the diagram being typed. Only in Markdown mode: the
+  // preview and the visual mode already show it.
+  interface Peek {
+    from: number;
+    lang: string;
+    source: string;
+    style: DiagramStyle;
+    anchor: Box;
+    caret: Box;
+  }
+  let peek = $state<Peek | null>(null);
+  let pinned = $state(false);
+  let area = $state({ width: 0, height: 0 });
+  let root: HTMLDivElement;
+  /** The diagram that was closed with Escape stays closed until the cursor leaves it. */
+  let dismissed: number | null = null;
+  let peekFrame = 0;
+
+  function schedulePeek() {
+    if (peekFrame) return;
+    peekFrame = requestAnimationFrame(() => {
+      peekFrame = 0;
+      refreshPeek();
+    });
+  }
+
+  function refreshPeek() {
+    if (!view || tab.kind !== 'md' || tab.view !== 'edit' || !store.diagramPeek) {
+      peek = null;
+      return;
+    }
+    const fence = fenceAt(view.state);
+    const { lang, words } = fence ? splitFence(fence.info) : { lang: '', words: '' };
+    if (!fence || (lang !== 'mermaid' && lang !== 'd2')) {
+      dismissed = null;
+      if (!pinned) peek = null;
+      return;
+    }
+    if (dismissed === fence.from) {
+      peek = null;
+      return;
+    }
+    // A block that is still open has no closing line: what is written so far is the code.
+    const doc = view.state.doc;
+    const last = doc.lineAt(fence.to);
+    const closed = /^\s*(`{3,}|~{3,})\s*$/.test(last.text) && last.number > doc.lineAt(fence.from).number;
+    const source = closed ? fence.source : doc.sliceString(doc.lineAt(fence.from).to + 1, fence.to);
+    const frame = root.getBoundingClientRect();
+    const top = view.documentTop;
+    const first = view.lineBlockAt(fence.from);
+    const end = view.lineBlockAt(fence.to);
+    let right = 0;
+    for (let n = doc.lineAt(fence.from).number; n <= Math.min(doc.lineAt(fence.to).number, doc.lineAt(fence.from).number + 80); n++) {
+      const line = doc.line(n);
+      const block = view.lineBlockAt(line.from);
+      // A wrapped line fills the width.
+      const edge = block.height > view.defaultLineHeight * 1.5 ? frame.width : (view.coordsAtPos(line.to, -1)?.right ?? frame.left) - frame.left;
+      right = Math.max(right, edge);
+    }
+    const head = view.lineBlockAt(view.state.selection.main.head);
+    const guttersLeft = (view.dom.querySelector('.cm-gutters')?.getBoundingClientRect().right ?? frame.left) - frame.left;
+    area = { width: frame.width, height: frame.height };
+    const box = (a: number, b: number): Box => ({ top: top + a - frame.top, bottom: top + b - frame.top, left: guttersLeft, right });
+    peek = {
+      from: fence.from,
+      lang,
+      source,
+      style: parseStyle(words),
+      anchor: box(first.top, end.bottom),
+      caret: box(head.top, head.bottom),
+    };
+  }
+
+  /** Escape closes the drawing, and lets go of it when it was kept open. */
+  function closePeek() {
+    if (!peek) return false;
+    if (view && fenceAt(view.state)) dismissed = fenceAt(view.state)!.from;
+    pinned = false;
+    peek = null;
+    return true;
   }
 
   /** Opens the diagram under the cursor when the builder can read it. */
@@ -325,25 +500,43 @@
     }
   }
 
-  function setNoteStyle(value: string | null) {
-    if (!view) return;
-    const change = frontmatterChange(view.state.doc.toString(), 'tema-diagramas', value);
-    if (change) view.dispatch({ changes: change });
-  }
-
   onMount(() => {
     view = new EditorView({ parent: host });
     view.dom.addEventListener(EDIT_DIAGRAM, openBuilder);
+    view.dom.addEventListener(TOGGLE_TASK, () => view && tab.kind === 'md' && toggleTask(view));
+    view.dom.addEventListener(FOLD_ALL, () => view && foldAll(view));
+    view.dom.addEventListener(UNFOLD_ALL, () => view && unfoldAll(view));
+    view.dom.addEventListener(SORT_LINES, () => view && tab.kind === 'md' && sortLines(view));
     const scroller = view.scrollDOM;
+    scroller.addEventListener('scroll', schedulePeek, { passive: true });
     scroller.addEventListener('scroll', () => {
-      const max = scroller.scrollHeight - scroller.clientHeight;
-      onscroll?.(max > 0 ? scroller.scrollTop / max : 0);
+      if (!view || scroller.clientHeight === 0) return;
+      if (expected !== null && Math.abs(scroller.scrollTop - expected) < 1) return void (expected = null);
+      expected = null;
+      const place = topPlace(view);
+      places.set(tab.key, place);
+      onscroll?.(place);
     }, { passive: true });
     show(tab);
     view.focus();
   });
 
-  onDestroy(() => view?.destroy());
+  onDestroy(() => {
+    cancelAnimationFrame(peekFrame);
+    store.selection = null;
+    view?.destroy();
+  });
+
+  /** Tells the status bar what is selected. */
+  function publishSelection(state: EditorState) {
+    const count = countSelection(state);
+    const now = store.selection;
+    if (!count) {
+      if (now) store.selection = null;
+    } else if (now?.key !== tab.key || now.words !== count.words || now.chars !== count.chars) {
+      store.selection = { key: tab.key, ...count };
+    }
+  }
 
   /** Tells the note panel which line has the cursor. */
   function publishPosition(state: EditorState) {
@@ -375,7 +568,17 @@
     tab.view;
     tab.outside;
     store.spellcheck;
+    store.typewriter;
     show(tab);
+  });
+
+  $effect(() => {
+    tab.view;
+    tab.kind;
+    tab.key;
+    store.diagramPeek;
+    pinned;
+    refreshPeek();
   });
 
   $effect(() => {
@@ -386,18 +589,20 @@
   });
 </script>
 
-<div class="editor">
-  {#if tab.kind === 'md'}<Toolbar view={() => view} ondiagram={openBuilder} onstyle={() => (styling = true)} />{/if}
+<div class="editor" bind:this={root}>
+  {#if tab.kind === 'md' && !store.focus}<Toolbar view={() => view} ondiagram={openBuilder} onstyle={() => store.openPanel('properties')} />{/if}
   <div class="host" bind:this={host}></div>
+  {#if peek}
+    {#key peek.from}
+      <DiagramPeek {tab} lang={peek.lang} source={peek.source} style={peek.style} anchor={peek.anchor} caret={peek.caret} {area} bind:pinned onclose={closePeek} />
+    {/key}
+  {/if}
 </div>
 {#if builder}
   <DiagramBuilder {tab} initial={builder.initial} onsave={saveDiagram} onclose={closeBuilder} />
 {/if}
-{#if styling}
-  <NoteDiagramStyle {tab} value={frontmatterValue(tab.content, 'tema-diagramas')} onchange={setNoteStyle} onclose={() => (styling = false)} />
-{/if}
 
 <style>
-  .editor { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .editor { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .host { flex: 1; min-height: 0; overflow: hidden; }
 </style>

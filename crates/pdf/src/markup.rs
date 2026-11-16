@@ -1,7 +1,7 @@
 //! Turns notes into Typst source. All text is emitted as string literals.
 
 use crate::Input;
-use pulldown_cmark::{BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Parser, Tag, TagEnd};
+use pulldown_cmark::{BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Tag, TagEnd};
 use std::collections::HashMap;
 use ultimatemd_core::docx::{Section, split_frontmatter};
 use ultimatemd_core::export_links;
@@ -98,9 +98,24 @@ struct Writer<'a> {
     next_diagram: usize,
     images: Vec<(String, Vec<u8>)>,
     notes: HashMap<String, String>,
+    /// Draw formulas as Typst math. Off, they are written as typed: the way out
+    /// when Typst cannot lay out a formula, so that the export still happens.
+    formulas: bool,
 }
 
 impl Writer<'_> {
+    fn math(&mut self, latex: &str, display: bool) {
+        let marks = if display { "$$" } else { "$" };
+        let typst = if self.formulas { ultimatemd_core::math::to_typst(latex, display) } else { None };
+        match typst {
+            Some(math) if display => {
+                self.push(&format!("#block(width: 100%, breakable: false)[#align(center)[{math}]]\n\n"))
+            }
+            Some(math) => self.push(&math),
+            None => self.push(&format!("#raw({})", quoted(&format!("{marks}{latex}{marks}")))),
+        }
+    }
+
     fn push(&mut self, value: &str) {
         if let Some(buffer) = self.out.last_mut() {
             buffer.push_str(value);
@@ -177,6 +192,8 @@ impl Writer<'_> {
             Event::Text(_) if self.in_image => {}
             Event::Text(value) => self.push(&text(&value)),
             Event::Code(value) => self.push(&format!("#raw({})", quoted(&value))),
+            Event::InlineMath(latex) => self.math(&latex, false),
+            Event::DisplayMath(latex) => self.math(&latex, true),
             Event::SoftBreak => self.push(&text(" ")),
             Event::HardBreak => self.push("#linebreak()"),
             Event::Rule => self.push("#line(length: 100%, stroke: 0.5pt + luma(170))\n\n"),
@@ -347,7 +364,7 @@ pub fn author(sections: &[Section]) -> String {
 }
 
 /// Returns the Typst source and the images it refers to.
-pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
+pub fn build(input: &Input, formulas: bool) -> (String, Vec<(String, Vec<u8>)>) {
     let author = author(input.sections);
     let metadata = if author.is_empty() { String::new() } else { format!(", author: {}", quoted(&author)) };
     let mut source = format!(
@@ -372,6 +389,7 @@ pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
         next_diagram: 0,
         images: Vec::new(),
         notes: HashMap::new(),
+        formulas,
     };
     for (index, section) in input.sections.iter().enumerate() {
         match section {
@@ -393,7 +411,7 @@ pub fn build(input: &Input) -> (String, Vec<(String, Vec<u8>)>) {
                 writer.note_heading = 0;
                 // Where links to the note land.
                 writer.push(&format!("#metadata(none)<{}>\n", export_links::note_anchor(index)));
-                for event in Parser::new_ext(&bodies[index], export_links::OPTIONS) {
+                for event in ultimatemd_core::math::events(&bodies[index]) {
                     writer.event(event);
                 }
                 let content = std::mem::take(&mut writer.out[0]);

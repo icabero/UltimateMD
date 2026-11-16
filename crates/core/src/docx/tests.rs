@@ -489,3 +489,33 @@ fn links_to_notes_in_the_document_jump_to_them() {
     let linked = document.split(r#"<w:hyperlink w:anchor="umd1">"#).nth(1).expect("link to the note");
     assert!(linked[..linked.find("</w:hyperlink>").unwrap()].contains(">Lunes<"));
 }
+
+#[test]
+fn formulas_are_word_equations() {
+    let sections =
+        note("# Título $x$\n\nSea $x^2$ y cuesta 5$ y 10$ euros.\n\n$$\n\\frac{a}{b}\n$$\n\nRota $\\left( x$ aquí.\n");
+    let image = |_: &str, _: &str| None;
+    let input = Input {
+        sections: &sections,
+        title: "archivo",
+        fixed_title: false,
+        date: "5/11/2026",
+        contents: "Índice",
+        diagrams: &[],
+        image: &image,
+        template: None,
+        settings: &Default::default(),
+        inline_numbering: false,
+        language: "es",
+    };
+    let parts = read_package(&render(&input).unwrap()).unwrap();
+    assert_well_formed(&parts);
+    let document = text(&parts, DOCUMENT);
+    assert_eq!(document.matches("<m:oMath ").count(), 2, "the one in the heading and the inline one: {document}");
+    assert!(document.contains("<m:oMathPara"), "{document}");
+    assert!(document.contains("<m:sSup>") && document.contains("<m:f>"));
+    let words = Regex::new("<[^>]*>").unwrap().replace_all(&document, "");
+    assert!(words.contains("5$ y 10$ euros"), "a price stays text: {words}");
+    assert!(words.contains("$\\left( x$"), "an unreadable formula goes in as typed: {words}");
+    assert!(document.contains("<w:rFonts"), "in the code font: {document}");
+}

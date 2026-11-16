@@ -11,6 +11,21 @@ export interface Vault {
   allowScripts: boolean;
 }
 
+/** How a vault's tree is ordered; folders always come first. */
+/** What a folder is given to stand out: a colour of the theme, by name, and an emoji. */
+export interface FolderLook {
+  color?: string | null;
+  emoji?: string | null;
+}
+
+export type SortMode = 'nameAsc' | 'nameDesc' | 'modifiedNew' | 'modifiedOld' | 'manual';
+export type DailyFormat = 'iso' | 'yearMonth' | 'dayFirst';
+export interface DailySettings {
+  folder: string;
+  format: DailyFormat;
+  template: string | null;
+}
+
 export interface TreeNode {
   name: string;
   path: string;
@@ -211,6 +226,15 @@ export const api = {
   setVaultAccess: (id: string, mcp: McpAccess) => invoke<void>('set_vault_access', { id, mcp }),
   setVaultScripts: (id: string, allow: boolean) => invoke<void>('set_vault_scripts', { id, allow }),
   tree: (id: string) => invoke<TreeNode[]>('vault_tree', { id }),
+  dailyNotes: (id: string) => invoke<DailySettings>('daily_notes', { id }),
+  saveDailyNotes: (id: string, settings: DailySettings) => invoke<void>('save_daily_notes', { id, settings }),
+  treeOrder: (id: string) => invoke<SortMode>('tree_order', { id }),
+  setTreeOrder: (id: string, mode: SortMode) => invoke<void>('set_tree_order', { id, mode }),
+  /** The colour or emoji of each folder that has one, by path. */
+  folderLooks: (id: string) => invoke<Record<string, FolderLook>>('folder_looks', { id }),
+  /** Gives a folder a look, or takes it away with null. */
+  setFolderLook: (id: string, folder: string, look: FolderLook | null) => invoke<void>('set_folder_look', { id, folder, look }),
+  placeInTree: (id: string, path: string, target: string, after: boolean) => invoke<void>('place_in_tree', { id, path, target, after }),
   read: (id: string, path: string) => invoke<Note>('read_note', { id, path }),
   write: (id: string, path: string, content: string, expected: string | null) =>
     invoke<string>('write_note', { id, path, content, expected }),
@@ -294,8 +318,8 @@ export const api = {
   gitCommitted: (id: string, path: string) => invoke<string | null>('git_committed', { id, path }),
   /** Commits every change in the vault and returns the commit's short id. */
   gitCommit: (id: string, message: string) => invoke<string>('git_commit', { id, message }),
-  /** The other names notes answer to: of the whole vault, or of `paths` only. */
-  aliases: (id: string, paths?: string[]) => invoke<{ path: string; aliases: string[] }[]>('vault_aliases', { id, paths: paths ?? null }),
+  /** The other names notes answer to and the emoji they declare: of the whole vault, or of `paths` only. */
+  aliases: (id: string, paths?: string[]) => invoke<{ path: string; aliases: string[]; icon: string | null }[]>('vault_aliases', { id, paths: paths ?? null }),
   /** The vault's guide for the diagrams an AI draws, or null. */
   diagramGuide: (id: string) => invoke<string | null>('diagram_guide', { id }),
   /** Saves the guide; an empty text removes it. */

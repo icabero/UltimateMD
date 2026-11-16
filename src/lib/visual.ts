@@ -6,20 +6,30 @@ import { Prec, StateField, Transaction, type EditorState, type Range } from '@co
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet } from '@codemirror/view';
 import { CALLOUT_START, describeCallout } from './callouts';
 import { parseStyle, type DiagramStyle } from './diagramStyle';
+import { findFormulas } from './mathSource';
+import { renderMath } from './math';
 import { diagramErrorBox, explainDiagramError } from './diagramErrors';
 import { renderDiagram } from './diagrams';
-import { tr } from './i18n.svelte';
-import { store } from './store.svelte';
+import { fileUrl } from './api';
+import { tr, type Key } from './i18n.svelte';
+import { coverPath, noteLook } from './look';
+import { store, type Tab } from './store.svelte';
+import { alignColumn, delimiterRow, joinRow, moveColumn, moveRow, parseTable, type Align, type Table } from './tables';
 import { themeKey, type Theme } from './themes';
 import { WIKILINK, linkAt } from './wikilinks';
 
 const PARSE_BUDGET_MS = 100;
 const DIAGRAM_HEIGHT = 220;
+const MATH_HEIGHT = 60;
+const COVER_HEIGHT = 180;
 const FRONTMATTER_LIMIT = 20_000;
 const DIAGRAM_FENCE = /^(`{3,}|~{3,})\s*(mermaid|d2)(?:\s+(.*))?$/i;
 
 /** Asks the editor to open the diagram under the cursor. */
 export const EDIT_DIAGRAM = 'umd-edit-diagram';
+/** What the palette asks of the editor: tick the lines as tasks, or sort them. */
+export const TOGGLE_TASK = 'umd-toggle-task';
+export const SORT_LINES = 'umd-sort-lines';
 const FRONTMATTER = /^---\r?\n[\s\S]*?\n---[ \t]*(\r?\n|$)/;
 const HIDDEN_MARKS = new Set(['EmphasisMark', 'StrikethroughMark']);
 
@@ -62,6 +72,81 @@ class CheckboxWidget extends WidgetType {
   }
 }
 
+/** A formula drawn, in the line or as a block of its own. A click puts the cursor in it and brings its source back. */
+class MathWidget extends WidgetType {
+  constructor(readonly tex: string, readonly block: boolean, readonly display: boolean) {
+    super();
+  }
+  eq(other: MathWidget) {
+    return other.tex === this.tex && other.block === this.block && other.display === this.display;
+  }
+  get estimatedHeight() {
+    return this.block ? MATH_HEIGHT : -1;
+  }
+  toDOM() {
+    const el = document.createElement(this.block ? 'div' : 'span');
+    el.className = this.block ? 'cm-v-math-block' : 'cm-v-math';
+    el.innerHTML = renderMath(this.tex, this.display);
+    return el;
+  }
+  ignoreEvent() {
+    return false;
+  }
+}
+
+/** The note's banner and emoji above its text. Hovering the banner offers to change or remove it. */
+class HeadWidget extends WidgetType {
+  constructor(readonly icon: string | null, readonly image: string | null, readonly vaultId: string) {
+    super();
+  }
+  eq(other: HeadWidget) {
+    return other.icon === this.icon && other.image === this.image && other.vaultId === this.vaultId;
+  }
+  get estimatedHeight() {
+    return (this.image ? COVER_HEIGHT : 0) + (this.icon ? 56 : 0);
+  }
+  toDOM() {
+    const el = document.createElement('div');
+    el.className = 'cm-v-head';
+    if (this.image) {
+      const cover = document.createElement('div');
+      cover.className = 'cm-v-cover';
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = fileUrl(this.vaultId, this.image);
+      const tools = document.createElement('div');
+      tools.className = 'cm-v-cover-tools';
+      const button = (label: string, run: (tab: Tab) => void) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = label;
+        b.onmousedown = (e) => e.preventDefault();
+        b.onclick = () => {
+          const tab = store.active;
+          if (tab) run(tab);
+        };
+        return b;
+      };
+      tools.append(
+        button(tr('look.changeCover'), (tab) => void store.chooseNoteCover(tab)),
+        button(tr('look.removeCover'), (tab) => store.setNoteLook(tab, 'cover', '')),
+      );
+      cover.append(img, tools);
+      el.append(cover);
+    }
+    if (this.icon) {
+      const emoji = document.createElement('div');
+      emoji.className = 'cm-v-icon';
+      emoji.textContent = this.icon;
+      el.append(emoji);
+    }
+    return el;
+  }
+  ignoreEvent() {
+    return true;
+  }
+}
+
 class DiagramWidget extends WidgetType {
   constructor(readonly lang: string, readonly src: string, readonly theme: Theme, readonly sketch: boolean, readonly animated = false) {
     super();
@@ -96,37 +181,37 @@ class DiagramWidget extends WidgetType {
 }
 
 const MIN_CELL_WIDTH = 8;
-const CELL_SEPARATOR = /(?<!\\)\|/;
-
-function splitRow(line: string) {
-  const inner = line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '');
-  return inner.split(CELL_SEPARATOR).map((cell) => cell.trim().replace(/\\([\\|])/g, '$1'));
-}
-
-const joinRow = (cells: string[]) => `| ${cells.map((cell) => cell.replace(/\s+/g, ' ').trim().replace(/[\\|]/g, '\\$&')).join(' | ')} |`;
-
-function tableRows(text: string) {
-  const lines = text.split('\n');
-  const head = splitRow(lines[0]);
-  return [head, ...lines.slice(2).map(splitRow)].map((row) => head.map((_, i) => row[i] ?? ''));
-}
 
 const cleanCell = (value: string) => value.replace(/\s+/g, ' ').trim();
 
 /** The Markdown each drawn table stands for, which outlives any one widget. */
 const tableText = new WeakMap<HTMLElement, string>();
+/** Brings what a table's buttons show up to date after it changed. */
+const tableRefresh = new WeakMap<HTMLElement, () => void>();
 
 /** Writes a table back. Its cells stay as they are, so typing never loses its place. */
-function writeTable(view: EditorView, wrap: HTMLElement, rows: string[][]) {
+function writeTable(view: EditorView, wrap: HTMLElement, rows: string[][], aligns: Align[]) {
   const text = tableText.get(wrap)!;
-  const lines = text.split('\n');
-  const divider = splitRow(lines[1]).length === rows[0].length ? lines[1] : joinRow(Array(rows[0].length).fill('---'));
+  const old = parseTable(text);
+  // A column added or taken away changes how many there are to align.
+  aligns = rows[0].map((_, i) => aligns[i] ?? null);
+  const same = old.aligns.length === aligns.length && old.aligns.every((a, i) => a === aligns[i]);
+  const divider = same ? text.split('\n')[1] : delimiterRow(aligns);
   const [head, ...body] = rows.map(joinRow);
   const next = [head, divider, ...body].join('\n');
   if (next === text) return;
   const from = view.posAtDOM(wrap);
   tableText.set(wrap, next);
   view.dispatch({ changes: { from, to: from + text.length, insert: next } });
+}
+
+/** Shows how each column is aligned, in the cells that are drawn. */
+function showAligns(table: HTMLTableElement, aligns: Align[]) {
+  for (const row of table.rows) {
+    [...row.cells].forEach((cell, c) => {
+      cell.querySelector('input')!.style.textAlign = aligns[c] ?? '';
+    });
+  }
 }
 
 /**
@@ -150,7 +235,7 @@ class TableWidget extends WidgetType {
 
   /** Keeps the table on screen through an edit, unless its shape changed. */
   updateDOM(dom: HTMLElement) {
-    const rows = tableRows(this.text);
+    const { rows, aligns } = parseTable(this.text);
     const table = dom.querySelector('table')!;
     if (table.rows.length !== rows.length || table.rows[0].cells.length !== rows[0].length) return false;
     tableText.set(dom, this.text);
@@ -158,6 +243,8 @@ class TableWidget extends WidgetType {
       const input = table.rows[r].cells[c].querySelector('input')!;
       if (cleanCell(input.value) !== value) input.value = value;
     }));
+    showAligns(table, aligns);
+    tableRefresh.get(dom)?.();
     return true;
   }
 
@@ -167,7 +254,38 @@ class TableWidget extends WidgetType {
     tableText.set(wrap, this.text);
     const table = wrap.appendChild(document.createElement('table'));
     const read = () => [...table.rows].map((row) => [...row.querySelectorAll('input')].map((input) => input.value));
-    tableRows(this.text).forEach((row, r) => {
+    const current = () => parseTable(tableText.get(wrap)!);
+    const updates: (() => void)[] = [];
+    const refresh = () => updates.forEach((update) => update());
+    tableRefresh.set(wrap, refresh);
+
+    /** The cell being edited, which the row, column and alignment actions act on. */
+    const focused = () => {
+      const input = document.activeElement;
+      const cell = input instanceof HTMLInputElement && table.contains(input) ? (input.parentElement as HTMLTableCellElement) : null;
+      return cell ? { r: (cell.parentElement as HTMLTableRowElement).rowIndex, c: cell.cellIndex } : null;
+    };
+    const move = (axis: 'row' | 'column', by: -1 | 1) => {
+      const at = focused();
+      if (!at) return;
+      const now = current();
+      const moved = axis === 'row' ? moveRow(now, at.r, by) : moveColumn(now, at.c, by);
+      if (!moved) return;
+      writeTable(view, wrap, moved.rows, moved.aligns);
+      // The cursor goes along with the cell.
+      table.rows[at.r + (axis === 'row' ? by : 0)]?.cells[at.c + (axis === 'column' ? by : 0)]?.querySelector('input')?.focus();
+      refresh();
+    };
+    const align = (to: Exclude<Align, null>) => {
+      const at = focused();
+      const changed = at && alignColumn(current(), at.c, to);
+      if (!changed) return;
+      writeTable(view, wrap, read(), changed.aligns);
+      refresh();
+    };
+
+    const parsed = current();
+    parsed.rows.forEach((row, r) => {
       const line = table.appendChild(document.createElement('tr'));
       for (const value of row) {
         const cell = line.appendChild(document.createElement(r === 0 ? 'th' : 'td'));
@@ -176,20 +294,31 @@ class TableWidget extends WidgetType {
         input.value = value;
         input.oninput = () => {
           fit();
-          writeTable(view, wrap, read());
+          writeTable(view, wrap, read(), current().aligns);
         };
+        input.onfocus = refresh;
         fit();
       }
     });
+    showAligns(table, parsed.aligns);
     wrap.addEventListener('keydown', (e) => {
       e.stopPropagation();
-      if (e.key !== 'Enter' || !(e.target instanceof HTMLInputElement)) return;
+      if (!(e.target instanceof HTMLInputElement)) return;
+      // Alt and an arrow move the row or column being edited, as Alt and an arrow move a line.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.startsWith('Arrow')) {
+        e.preventDefault();
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') move('row', e.key === 'ArrowUp' ? -1 : 1);
+        else move('column', e.key === 'ArrowLeft' ? -1 : 1);
+        return;
+      }
+      if (e.key !== 'Enter') return;
       e.preventDefault();
       const cell = e.target.parentElement as HTMLTableCellElement;
       const below = table.rows[(cell.parentElement as HTMLTableRowElement).rowIndex + 1];
       below?.cells[cell.cellIndex].querySelector('input')?.focus();
     });
     for (const type of ['beforeinput', 'input', 'paste', 'cut', 'copy']) wrap.addEventListener(type, (e) => e.stopPropagation());
+    wrap.addEventListener('focusout', () => queueMicrotask(refresh));
 
     const tools = wrap.appendChild(document.createElement('div'));
     tools.className = 'cm-v-table-tools';
@@ -199,13 +328,48 @@ class TableWidget extends WidgetType {
       button.onmousedown = (e) => e.preventDefault();
       button.onclick = () => {
         const changed = change(read());
-        if (changed) writeTable(view, wrap, changed);
+        if (changed) writeTable(view, wrap, changed, current().aligns);
       };
     };
     tool(tr('table.addRow'), (now) => [...now, now[0].map(() => '')]);
     tool(tr('table.addColumn'), (now) => now.map((row, i) => [...row, i === 0 ? `${tr('toolbar.column')} ${row.length + 1}` : '']));
     tool(tr('table.removeRow'), (now) => (now.length > 2 ? now.slice(0, -1) : null));
     tool(tr('table.removeColumn'), (now) => (now[0].length > 1 ? now.map((row) => row.slice(0, -1)) : null));
+
+    // These act on the cell being edited, so they stay off until one is.
+    const group = (label: string) => {
+      const box = tools.appendChild(document.createElement('div'));
+      box.className = 'cm-v-table-group';
+      box.setAttribute('role', 'group');
+      box.setAttribute('aria-label', label);
+      return box;
+    };
+    const cellTool = (box: HTMLElement, label: string, title: string, run: () => void, state: (at: { r: number; c: number }, t: Table) => { on?: boolean; off?: boolean }) => {
+      const button = box.appendChild(document.createElement('button'));
+      button.textContent = label;
+      button.onmousedown = (e) => e.preventDefault();
+      button.onclick = run;
+      button.setAttribute('aria-label', title);
+      updates.push(() => {
+        const at = focused();
+        const s = at ? state(at, current()) : { off: true };
+        button.disabled = !!s.off;
+        button.title = at ? title : `${title} (${tr('table.pickCell')})`;
+        button.setAttribute('aria-pressed', String(!!s.on));
+      });
+    };
+    const aligning = group(tr('table.align'));
+    for (const [to, label, key] of [['left', '⇤', 'table.alignLeft'], ['center', '↔', 'table.alignCenter'], ['right', '⇥', 'table.alignRight']] as const) {
+      cellTool(aligning, label, tr(key), () => align(to), (at, t) => ({ on: t.aligns[at.c] === to }));
+    }
+    const moving = group(tr('table.move'));
+    const moveTool = (label: string, key: Key, axis: 'row' | 'column', by: -1 | 1) =>
+      cellTool(moving, label, tr(key), () => move(axis, by), (at, t) => ({ off: !(axis === 'row' ? moveRow(t, at.r, by) : moveColumn(t, at.c, by)) }));
+    moveTool('↑', 'table.rowUp', 'row', -1);
+    moveTool('↓', 'table.rowDown', 'row', 1);
+    moveTool('←', 'table.columnLeft', 'column', -1);
+    moveTool('→', 'table.columnRight', 'column', 1);
+    refresh();
     return wrap;
   }
 }
@@ -240,6 +404,12 @@ function decorate(state: EditorState, typing: boolean) {
   const tree = ensureSyntaxTree(state, size, PARSE_BUDGET_MS) ?? syntaxTree(state);
   const head = FRONTMATTER.exec(state.sliceDoc(0, Math.min(size, FRONTMATTER_LIMIT)));
   const bodyStart = head?.[0].length ?? 0;
+  const tab = store.active;
+  if (head && tab) {
+    const { icon, cover } = noteLook(head[0]);
+    const image = cover ? coverPath(cover, tab.path, store.files(tab.vaultId)) : null;
+    if (icon || image) out.push(Decoration.widget({ widget: new HeadWidget(icon, image, tab.vaultId), block: true, side: -1 }).range(0));
+  }
   for (let pos = 0; pos < bodyStart; ) {
     const line = state.doc.lineAt(pos);
     out.push(lineClass('cm-v-meta').range(line.from));
@@ -256,6 +426,10 @@ function decorate(state: EditorState, typing: boolean) {
     const textStart = match[3] === undefined ? from + 2 : to - 2 - match[3].length;
     out.push(hidden.range(from, textStart), hidden.range(to - 2, to));
   }
+
+  // The marks inside a formula stay as they are: `a_1 * b_2` is not emphasis.
+  const formulas = findFormulas(state, bodyStart);
+  for (const f of formulas) links.push({ from: f.from, to: f.to });
 
   tree.iterate({
     enter(node) {
@@ -318,6 +492,12 @@ function decorate(state: EditorState, typing: boolean) {
       }
     },
   });
+  // Drawn when the cursor is elsewhere. Not inside a table or diagram, which draw themselves.
+  for (const f of formulas) {
+    if (touchesCursor(state, f.from, f.to) || blocks.some((b) => b.from < f.to && b.to > f.from)) continue;
+    const widget = new MathWidget(f.content, f.block, f.display);
+    out.push(f.block ? Decoration.replace({ widget, block: true }).range(f.from, f.to) : Decoration.replace({ widget }).range(f.from, f.to));
+  }
   return { all: Decoration.set(out, true), blocks: Decoration.set(blocks, true) };
 }
 
@@ -354,9 +534,11 @@ const keepBlocksWhole = EditorView.inputHandler.of((view, from, to, text) => {
 });
 
 const look = EditorView.theme({
-  '.cm-gutters': { display: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--sans)', fontSize: 'calc(15px * var(--text-scale, 1))', lineHeight: 'calc(1.65 + var(--leading, 0))' },
-  '.cm-content': { maxWidth: 'var(--prose-width, 760px)', margin: '0 auto', width: '100%' },
+  // Only the fold arrows stay, next to the text, which is centred along with them.
+  '.cm-lineNumbers': { display: 'none !important' },
+  '.cm-activeLineGutter': { background: 'transparent' },
+  '.cm-scroller': { justifyContent: 'center', fontFamily: 'var(--sans)', fontSize: 'calc(15px * var(--text-scale, 1))', lineHeight: 'calc(1.65 + var(--leading, 0))' },
+  '.cm-content': { maxWidth: 'var(--prose-width, 760px)', margin: '0', width: '100%' },
   '.cm-activeLine': { background: 'transparent' },
   '.cm-v-h1': { fontSize: '1.9em', fontWeight: '700', lineHeight: '1.3' },
   '.cm-v-h2': { fontSize: '1.5em', fontWeight: '700', lineHeight: '1.3' },
@@ -370,6 +552,13 @@ const look = EditorView.theme({
   '.cm-v-callout-caution': { '--callout': '#dc2626' },
   '.cm-v-callout-title': { color: 'color-mix(in srgb, var(--callout) 70%, var(--text))', fontWeight: '650' },
   '.cm-v-code': { background: 'var(--panel)', fontFamily: 'var(--mono)', fontSize: 'calc(13px * var(--text-scale, 1))' },
+  '.cm-v-head': { margin: '0 0 8px' },
+  '.cm-v-cover': { position: 'relative', height: `${COVER_HEIGHT}px`, overflow: 'hidden', borderRadius: '8px', background: 'var(--panel)' },
+  '.cm-v-cover img': { display: 'block', width: '100%', height: '100%', objectFit: 'cover' },
+  '.cm-v-cover-tools': { position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '6px', opacity: '0', transition: 'opacity 120ms' },
+  '.cm-v-cover:hover .cm-v-cover-tools, .cm-v-cover:focus-within .cm-v-cover-tools': { opacity: '1' },
+  '.cm-v-cover-tools button': { padding: '3px 10px', border: '1px solid var(--line)', borderRadius: '5px', background: 'var(--raised)', color: 'var(--text)', fontFamily: 'var(--sans)', fontSize: '12px', cursor: 'pointer' },
+  '.cm-v-icon': { marginTop: '6px', fontSize: '2.6em', lineHeight: '1.1' },
   '.cm-v-meta': { color: 'var(--text-3)', fontFamily: 'var(--mono)', fontSize: 'calc(12.5px * var(--text-scale, 1))' },
   '.cm-v-inline-code': { padding: '1px 4px', borderRadius: '4px', background: 'var(--panel)', fontFamily: 'var(--mono)', fontSize: '.9em' },
   '.cm-v-link': { color: 'var(--accent-text)', textDecoration: 'underline' },
@@ -380,14 +569,19 @@ const look = EditorView.theme({
   '.cm-v-table table': { borderCollapse: 'collapse', maxWidth: '100%' },
   '.cm-v-table th, .cm-v-table td': { padding: '0', border: '1px solid var(--line)' },
   '.cm-v-table th': { background: 'var(--panel)' },
-  '.cm-v-table input': { display: 'block', height: 'auto', padding: '6px 10px', border: '0', borderRadius: '0', background: 'transparent', color: 'inherit', font: 'inherit', outline: 'none' },
+  '.cm-v-table input': { display: 'block', width: '100%', boxSizing: 'border-box', height: 'auto', padding: '6px 10px', border: '0', borderRadius: '0', background: 'transparent', color: 'inherit', font: 'inherit', outline: 'none' },
   '.cm-v-table th input': { fontWeight: '600' },
   '.cm-v-table input:focus': { boxShadow: 'inset 0 0 0 2px var(--accent)' },
   '.cm-v-table ::selection': { background: 'transparent' },
   '.cm-v-table input:focus::selection': { background: 'var(--selection)' },
-  '.cm-v-table-tools': { display: 'flex', gap: '4px', marginTop: '4px', opacity: '0', transition: 'opacity 120ms' },
+  '.cm-v-table-tools': { display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px', opacity: '0', transition: 'opacity 120ms' },
+  '.cm-v-table-group': { display: 'flex', gap: '2px', marginLeft: '8px' },
+  '.cm-v-table-tools button[aria-pressed="true"]': { background: 'var(--accent-soft)', borderColor: 'var(--accent)', color: 'var(--text)' },
+  '.cm-v-table-tools button:disabled': { opacity: '.45' },
   '.cm-v-table:hover .cm-v-table-tools, .cm-v-table:focus-within .cm-v-table-tools': { opacity: '1' },
   '.cm-v-table-tools button': { padding: '2px 8px', border: '1px solid var(--line)', borderRadius: '5px', background: 'var(--raised)', color: 'var(--text-2)', fontFamily: 'var(--sans)', fontSize: '11.5px' },
+  '.cm-v-math-block': { margin: '6px 0', overflowX: 'auto', overflowY: 'hidden', cursor: 'text' },
+  '.cm-v-math': { cursor: 'text' },
   '.cm-v-diagram': { display: 'flex', justifyContent: 'center', minHeight: '40px', padding: '8px 0', cursor: 'pointer' },
   '.cm-v-diagram svg': { maxWidth: '100%', height: 'auto' },
   '.cm-v-diagram .diagram-error': { width: '100%', padding: '10px 14px', border: '1px solid var(--line)', borderRadius: '8px', fontFamily: 'var(--sans)', fontSize: '13px', lineHeight: '1.5', cursor: 'default' },

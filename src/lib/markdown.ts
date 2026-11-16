@@ -7,6 +7,7 @@ import DOMPurify from 'dompurify';
 import { fileUrl } from './api';
 import { shapeCallouts } from './callouts';
 import { splitFence } from './diagramStyle';
+import { mathPlugin } from './math';
 import { dirName, kindOf, resolveLink, resolveRelative } from './paths';
 
 export interface RenderContext {
@@ -31,7 +32,8 @@ const md: any = new MarkdownIt({
   },
 })
   .use(footnote)
-  .use(taskLists, { enabled: false, label: true });
+  .use(taskLists, { enabled: false, label: true })
+  .use(mathPlugin);
 
 // Each top-level block says which lines of the note it comes from, so the
 // preview can mark the ones that changed.
@@ -267,8 +269,8 @@ export function renderMarkdown(text: string, ctx: RenderContext): DocumentFragme
   const fragment = DOMPurify.sanitize(head + md.render(body, { offset }), {
     RETURN_DOM_FRAGMENT: true,
     FORCE_BODY: true,
-    ADD_TAGS: ['style'],
-    ADD_ATTR: ['data-lang', 'data-src', 'data-style', 'data-embed', 'data-embed-note', 'data-wikilink'],
+    ADD_TAGS: ['style', 'annotation'],
+    ADD_ATTR: ['encoding', 'data-lang', 'data-src', 'data-style', 'data-embed', 'data-embed-note', 'data-wikilink'],
     FORBID_TAGS: ['form', 'iframe', 'object', 'embed', 'base', 'link', 'meta'],
   });
   shapeCallouts(fragment);

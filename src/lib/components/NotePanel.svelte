@@ -129,9 +129,11 @@
   .head { display: flex; align-items: center; gap: var(--space-1); height: 38px; flex: none; padding: 0 var(--space-1-5) 0 var(--space-2); border-bottom: 1px solid var(--line); }
   .frame-gap { height: 38px; flex: none; border-bottom: 1px solid var(--line); }
   .tabs { display: flex; flex: 1; gap: var(--space-0-5); min-width: 0; overflow: hidden; }
-  .tabs button { min-width: 0; overflow: hidden; padding: var(--space-1) var(--space-2); white-space: nowrap; text-overflow: ellipsis; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); transition: background var(--ease), color var(--ease); }
+  .tabs button { flex: 0 1 auto; min-width: 0; overflow: hidden; padding: var(--space-1) var(--space-1-5); white-space: nowrap; text-overflow: ellipsis; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); transition: background var(--ease), color var(--ease); }
   .tabs button:hover { background: var(--hover); color: var(--text); }
   .tabs button.on { background: var(--accent-soft); color: var(--accent-text); }
+  /* The open tab never hides its name; the others give way first. */
+  .tabs button.on { flex-shrink: 0; }
   .body { flex: 1; min-height: 0; padding: var(--space-2); overflow-y: auto; }
   .heading, .item { display: block; width: 100%; padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .heading:hover, .item:hover { background: var(--hover); color: var(--text); }

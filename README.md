@@ -24,12 +24,14 @@ UltimateMD es un editor libre para Windows, macOS y Linux. Tus notas siguen sien
 - **Escribir más rápido**: pega desde webs, Word o Google Docs y se convierte en Markdown; pega o arrastra imágenes y se guardan en el vault; crea notas desde plantillas; usa callouts como `> [!warning]`.
 - **Enlazar notas** escribiendo `[[` o con un botón, con sugerencias y un clic para abrirlas, también a un título (`[[nota#Título]]`). Al renombrar o mover una nota, sus enlaces se actualizan solos, y una pantalla reúne los enlaces rotos del vault para corregirlos.
 - **Leer un vault o una carpeta de arriba abajo**, como un solo documento, con un índice que marca por dónde vas, enlaces que saltan dentro de la lectura y el sitio guardado para volver. Desde el menú del vault o de la carpeta.
-- **Moverte rápido** con autoguardado, selector rápido y búsqueda global que no distingue acentos y abre la nota en la línea encontrada.
+- **Moverte rápido** con autoguardado, selector rápido y búsqueda global que no distingue acentos y abre la nota en la línea encontrada. Encima de la nota ves su ruta, los enlaces enseñan su nota al pasar el ratón y al cambiar de vista sigues en el mismo sitio.
+- **Escribir cómodo**: menú rápido con `/`, fórmulas matemáticas, tablas que se alinean y reordenan, secciones que se pliegan, modo concentración y máquina de escribir, y notas diarias.
+- **Encontrar cada ajuste**: una pantalla de ajustes por vault, los de cada nota en su panel, un buscador de ajustes y una frase que explica cada opción.
 - **Dibujar diagramas** Mermaid y D2 dentro de la nota, sin conexión: con un creador visual para los más habituales, plantillas para todos los demás y conexiones animadas. Si uno falla, te dice en qué línea y por qué.
 - **Exportar** una nota, una carpeta o un vault a PDF, Word, HTML o un sitio web en tres pasos, con vista previa y una revisión que avisa de lo que saldría mal.
 - **Usar tus plantillas de Word**, conservando portada, cabeceras, estilos e índice.
 - **Conectar tu IA** por MCP, con permisos por vault.
-- **Personalizarla** con ocho temas y temas propios por vault, nota o diagrama, y ajustar el tamaño del texto y el ancho de línea.
+- **Personalizarla** con iconos por tipo de archivo, color o emoji en las carpetas, icono y portada en cada nota, ocho temas y temas propios por vault, nota o diagrama, y ajustar el tamaño del texto y el ancho de línea.
 - **Abrir `.md` sueltos** y usarla como programa por defecto.
 - **Usarla en castellano, euskera o inglés**, con un tutorial la primera vez y aviso de nuevas versiones.
 
@@ -70,7 +72,7 @@ Herramientas: `list_vaults`, `list_notes`, `read_note`, `search_notes`, `get_bac
 
 ### Diagramas de la IA con el estilo del vault
 
-Para que todos los diagramas de un vault se parezcan, los dibuje quien los dibuje, el vault puede llevar una **guía de estilo**, como un `CLAUDE.md` para diagramas. Ábrela con clic derecho en el vault → **Estilo de diagramas para la IA**. Puedes escribirla a mano o pulsar **Partir del estilo actual** para empezar con los colores y la forma con que la app dibuja ya los diagramas del vault. Se guarda en `.ultimatemd/diagramas.md` y viaja con el vault.
+Para que todos los diagramas de un vault se parezcan, los dibuje quien los dibuje, el vault puede llevar una **guía de estilo**, como un `CLAUDE.md` para diagramas. Ábrela en los ajustes del vault → **Diagramas**, o desde la paleta (Ctrl+Mayús+P) con «Estilo de diagramas para la IA». Puedes escribirla a mano o pulsar **Partir del estilo actual** para empezar con los colores y la forma con que la app dibuja ya los diagramas del vault. Se guarda en `.ultimatemd/diagramas.md` y viaja con el vault.
 
 - Antes de dibujar, la IA lee la guía con `get_diagram_guide`. La usa tanto si dibuja en Mermaid o D2 como si hace una imagen.
 - Cuando Mermaid o D2 no bastan, la IA guarda el diagrama como imagen con `add_diagram_image`. Puede ser un SVG, que se limpia antes de guardarlo (sin scripts ni nada que se cargue de fuera), o un PNG. La imagen va a `adjuntos/` y se inserta en la nota o en una sección.
@@ -93,7 +95,7 @@ Lo exportado usa un aspecto de documento, sea cual sea el tema activo. Los diagr
 - **PDF:** se compone directamente con un motor tipográfico integrado, sin diálogo de impresión, con portada e índice opcionales. Lleva el título y el `autor` del frontmatter en sus propiedades, y puede generarse como PDF/A para archivar.
 - **Sitio web:** una página por nota, con las mismas carpetas, un menú con todas y una portada. Los enlaces entre notas llevan a su página y las imágenes se copian en `assets/`. Se crea una carpeta nueva dentro de la que elijas, lista para abrir en el navegador o publicar en GitHub Pages.
 - **Word:** la nota se escribe dentro de una copia de tu plantilla. Incluye una plantilla de ejemplo que puedes guardar y adaptar.
-- **Word por vault:** cada vault puede llevar su propia plantilla y ajustar títulos, texto, tablas, imágenes y código, con una muestra en directo. Se abre desde el icono de Word junto al nombre del vault. Los estilos de títulos numerados de la plantilla se detectan solos.
+- **Word por vault:** cada vault puede llevar su propia plantilla y ajustar títulos, texto, tablas, imágenes y código, con una muestra en directo. Está en los ajustes del vault → **Word**. Los estilos de títulos numerados de la plantilla se detectan solos.
 
 Marcadores para tu plantilla:
 
@@ -118,6 +120,7 @@ Abre la carpeta del vault como cualquier otra. UltimateMD no toca `.obsidian` ni
 | Etiquetas `#etiqueta`, `#anidada/etiqueta` y `tags:` del frontmatter | Se cuentan, se sugieren y se buscan |
 | Callouts `> [!tipo]`, también plegables con `-` y `+` | Con su color e icono |
 | `==resaltado==` y `%%comentarios%%` | El comentario no se ve ni sale al exportar. En Word y PDF el resaltado queda como texto normal |
+| Fórmulas `$x^2$` y bloques `$$ ... $$` (LaTeX) | Se dibujan en la vista previa y el modo visual, sin conexión; en Word son ecuaciones editables y en PDF, matemáticas de Typst. Un precio como `5$ y 10$` no cuenta como fórmula, y `\$` escribe un dólar. Lo que no se entiende sale tal cual, sin romper la nota |
 | Tareas `- [ ]` y `- [x]` | Se marcan con un clic en el modo visual |
 | `aliases:` del frontmatter | `[[Otro nombre]]` lleva a la nota, se sugiere al escribir `[[` y sigue funcionando al renombrarla o moverla |
 | `![[otra nota]]`, `![[nota#Título]]` y `![[nota#^bloque]]` | Se ve su texto dentro de la nota, en la lectura de arriba abajo y al exportar |

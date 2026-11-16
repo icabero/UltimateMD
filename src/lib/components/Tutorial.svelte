@@ -12,6 +12,7 @@
     { title: 'tutorial.searchTitle', body: 'tutorial.searchBody' },
     { title: 'tutorial.exportTitle', body: 'tutorial.exportBody' },
     { title: 'tutorial.themesTitle', body: 'tutorial.themesBody' },
+    { title: 'tutorial.settingsTitle', body: 'tutorial.settingsBody' },
     { title: 'tutorial.mcpTitle', body: 'tutorial.mcpBody' },
   ];
 

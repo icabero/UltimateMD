@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { dim, pop } from '../motion';
+  // How the vault's notes look in Word, as a part of its settings screen.
   import { onMount } from 'svelte';
   import DocxSheet from './DocxSheet.svelte';
-  import Icon from './Icon.svelte';
   import { api, type WordConfig, type WordSettings } from '../api';
   import { tr } from '../i18n.svelte';
   import { store } from '../store.svelte';
@@ -87,7 +86,6 @@
     await load();
   }
 
-  const close = () => (store.wordScreen = null);
   const number = (value: string) => (value === '' ? null : Number(value));
 
   onMount(() => {
@@ -99,18 +97,11 @@
   });
 </script>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && !store.dialog) close(); }} />
-
-<button in:dim class="scrim top" aria-label={tr('common.close')} onclick={close}></button>
-<div in:pop class="modal" role="dialog" aria-label={tr('word.title', { name: vaultName })}>
+<div class="word">
   <div class="config">
-    <header>
-      <h2>{tr('word.title', { name: vaultName })}</h2>
-      <button class="icon" title={tr('common.close')} onclick={close}><Icon name="close" /></button>
-    </header>
-
+    <p class="intro">{tr('word.intro')}</p>
     {#if settings && config}
-      <h3>{tr('export.template')}</h3>
+      <h3 data-setting="vault.word.template">{tr('export.template')}</h3>
       <p class="hint">{tr(config.hasTemplate ? 'word.templateHere' : 'word.noTemplate')}</p>
       <div class="buttons">
         <button class="plain" onclick={chooseTemplate}>{tr(config.hasTemplate ? 'word.changeTemplate' : 'word.chooseTemplate')}</button>
@@ -118,6 +109,7 @@
       </div>
 
       <h3>{tr('word.headings')}</h3>
+      <p class="hint">{tr('word.headingsHint')}</p>
       {#each LEVELS as n}
         <label class="row">{tr('export.heading', { n })}
           <select value={settings.headings[n - 1] ?? ''} onchange={(e) => { settings!.headings[n - 1] = e.currentTarget.value || null; schedule(); }}>
@@ -131,6 +123,7 @@
       {/if}
 
       <h3>{tr('word.text')}</h3>
+      <p class="hint">{tr('word.textHint')}</p>
       <label class="row">{tr('word.body')}
         <select value={settings.body ?? ''} onchange={(e) => { settings!.body = e.currentTarget.value || null; schedule(); }}>
           <option value="">{auto(config.info.body)}</option>
@@ -139,6 +132,7 @@
       </label>
 
       <h3>{tr('word.tables')}</h3>
+      <p class="hint">{tr('word.tablesHint')}</p>
       <div class="row">
         <label for="word-fill">{tr('word.headerColor')}</label>
         <span class="pair">
@@ -151,11 +145,13 @@
       </label>
 
       <h3>{tr('word.images')}</h3>
+      <p class="hint">{tr('word.imagesHint')}</p>
       <label class="row">{tr('word.maxWidth')}
         <input class="number" type="number" min="50" max="1000" step="10" placeholder={tr('word.fullWidth')} value={settings.imageMaxWidth ?? ''} oninput={(e) => { settings!.imageMaxWidth = number(e.currentTarget.value); schedule(); }} />
       </label>
 
       <h3>{tr('word.code')}</h3>
+      <p class="hint">{tr('word.codeHint')}</p>
       <label class="row">{tr('word.codeTextSize')}
         <input class="number" type="number" min="6" max="24" step="0.5" placeholder={tr('word.likeText')} value={settings.codeTextSize ?? ''} oninput={(e) => { settings!.codeTextSize = number(e.currentTarget.value); schedule(); }} />
       </label>
@@ -171,11 +167,9 @@
 </div>
 
 <style>
-  .top { z-index: var(--z-nested-scrim); }
-  .modal { position: fixed; top: 50%; left: 50%; z-index: var(--z-nested); display: grid; grid-template-columns: 360px 1fr; width: min(1120px, calc(100vw - 32px)); height: min(760px, calc(100vh - 32px)); overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-lg); transform: translate(-50%, -50%); }
-  .config { min-height: 0; padding: var(--space-2) var(--space-5) var(--space-4); overflow-y: auto; }
-  header { display: flex; align-items: center; justify-content: space-between; }
-  h2 { margin: var(--space-2) 0; font-size: var(--font-lg); font-weight: 650; }
+  .word { display: grid; grid-template-columns: 340px 1fr; height: 100%; min-height: 0; }
+  .config { min-height: 0; padding: 0 var(--space-5) var(--space-4) 0; overflow-y: auto; }
+  .intro { margin-bottom: var(--space-1); }
   h3 { margin: var(--space-4) 0 var(--space-1-5); font-size: var(--font-sm); font-weight: 650; }
   p { margin: 0; color: var(--text-2); font-size: var(--font-sm); line-height: 1.5; }
   .hint { margin-bottom: var(--space-1-5); }
@@ -190,7 +184,7 @@
   .swatch { width: 30px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-xs); background: none; }
   .link { padding: 0; border: 0; background: none; color: var(--accent-text); font-size: var(--font-sm); }
   .note { margin: var(--space-1-5) 0; color: var(--text-3); font-size: var(--font-xs); }
-  .preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: var(--space-2-5) var(--space-5) var(--space-4); overflow: auto; border-left: 1px solid var(--line); background: var(--panel); }
+  .preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: var(--space-2-5) var(--space-4) var(--space-4); overflow: auto; border-left: 1px solid var(--line); background: var(--panel); }
   .preview[aria-busy='true'] :global(.sheet) { opacity: .6; }
   .error { color: var(--danger); }
 </style>

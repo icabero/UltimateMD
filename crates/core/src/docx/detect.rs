@@ -220,11 +220,10 @@ pub fn detect(styles_xml: &str, numbering_xml: &str, document_xml: &str) -> Dete
     };
     if let Some(list) = detected.heading_list.clone() {
         // Left alone, they would count from 1 in a list that nothing else uses.
-        for slot in chain.len()..HEADING_LEVELS {
+        for (slot, level) in detected.loose_levels.iter_mut().enumerate().skip(chain.len()) {
             let name = format!("heading {}", slot + 1);
             if styles.values().any(|s| s.name == name && s.numbered) {
-                detected.loose_levels[slot] =
-                    Some(if counts_level(numbering_xml, &definition, slot) { list.clone() } else { "0".into() });
+                *level = Some(if counts_level(numbering_xml, &definition, slot) { list.clone() } else { "0".into() });
             }
         }
     }

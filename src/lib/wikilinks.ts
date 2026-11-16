@@ -6,6 +6,7 @@ import type { EditorState } from '@codemirror/state';
 import { Decoration, EditorView, MatchDecorator, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import { api } from './api';
 import { tr } from './i18n.svelte';
+import { hoverLink, leave } from './linkCard';
 import { outline } from './markdown';
 import { dirName, kindOf, resolveLink, stem } from './paths';
 import { store } from './store.svelte';
@@ -137,4 +138,21 @@ const look = EditorView.theme({
   '.cm-completionDetail': { marginLeft: '10px', color: 'var(--text-3)', fontStyle: 'normal' },
 });
 
-export const wikilinks = [marks, look];
+/** Resting the pointer on a link shows the start of its note. */
+const hoverCard = EditorView.domEventHandlers({
+  mousemove(event, view) {
+    const el = (event.target as Element | null)?.closest?.('.cm-wikilink');
+    const pos = el ? view.posAtCoords(event) : null;
+    const link = pos === null ? null : linkAt(view.state, pos);
+    const tab = store.active;
+    if (!el || !link || !tab) return void leave();
+    const path = link.target ? store.resolve(tab.vaultId, link.target, tab.path) : tab.path;
+    if (path && kindOf(path) !== 'md') return void leave();
+    hoverLink({ vaultId: tab.vaultId, from: tab.path, path, name: link.target, anchor: link.anchor }, el.getBoundingClientRect());
+  },
+  mouseleave() {
+    leave();
+  },
+});
+
+export const wikilinks = [marks, look, hoverCard];

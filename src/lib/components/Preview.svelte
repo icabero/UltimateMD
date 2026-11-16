@@ -8,11 +8,14 @@
   import { fillEmbeds } from '../embeds';
   import { renderDiagram, toPng, toSvgBytes } from '../diagrams';
   import { findTerms } from '../fold';
+  import { hideLinkCard, watchLinks } from '../linkCard';
+  import { coverPath, noteLook } from '../look';
   import { tr } from '../i18n.svelte';
   import { outline, renderMarkdown, type Heading } from '../markdown';
   import { store, type Tab } from '../store.svelte';
   import { themeKey, themeVariables } from '../themes';
-  import previewCss from '../preview.css?inline';
+  import previewCss from '../previewCss';
+  import { places, type Place } from '../place';
 
   let { tab }: { tab: Tab } = $props();
 
@@ -38,8 +41,61 @@
   let rendered = $state(false);
   const FOUND = 'umd-found';
 
-  export function scrollTo(ratio: number) {
-    if (scroller) scroller.scrollTop = ratio * (scroller.scrollHeight - scroller.clientHeight);
+  /** The scroll position set by code, so that its own scroll event is not taken for the reader's. */
+  let expected: number | null = null;
+  /** The reader scrolled here, so the place from the last view is no longer wanted. */
+  let moved = false;
+  /** Until the first drawing is done, the heights still change and the place is put back. */
+  let settling = true;
+
+  // The blocks that say which lines of the note they show.
+  const blocks = () => [...body.querySelectorAll<HTMLElement>(':scope > [data-lines]')].map((el) => {
+    const [from, to] = el.dataset.lines!.split('-').map(Number);
+    return { el, from, to, box: el.getBoundingClientRect() };
+  }).filter((b) => b.box.height > 0);
+
+  /** The line at the top of the preview, and how far down it, from the block there. */
+  function topPlace(): Place | null {
+    if (!scroller || !body || !rendered) return null;
+    const top = scroller.getBoundingClientRect().top;
+    const all = blocks();
+    // The last block that starts above the top edge.
+    let block = all[0];
+    for (const b of all) if (b.box.top <= top) block = b;
+    if (!block) return null;
+    const lines = block.to - block.from + 1;
+    const at = Math.min(Math.max((top - block.box.top) / block.box.height, 0), 0.999) * lines;
+    return { line: block.from + Math.floor(at), frac: at - Math.floor(at) };
+  }
+
+  /** Puts a place of the note at the top of the preview. */
+  export function scrollToPlace(place: Place) {
+    if (!scroller || !body || !rendered || scroller.clientHeight === 0) return;
+    // The block holding the line, or the last one before it.
+    const all = blocks();
+    let block = all[0];
+    for (const b of all) if (b.from <= place.line) block = b;
+    if (!block) return;
+    const lines = block.to - block.from + 1;
+    const inside = Math.min(Math.max((place.line - block.from + place.frac) / lines, 0), 1);
+    scroller.scrollTop += block.box.top - scroller.getBoundingClientRect().top + inside * block.box.height;
+    expected = scroller.scrollTop;
+  }
+
+  /** Back to where the reader was in the last view, until they scroll by themselves. */
+  function restore() {
+    const place = places.get(tab.key);
+    if (settling && !moved && place) scrollToPlace(place);
+  }
+
+  function onScroll() {
+    publishPosition();
+    if (!scroller || scroller.clientHeight === 0) return;
+    if (expected !== null && Math.abs(scroller.scrollTop - expected) < 1) return void (expected = null);
+    expected = null;
+    moved = true;
+    const place = topPlace();
+    if (place) places.set(tab.key, place);
   }
 
   function saveDiagram(svg: SVGSVGElement, format: 'svg' | 'png', index: number) {
@@ -114,6 +170,30 @@
     }));
   }
 
+  /** The banner and emoji the note's frontmatter asks for, above everything else. Only on screen, never in an export. */
+  function noteHead(files: string[]) {
+    if (tab.kind !== 'md') return null;
+    const { icon, cover } = noteLook(tab.content);
+    const image = cover ? coverPath(cover, tab.path, files) : null;
+    if (!icon && !image) return null;
+    const head = document.createElement('header');
+    head.className = 'note-head';
+    if (image) {
+      const img = document.createElement('img');
+      img.className = 'note-cover';
+      img.alt = '';
+      img.src = fileUrl(tab.vaultId, image);
+      head.append(img);
+    }
+    if (icon) {
+      const emoji = document.createElement('div');
+      emoji.className = 'note-icon';
+      emoji.textContent = icon;
+      head.append(emoji);
+    }
+    return head;
+  }
+
   function render() {
     const id = ++run;
     const context = { vaultId: tab.vaultId, path: tab.path, files: store.files(tab.vaultId), aliases: store.aliasMap(tab.vaultId) };
@@ -129,14 +209,22 @@
       if (previous) el.innerHTML = previous.innerHTML;
     }
     if ('highlights' in CSS) CSS.highlights.delete(FOUND);
+    const head = noteHead(context.files);
+    if (head) fragment.prepend(head);
     body.replaceChildren(fragment);
     markOutside();
     codeTools();
     rendered = true;
+    restore();
     reveal();
     publishPosition();
     void fillEmbeds(body, context, store.noteReader(tab.vaultId)).then(() => {
-      if (id === run) void hydrate(id);
+      if (id === run) {
+        void hydrate(id).then(() => {
+          restore();
+          settling = false;
+        });
+      }
     });
   }
 
@@ -228,6 +316,7 @@
     if (!a) return;
     const href = a.getAttribute('href') ?? '';
     e.preventDefault();
+    hideLinkCard();
     // Footnotes keep their own ids within the preview.
     if (/^#fn/.test(href)) {
       root.getElementById(decodeURIComponent(href.slice(1)))?.scrollIntoView();
@@ -250,6 +339,7 @@
     root.append(style, body);
     body.addEventListener('click', onClick);
     body.addEventListener('contextmenu', imageMenu);
+    watchLinks(body, () => tab.vaultId, () => tab.path);
   });
 
   $effect(() => {
@@ -270,7 +360,7 @@
 </script>
 
 {#if tab.kind === 'md'}
-  <div class="scroll" style={scoped} data-note-theme={content.id} bind:this={scroller} onscroll={publishPosition}><div bind:this={host}></div></div>
+  <div class="scroll" style={scoped} data-note-theme={content.id} bind:this={scroller} onscroll={onScroll}><div bind:this={host}></div></div>
 {:else if tab.kind === 'html'}
   <div class="frame">
     {#key `${htmlSrc}:${scripts}`}
