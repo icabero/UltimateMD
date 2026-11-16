@@ -168,7 +168,7 @@
   <header data-tauri-drag-region>
     <span class="brand" data-tauri-drag-region>Ultimate<b>MD</b></span>
     <button class="icon" title={tr('sidebar.searchTitle')} class:on={store.searching} onclick={() => (store.searching = !store.searching)}><Icon name="search" /></button>
-    <button class="icon" title={tr('cmd.settings')} onclick={() => (store.settings = true)}><Icon name="settings" /></button>
+    <button class="icon" title={tr('cmd.settings')} onclick={() => (store.settings = true)}><Icon name="gear" /></button>
     <button class="icon" title={tr('more.title')} aria-label={tr('more.title')} aria-haspopup="menu" onclick={appMenu}><Icon name="more" /></button>
     <button class="icon" title={tr('sidebar.hide')} onclick={() => store.toggleBar('left', false)}><Icon name="panelLeft" /></button>
   </header>
@@ -257,7 +257,6 @@
   .vault { margin-bottom: var(--space-2); border-radius: var(--radius-md); }
   .vault.drop { background: var(--accent-soft); }
   .vhead { display: flex; align-items: center; height: 30px; }
-  .vhead .small { opacity: 0; }
   .vhead:hover .small, .vhead .small:focus-visible, .vhead .warn { opacity: 1; }
   .vhead .warn { color: var(--danger); }
   .vname { display: flex; flex: 1; align-items: center; gap: var(--space-1-5); min-width: 0; padding: 0 var(--space-1); border: 0; background: none; color: var(--text); font-size: var(--font-sm); font-weight: 600; text-align: left; }

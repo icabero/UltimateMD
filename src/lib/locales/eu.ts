@@ -1082,5 +1082,5 @@ export const eu: Record<Key, string> = {
   'cmd.vaultDaily': 'Vault honetako eguneroko oharrak',
   'cmd.noteDiagramStyle': 'Ohar honen diagramen estiloa',
   'tutorial.settingsTitle': 'Ezarpen bakoitza bere tokian',
-  'tutorial.settingsBody': 'Aplikazioaren ezarpenak goiko ezkerreko ezarpenen botoian daude. Vault bakoitzarenak, alboko barran bere izenaren ondoko ezarpenen botoian: ordena, eguneroko oharrak, Word, diagramak eta IAren sarbidea. Ohar bakoitzarenak, eskuineko panelaren «Oharra» fitxan (Ctrl+Maius+O). Zerbait non dagoen ez badakizu, bilatu ezarpenen bilatzailean. Gutxien erabiltzen direnak «Gehiago» menuetan daude, eta dena Ctrl+Maius+P bidez aurkitzen da.',
+  'tutorial.settingsBody': 'Aplikazioaren ezarpenak goiko ezkerreko engranajearen botoian daude. Vault bakoitzarenak, alboko barran bere izenaren ondoko graduatzaileen botoian: ordena, eguneroko oharrak, Word, diagramak eta IAren sarbidea. Ohar bakoitzarenak, eskuineko panelaren «Oharra» fitxan (Ctrl+Maius+O). Zerbait non dagoen ez badakizu, bilatu ezarpenen bilatzailean. Gutxien erabiltzen direnak «Gehiago» menuetan daude, eta dena Ctrl+Maius+P bidez aurkitzen da.',
 };

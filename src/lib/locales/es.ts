@@ -1081,5 +1081,5 @@ export const es = {
   'cmd.vaultDaily': 'Notas diarias de este vault',
   'cmd.noteDiagramStyle': 'Estilo de los diagramas de esta nota',
   'tutorial.settingsTitle': 'Cada ajuste, en su sitio',
-  'tutorial.settingsBody': 'Los ajustes de la app están en el botón de ajustes de arriba a la izquierda. Los de cada vault, en el botón de ajustes junto a su nombre en la barra lateral: allí van el orden, las notas diarias, Word, los diagramas y el acceso de la IA. Los de cada nota, en la pestaña «Nota» del panel de la derecha (Ctrl+Mayús+O). Si dudas dónde está algo, búscalo en el buscador de los ajustes. Lo menos usado está en los menús «Más», y todo se encuentra con Ctrl+Mayús+P.',
+  'tutorial.settingsBody': 'Los ajustes de la app están en el botón del engranaje, arriba a la izquierda. Los de cada vault, en el botón de los controles deslizantes junto a su nombre en la barra lateral: allí van el orden, las notas diarias, Word, los diagramas y el acceso de la IA. Los de cada nota, en la pestaña «Nota» del panel de la derecha (Ctrl+Mayús+O). Si dudas dónde está algo, búscalo en el buscador de los ajustes. Lo menos usado está en los menús «Más», y todo se encuentra con Ctrl+Mayús+P.',
 };

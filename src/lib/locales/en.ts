@@ -1082,5 +1082,5 @@ export const en: Record<Key, string> = {
   'cmd.vaultDaily': 'Daily notes of this vault',
   'cmd.noteDiagramStyle': 'Diagram style of this note',
   'tutorial.settingsTitle': 'Each setting in its place',
-  'tutorial.settingsBody': 'The app settings are behind the settings button at the top left. Each vault’s are behind the settings button next to its name in the sidebar: order, daily notes, Word, diagrams and AI access. Each note’s are in the “Note” tab of the right-hand panel (Ctrl+Shift+O). If you are not sure where something is, look it up in the settings search. The least used things are in the “More” menus, and everything can be found with Ctrl+Shift+P.',
+  'tutorial.settingsBody': 'The app settings are behind the gear button at the top left. Each vault’s are behind the sliders button next to its name in the sidebar: order, daily notes, Word, diagrams and AI access. Each note’s are in the “Note” tab of the right-hand panel (Ctrl+Shift+O). If you are not sure where something is, look it up in the settings search. The least used things are in the “More” menus, and everything can be found with Ctrl+Shift+P.',
 };
