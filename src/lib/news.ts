@@ -2,6 +2,17 @@ import type { Key } from './i18n.svelte';
 
 /** What each version brought, the things worth telling. Keyed by major.minor. */
 export const NEWS: Record<string, { title: Key; text: Key }[]> = {
+  '0.8': [
+    { title: 'news.08.slash', text: 'news.08.slashText' },
+    { title: 'news.08.math', text: 'news.08.mathText' },
+    { title: 'news.08.tables', text: 'news.08.tablesText' },
+    { title: 'news.08.focus', text: 'news.08.focusText' },
+    { title: 'news.08.daily', text: 'news.08.dailyText' },
+    { title: 'news.08.move', text: 'news.08.moveText' },
+    { title: 'news.08.look', text: 'news.08.lookText' },
+    { title: 'news.08.settings', text: 'news.08.settingsText' },
+    { title: 'news.08.update', text: 'news.08.updateText' },
+  ],
   '0.7': [
     { title: 'news.07.ai', text: 'news.07.aiText' },
     { title: 'news.07.history', text: 'news.07.historyText' },
