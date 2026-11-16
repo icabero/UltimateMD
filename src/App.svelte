@@ -6,6 +6,7 @@
   import About from './lib/components/About.svelte';
   import Export from './lib/components/Export.svelte';
   import Modal from './lib/components/Modal.svelte';
+  import Picker from './lib/components/Picker.svelte';
   import WindowControls from './lib/components/WindowControls.svelte';
   import TemplatePicker from './lib/components/TemplatePicker.svelte';
   import { IS_MAC, frame } from './lib/frame.svelte';
@@ -14,7 +15,7 @@
   import Preview from './lib/components/Preview.svelte';
   import Settings from './lib/components/Settings.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
-  import ThemeEditor from './lib/components/ThemeEditor.svelte';
+  import VaultSettings from './lib/components/VaultSettings.svelte';
   import Tutorial from './lib/components/Tutorial.svelte';
   import Shortcuts from './lib/components/Shortcuts.svelte';
   import OutsideChanges from './lib/components/OutsideChanges.svelte';
@@ -25,17 +26,17 @@
   import { manageDialogFocus } from './lib/dialogFocus';
   import News from './lib/components/News.svelte';
   import ConflictMerge from './lib/components/ConflictMerge.svelte';
-  import WordScreen from './lib/components/WordScreen.svelte';
-  import DiagramGuide from './lib/components/DiagramGuide.svelte';
   import Reader from './lib/components/Reader.svelte';
   import GitScreen from './lib/components/GitScreen.svelte';
   import BrokenLinks from './lib/components/BrokenLinks.svelte';
+  import Breadcrumb from './lib/components/Breadcrumb.svelte';
   import Tabs from './lib/components/Tabs.svelte';
   import Welcome from './lib/components/Welcome.svelte';
   import { applyInstallerLanguage, tr } from './lib/i18n.svelte';
   import { LEADINGS, LINE_WIDTHS, ZOOM, store, type ViewMode } from './lib/store.svelte';
   import { applyTheme } from './lib/themes';
   import { api } from './lib/api';
+  import { countText } from './lib/formatting';
   import { dictionaryOf, spellLanguage } from './lib/spellcheck';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
@@ -48,13 +49,36 @@
   const side = $derived(store.sideTab);
   const panel = $derived(store.showRight && tab?.kind === 'md');
   const columns = $derived(`${store.showLeft ? `${sidebarWidth}px ` : ''}minmax(0, 1fr)${panel ? ` ${store.layout.rightWidth}px` : ''}`);
-  const words = $derived(tab?.content.trim() ? tab.content.trim().split(/\s+/).length : 0);
+  const count = $derived(countText(tab?.content ?? ''));
+  // The editor's selection, unless the editor is hidden behind the preview.
+  const picked = $derived(store.selection && tab && store.selection.key === tab.key && tab.view !== 'preview' ? store.selection : null);
   const status = $derived(
     !tab ? '' : tr(tab.missing ? 'app.statusDeleted' : tab.conflict ? 'app.statusConflict' : tab.saving ? 'app.statusSaving' : tab.dirty ? 'app.statusUnsaved' : 'app.statusSaved'),
   );
 
   $effect(() => {
     applyTheme(store.theme);
+  });
+
+  // Concentration shows a note; without one there is nothing to focus on.
+  $effect(() => {
+    if (store.focus && (!tab || store.reader)) store.focus = false;
+  });
+
+  // The hint to leave shows for a few seconds, and again when the mouse goes to the top.
+  let hint = $state(false);
+  let hintTimer: ReturnType<typeof setTimeout> | undefined;
+  function showHint(time: number) {
+    hint = true;
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => (hint = false), time);
+  }
+  $effect(() => {
+    if (store.focus) showHint(4000);
+    else {
+      clearTimeout(hintTimer);
+      hint = false;
+    }
   });
 
   // Linux's spell checker needs telling which dictionary to use; elsewhere this does nothing.
@@ -92,10 +116,17 @@
   function onKey(e: KeyboardEvent) {
     const key = e.key.toLowerCase();
     if (key === 'escape') {
+      // The settings search clears itself first.
+      if (e.target instanceof HTMLInputElement && e.target.dataset.clearOnEscape !== undefined && e.target.value) return;
+      // With nothing else open, Escape leaves concentration; otherwise it only closes what is open.
+      if (store.focus && !store.tutorial && store.palette === null && !store.menu && !store.dialog && !document.querySelector('[role=dialog], .cm-tooltip-autocomplete, .cm-panel')) {
+        store.focus = false;
+        e.preventDefault();
+        return;
+      }
       if (store.tutorial) store.closeTutorial();
       store.settings = store.exporting = store.about = store.shortcuts = false;
       store.palette = null;
-      store.themeEditor = null;
       return;
     }
     if (!(e.ctrlKey || e.metaKey)) return;
@@ -123,6 +154,11 @@
         store.toggleBar('left', true);
       },
       p: () => (store.palette = '>'),
+      enter: () => {
+        if (tab && !store.reader) store.focus = !store.focus;
+      },
+      d: () => void store.openDaily(0),
+      w: () => void store.closeAll(),
       e: () => store.toggleBar('left'),
       o: () => {
         if (tab?.kind === 'md') store.toggleBar('right');
@@ -171,14 +207,18 @@
 
 <svelte:window onkeydowncapture={onKey} onblur={() => store.saveAll()} onresize={() => store.setWindowWidth(innerWidth)} />
 
-<div class="app" style:grid-template-columns={columns} style:--frame-left={frame.own && IS_MAC ? '76px' : '0px'} style:--frame-right={frame.own && !IS_MAC ? '138px' : '0px'}>
+<div class="app" class:focus={store.focus} style:grid-template-columns={columns} style:--frame-left={frame.own && IS_MAC ? '76px' : '0px'} style:--frame-right={frame.own && !IS_MAC ? '138px' : '0px'}>
   {#if frame.own && !IS_MAC}<WindowControls />{/if}
   {#if store.showLeft}
     <Sidebar />
     <button class="grip" aria-label={tr('app.resize')} style:left="{sidebarWidth - 3}px" onpointerdown={resize}></button>
   {/if}
-  <main>
-    <Tabs />
+  <main onmousemove={(e) => { if (store.focus && !hint && e.clientY < 48) showHint(2500); }}>
+    {#if store.focus}
+      <button class="leave" class:shown={hint} tabindex={hint ? 0 : -1} onclick={() => (store.focus = false)}>{tr('focus.hint')}</button>
+    {:else}
+      <Tabs />
+    {/if}
     {#if tab?.conflict}
       <div class="banner" role="alert">
         <span>{tr('app.conflictBanner')}</span>
@@ -196,6 +236,7 @@
         <button class="dismiss" title={tr('common.close')} aria-label={tr('common.close')} onclick={() => (tab.outside = null)}>×</button>
       </div>
     {/if}
+    {#if tab && !tab.loose && !store.reader && !store.focus}<Breadcrumb {tab} />{/if}
     <div class="content" style:--text-scale={store.reading.textScale} style:--prose-width={LINE_WIDTHS[store.reading.lineWidth]} style:--leading={LEADINGS[store.reading.leading] ?? 0}>
       {#if store.reader}
         {#key `${store.reader?.vaultId}:${store.reader?.folder}`}<Reader vaultId={store.reader?.vaultId ?? ""} folder={store.reader?.folder ?? ""} />{/key}
@@ -205,7 +246,7 @@
         {#key tab.key}<Preview {tab} />{/key}
       {:else}
         <div class="pane" class:hidden={tab.view === 'preview'}>
-          <Editor {tab} onscroll={(ratio) => preview?.scrollTo(ratio)} />
+          <Editor {tab} onscroll={(place) => preview?.scrollToPlace(place)} />
         </div>
         {#if tab.view === 'split' || tab.view === 'preview'}
           <div class="pane preview">
@@ -224,14 +265,16 @@
         </section>
       {/if}
     </div>
-    <footer>
+    <footer class:dim={store.focus}>
       {#if tab}
         <span class="where">{store.location(tab)} / {tab.path}</span>
         {#if tab.loose}
           <button class="adopt" onclick={() => store.adoptFolder(tab)}>{tr('app.adoptFolder')}</button>
         {/if}
         <span class="spacer"></span>
-        {#if tab.kind === 'md' || tab.kind === 'html'}<span>{tr('app.words', { n: words })}</span>{/if}
+        {#if tab.kind === 'md' || tab.kind === 'html'}
+          <span class="count">{picked ? tr('app.countSelected', { words: picked.words, total: count.words, chars: picked.chars }) : tr('app.count', { words: count.words, chars: count.chars })}</span>
+        {/if}
         {#key status}<span class="status" in:swap>{status}</span>{/key}
       {/if}
       {#if store.update}
@@ -250,9 +293,7 @@
 {#if store.about}<About />{/if}
 {#if store.shortcuts}<Shortcuts />{/if}
 {#if store.outsideDiff && tab?.outside}<OutsideChanges {tab} />{/if}
-{#if store.themeEditor}<ThemeEditor vaultId={store.themeEditor} />{/if}
-{#if store.wordScreen}<WordScreen vaultId={store.wordScreen} />{/if}
-{#if store.guideScreen}<DiagramGuide vaultId={store.guideScreen} />{/if}
+{#if store.vaultSettings}<VaultSettings vaultId={store.vaultSettings.vaultId} section={store.vaultSettings.section} />{/if}
 {#if store.gitScreen}<GitScreen vaultId={store.gitScreen} />{/if}
 {#if store.merging && tab?.conflict}<ConflictMerge {tab} />{/if}
 {#if store.news}<News version={store.news} />{/if}
@@ -264,11 +305,23 @@
 {#if store.dialog}
   {#key store.dialog}<Modal dialog={store.dialog} />{/key}
 {/if}
+{#if store.picker}
+  {#key store.picker}<Picker picker={store.picker} />{/key}
+{/if}
 {#if store.tutorial}<Tutorial />{/if}
 {#if store.toast}{#key store.toast.id}<Toast toast={store.toast} />{/key}{/if}
 
 <style>
   .app { position: relative; display: grid; height: 100vh; overflow: hidden; }
+  main { position: relative; }
+  .leave { position: absolute; top: var(--space-3); left: 50%; z-index: var(--z-raised); transform: translateX(-50%); padding: var(--space-1) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--raised); color: var(--text-2); font-size: var(--font-sm); opacity: 0; pointer-events: none; transition: opacity .3s; }
+  .leave.shown { opacity: 1; pointer-events: auto; }
+  .leave:focus-visible { opacity: 1; }
+  /* Concentration: the note alone, as wide as the reading width allows, without line numbers. */
+  .focus .content :global(.cm-content) { max-width: var(--prose-width, 720px); margin: 0 auto; }
+  .focus .content :global(.cm-gutters) { display: none; }
+  footer.dim { opacity: .35; transition: opacity .2s; }
+  footer.dim:hover { opacity: 1; }
   .grip { position: absolute; top: 0; bottom: 0; z-index: var(--z-raised); width: 6px; padding: 0; border: 0; background: none; cursor: col-resize; }
   .grip:hover { background: var(--line); }
   main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }

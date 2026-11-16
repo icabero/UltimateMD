@@ -7,6 +7,7 @@ export function keyLabel(key: string) {
   if (IS_MAC && key === 'Ctrl') return '⌘';
   if (IS_MAC && key === 'Alt') return '⌥';
   if (key === 'Click') return tr('keys.click');
+  if (key === 'Enter') return tr('keys.enter');
   if (key === 'Del') return tr('keys.delete');
   return key;
 }
@@ -25,6 +26,7 @@ export const SHORTCUTS: { title: Key; items: Shortcut[] }[] = [
       { label: 'cmd.openNote', keys: [['Ctrl', 'P']] },
       { label: 'shortcuts.actions', keys: [['Ctrl', 'Shift', 'P']] },
       { label: 'cmd.newNote', keys: [['Ctrl', 'N']] },
+      { label: 'daily.open', keys: [['Ctrl', 'Shift', 'D']] },
       { label: 'cmd.searchAll', keys: [['Ctrl', 'Shift', 'F']] },
       { label: 'cmd.saveAll', keys: [['Ctrl', 'S']] },
       { label: 'cmd.export', keys: [['Ctrl', 'E']] },
@@ -38,9 +40,11 @@ export const SHORTCUTS: { title: Key; items: Shortcut[] }[] = [
       { label: 'cmd.nextTab', keys: [['Ctrl', 'Tab']] },
       { label: 'shortcuts.previousTab', keys: [['Ctrl', 'Shift', 'Tab']] },
       { label: 'cmd.closeTab', keys: [['Ctrl', 'W']] },
+      { label: 'cmd.closeAllTabs', keys: [['Ctrl', 'Shift', 'W']] },
       { label: 'shortcuts.nextView', keys: [['Ctrl', '\\']] },
       { label: 'cmd.toggleSidebar', keys: [['Ctrl', 'Shift', 'E']] },
       { label: 'cmd.togglePanel', keys: [['Ctrl', 'Shift', 'O']] },
+      { label: 'cmd.focus', keys: [['Ctrl', 'Shift', 'Enter']] },
       { label: 'shortcuts.moveTab', keys: [['Ctrl', 'Shift', '←'], ['Ctrl', 'Shift', '→']] },
       { label: 'cmd.zoomIn', keys: [['Ctrl', '+']] },
       { label: 'cmd.zoomOut', keys: [['Ctrl', '-']] },
@@ -64,13 +68,19 @@ export const SHORTCUTS: { title: Key; items: Shortcut[] }[] = [
       { label: 'shortcuts.bold', keys: [['Ctrl', 'B']] },
       { label: 'shortcuts.italic', keys: [['Ctrl', 'I']] },
       { label: 'shortcuts.link', keys: [['Ctrl', 'K']] },
+      { label: 'shortcuts.slash', keys: [['/']] },
       { label: 'shortcuts.followLink', keys: [['Ctrl', 'Click']] },
       { label: 'shortcuts.pastePlain', keys: [['Ctrl', 'Shift', 'V']] },
       { label: 'shortcuts.undo', keys: [['Ctrl', 'Z']] },
       { label: 'shortcuts.redo', keys: [['Ctrl', 'Shift', 'Z'], ['Ctrl', 'Y']] },
       { label: 'shortcuts.indent', keys: [['Tab'], ['Shift', 'Tab']] },
       { label: 'shortcuts.moveLine', keys: [['Alt', '↑'], ['Alt', '↓']] },
+      { label: 'shortcuts.moveTableRow', keys: [['Alt', '↑'], ['Alt', '↓']] },
+      { label: 'shortcuts.moveTableColumn', keys: [['Alt', '←'], ['Alt', '→']] },
       { label: 'shortcuts.selectNext', keys: [['Ctrl', 'D']] },
+      { label: 'shortcuts.toggleTask', keys: [['Ctrl', 'Enter']] },
+      { label: 'shortcuts.sortLines', keys: [['Alt', 'Shift', 'S']] },
+      { label: 'shortcuts.fold', keys: [['Ctrl', 'Shift', '['], ['Ctrl', 'Shift', ']']] },
     ],
   },
   {

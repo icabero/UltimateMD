@@ -8,6 +8,7 @@ import { newsFor, series } from './news';
 import { baseName, dirName, kindOf, linkFrom, resolveLink, resolveRelative, stem } from './paths';
 import { frontmatterChange, frontmatterValue } from './themes';
 import { isNewer } from './updates';
+import { addDays, dailyName, dailyPath } from './daily';
 
 describe('fold', () => {
   it('drops case and accents, composed or not', () => {
@@ -129,5 +130,22 @@ describe('versions', () => {
     expect(newsFor('0.7.2')).toBe('0.7');
     expect(newsFor('0.6.0')).toBeNull();
     expect(newsFor('1.2.0')).toBe('0.7');
+  });
+});
+
+describe('daily notes', () => {
+  const day = new Date(2026, 10, 3);
+  it('names the day in the three formats', () => {
+    expect(dailyName(day, 'iso')).toBe('2026-11-03');
+    expect(dailyName(day, 'yearMonth')).toBe('2026/11/2026-11-03');
+    expect(dailyName(day, 'dayFirst')).toBe('03-11-2026');
+  });
+  it('puts the note in its folder, or at the root', () => {
+    expect(dailyPath(day, { folder: 'Diario', format: 'iso', template: null })).toBe('Diario/2026-11-03.md');
+    expect(dailyPath(day, { folder: '', format: 'yearMonth', template: null })).toBe('2026/11/2026-11-03.md');
+  });
+  it('moves across months and years', () => {
+    expect(dailyName(addDays(new Date(2026, 11, 31), 1), 'iso')).toBe('2027-01-01');
+    expect(dailyName(addDays(new Date(2026, 2, 1), -1), 'iso')).toBe('2026-02-28');
   });
 });

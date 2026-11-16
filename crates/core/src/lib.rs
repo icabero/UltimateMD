@@ -5,15 +5,18 @@
 
 pub mod aliases;
 pub mod callouts;
+pub mod daily_notes;
 pub mod diagram_guide;
 pub mod docx;
 pub mod error;
 pub mod export_links;
 pub mod files;
+pub mod folder_looks;
 pub mod git;
 pub mod history;
 pub mod links;
 pub mod marks;
+pub mod math;
 pub mod note_templates;
 pub mod paths;
 pub mod registry;
@@ -23,6 +26,7 @@ pub mod sections;
 pub mod svg;
 pub mod tags;
 pub mod templates;
+pub mod tree_order;
 pub mod vault_themes;
 pub mod word_settings;
 

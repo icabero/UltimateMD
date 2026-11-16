@@ -29,6 +29,8 @@
     const items: MenuItem[] = [
       { label: tr('common.close'), icon: 'close', keys: ['Ctrl', 'W'], run: () => void store.close(tab) },
       { label: tr('tabs.closeOthers'), disabled: !others, run: () => void store.closeOthers(tab) },
+      { label: tr('tabs.closeRight'), disabled: !store.tabsBeside(tab, 'right').length, run: () => void store.closeBeside(tab, 'right') },
+      { label: tr('tabs.closeLeft'), disabled: !store.tabsBeside(tab, 'left').length, run: () => void store.closeBeside(tab, 'left') },
       { label: tr('tabs.closeAll'), run: () => void store.closeAll() },
       { label: tr(tab.pinned ? 'tabs.unpin' : 'tabs.pin'), icon: 'pin', separator: true, run: () => store.togglePin(tab) },
     ];
@@ -44,6 +46,16 @@
       { label: tr('menu.copyPath'), icon: 'copy', separator: !!tab.loose || tab.kind !== 'md', run: () => void store.copyText(store.absolutePath(tab), tr('menu.pathCopied')) },
       { label: tr('menu.reveal'), icon: 'folder', run: () => store.revealInFolder(tab.vaultId, tab.path) },
     );
+    store.openMenu(e, items);
+  }
+
+  /** What is done to the note on screen now and then: the same actions as in the palette. */
+  function noteMenu(e: MouseEvent, tab: Tab) {
+    const items: MenuItem[] = [
+      { label: tr('cmd.focus'), icon: 'focus', keys: ['Ctrl', 'Shift', 'Enter'], run: () => (store.focus = true) },
+      { label: tr(store.typewriter ? 'cmd.typewriterOff' : 'cmd.typewriterOn'), icon: 'edit', run: () => store.setTypewriter(!store.typewriter) },
+    ];
+    if (!tab.loose) items.push({ label: tr('cmd.saveAsTemplate'), icon: 'tasks', separator: true, run: () => void store.saveAsTemplate(tab) });
     store.openMenu(e, items);
   }
 
@@ -98,7 +110,8 @@
         ondragleave={() => (over = null)}
         ondrop={drop}
         ondragend={() => (dragged = over = null)}
-        onauxclick={(e) => { if (e.button === 1) store.close(tab); }}
+        onmousedown={(e) => { if (e.button === 1) e.preventDefault(); }}
+        onauxclick={(e) => { if (e.button === 1) { e.preventDefault(); void store.close(tab); } }}
         oncontextmenu={(e) => menu(e, tab)}
         title="{store.location(tab)} · {tab.path}">
         <!-- The close button sits beside the tab, not inside it: a control
@@ -107,6 +120,7 @@
           onclick={() => select(tab)} onkeydown={(e) => onKey(e, tab, index)}>
           {#if tab.pinned}<span class="mark" title={tr('tabs.pinned')}><Icon name="pin" size={12} /></span>{/if}
           {#if tab.loose}<span class="mark" title={tr('tabs.looseFile')}><Icon name="file" size={12} /></span>{/if}
+          {#if tab.kind === 'md' && store.noteIcon(tab.vaultId, tab.path)}<span class="emoji" aria-hidden="true">{store.noteIcon(tab.vaultId, tab.path)}</span>{/if}
           <span class="name">{baseName(tab.path).replace(/\.(md|markdown)$/i, '')}</span>
           {#if tab.dirty}<span class="dirty" title={tr('tabs.unsaved')}></span>{/if}
         </div>
@@ -124,6 +138,7 @@
       {#if active.kind === 'md'}
         <button class="icon" title={tr('tabs.export')} onclick={() => (store.exporting = true)}><Icon name="export" /></button>
         <button class="icon" class:on={store.showRight} aria-pressed={store.showRight} title={tr('panel.toggle')} onclick={() => store.toggleBar('right')}><Icon name="panelRight" /></button>
+        <button class="icon" title={tr('more.title')} aria-label={tr('more.title')} aria-haspopup="menu" onclick={(e) => noteMenu(e, active)}><Icon name="more" /></button>
       {/if}
     </div>
   {/if}
@@ -142,6 +157,7 @@
   .tab.before { box-shadow: inset 2px 0 0 var(--accent); }
   .tab.after { box-shadow: inset -2px 0 0 var(--accent); }
   .name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .emoji { flex: none; line-height: 1; }
   .mark { display: flex; flex: none; color: var(--text-3); }
   .dirty { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
   .x { display: flex; flex: none; padding: var(--space-1); border: 0; border-radius: var(--radius-xs); background: none; color: inherit; opacity: 0; }

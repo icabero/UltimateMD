@@ -13,11 +13,12 @@
   import { fold } from '../fold';
   import { tr } from '../i18n.svelte';
   import { renderMarkdown } from '../markdown';
+  import { hideLinkCard, watchLinks } from '../linkCard';
   import { baseName } from '../paths';
   import { readingOrder, readingText, savePlace, savedPlace } from '../reading';
   import { store, type Tab } from '../store.svelte';
   import { themeVariables } from '../themes';
-  import previewCss from '../preview.css?inline';
+  import previewCss from '../previewCss';
 
   let { vaultId, folder }: { vaultId: string; folder: string } = $props();
 
@@ -163,6 +164,7 @@
     const a = e.composedPath().find((n) => n instanceof HTMLAnchorElement) as HTMLAnchorElement | undefined;
     if (!a) return;
     e.preventDefault();
+    hideLinkCard();
     const href = a.getAttribute('href') ?? '';
     const from = (a.closest('section') as HTMLElement | null)?.dataset.path ?? '';
     if (/^#fn/.test(href)) {
@@ -202,6 +204,7 @@ section:not(.ready) .body { min-height: 40vh; color: var(--text-2); font-family:
     article.className = 'prose';
     root.append(style, article);
     article.addEventListener('click', onClick);
+    watchLinks(article, () => vaultId, (a) => (a.closest('section') as HTMLElement | null)?.dataset.path ?? '');
   });
 
   // The list of notes follows the vault as it changes.

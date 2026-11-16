@@ -51,8 +51,8 @@
     { icon: 'plus', label: 'cmd.newNote', keys: ['Ctrl', 'N'], run: () => void store.newNote() },
     { icon: 'file', label: 'cmd.openNote', keys: ['Ctrl', 'P'], run: () => (store.palette = '') },
     { icon: 'tasks', label: 'cmd.fromTemplate', keys: [], run: () => store.newNoteFromTemplate() },
-    { icon: 'search', label: 'home.search', keys: ['Ctrl', 'Shift', 'F'], run: () => { store.searching = true; store.toggleBar('left', true); } },
-    { icon: 'list', label: 'home.actions', keys: ['Ctrl', 'Shift', 'P'], run: () => (store.palette = '>') },
+    { icon: 'search', label: 'cmd.searchAll', keys: ['Ctrl', 'Shift', 'F'], run: () => { store.searching = true; store.toggleBar('left', true); } },
+    { icon: 'list', label: 'shortcuts.actions', keys: ['Ctrl', 'Shift', 'P'], run: () => (store.palette = '>') },
     { icon: 'keyboard', label: 'cmd.shortcuts', keys: ['Ctrl', '/'], run: () => (store.shortcuts = true) },
   ];
 </script>

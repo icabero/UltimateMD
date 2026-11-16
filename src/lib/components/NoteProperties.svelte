@@ -1,30 +1,31 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import NoteLook from './NoteLook.svelte';
   import { properties, setProperty, validKey } from '../frontmatter';
-  import { themeName, tr, type Key } from '../i18n.svelte';
+  import { tr, type Key } from '../i18n.svelte';
+  import { noteLook } from '../look';
   import { store, type Tab } from '../store.svelte';
-  import { THEMES } from '../themes';
 
   let { tab }: { tab: Tab } = $props();
 
   /** The fields UltimateMD itself reads. The first key is the one written; the others are accepted too. */
-  const KNOWN: { keys: string[]; label: Key; hint: Key; kind: 'text' | 'date' | 'theme' | 'diagram' }[] = [
+  const KNOWN: { keys: string[]; label: Key; hint: Key; kind: 'text' | 'date' }[] = [
     { keys: ['titulo', 'title'], label: 'props.title', hint: 'props.titleHint', kind: 'text' },
     { keys: ['autor', 'author'], label: 'props.author', hint: 'props.authorHint', kind: 'text' },
     { keys: ['fecha', 'date'], label: 'props.date', hint: 'props.dateHint', kind: 'date' },
-    { keys: ['tema'], label: 'props.theme', hint: 'props.themeHint', kind: 'theme' },
-    { keys: ['tema-diagramas'], label: 'props.diagramTheme', hint: 'props.diagramThemeHint', kind: 'diagram' },
   ];
 
   const fields = $derived(properties(tab.content));
+  const look = $derived(noteLook(tab.content));
   const known = $derived(
     KNOWN.map((field) => {
       const found = fields.find((p) => field.keys.includes(p.key));
       return { ...field, key: found?.key ?? field.keys[0], value: found?.value ?? '', complex: found?.complex ?? false };
     }),
   );
-  const others = $derived(fields.filter((p) => !KNOWN.some((k) => k.keys.includes(p.key))));
-  const own = $derived(store.vaultThemes[tab.vaultId]?.themes ?? []);
+  // The icon and the cover have their own fields above.
+  const OWN = ['icono', 'icon', 'portada', 'cover'];
+  const others = $derived(fields.filter((p) => !KNOWN.some((k) => k.keys.includes(p.key)) && !OWN.includes(p.key)));
 
   function commit(key: string, value: string) {
     const next = setProperty(tab.content, key, value);
@@ -46,33 +47,13 @@
   const today = () => new Date().toISOString().slice(0, 10);
 </script>
 
-{#snippet themeOptions(diagram: boolean)}
-  <option value="">{tr(diagram ? 'props.diagramFromVault' : 'props.fromVault')}</option>
-  {#if diagram}<option value="boceto">{tr('noteStyle.sketch')}</option>{/if}
-  {#if own.length}
-    <optgroup label={tr('themes.fromVault')}>
-      {#each own as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
-    </optgroup>
-  {/if}
-  <optgroup label={tr('themes.included')}>
-    {#each THEMES as t (t.id)}<option value={t.id}>{themeName(t)}</option>{/each}
-  </optgroup>
-{/snippet}
-
 <div class="props">
   {#each known as f (f.label)}
     {@const id = `prop-${f.keys[0]}`}
-    <div class="field">
+    <div class="field" data-setting="note.{f.keys[0]}">
       <label class="name" for={id}>{tr(f.label)}</label>
       {#if f.complex}
         <span class="complex">{tr('props.complex')}</span>
-      {:else if f.kind === 'theme' || f.kind === 'diagram'}
-        <select {id} aria-describedby="{id}-hint" value={f.value} onchange={(e) => commit(f.key, e.currentTarget.value)}>
-          {@render themeOptions(f.kind === 'diagram')}
-          {#if f.value && f.value !== 'boceto' && !THEMES.some((t) => t.id === f.value) && !own.some((t) => t.id === f.value)}
-            <option value={f.value}>{tr('props.unknownTheme', { id: f.value })}</option>
-          {/if}
-        </select>
       {:else}
         <span class="row">
           <input {id} aria-describedby="{id}-hint" value={f.value} placeholder={f.kind === 'date' ? tr('props.datePlaceholder') : ''} onchange={(e) => commit(f.key, e.currentTarget.value)} onkeydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
@@ -83,7 +64,31 @@
     </div>
   {/each}
 
-  <h3>{tr('props.others')}</h3>
+  <div class="field" data-setting="note.icon">
+    <span class="name" id="look-icon-name">{tr('look.icon')}</span>
+    <span class="row">
+      <button type="button" class="text" aria-labelledby="look-icon-name" aria-describedby="look-icon-hint" onclick={() => void store.chooseNoteIcon(tab)}>{look.icon ? `${look.icon} ${tr('look.change')}` : tr('look.choose')}</button>
+      {#if look.icon}<button type="button" class="text" onclick={() => store.setNoteLook(tab, 'icon', '')}>{tr('look.remove')}</button>{/if}
+    </span>
+    <span class="hint" id="look-icon-hint">{tr('look.iconHint')}</span>
+  </div>
+  <div class="field" data-setting="note.cover">
+    <span class="name" id="look-cover-name">{tr('look.cover')}</span>
+    {#if tab.loose}
+      <span class="complex">{tr('look.needsVault')}</span>
+    {:else}
+      <span class="row">
+        <button type="button" class="text" aria-labelledby="look-cover-name" aria-describedby="look-cover-hint" onclick={() => void store.chooseNoteCover(tab)}>{look.cover ? tr('look.changeCover') : tr('look.choose')}</button>
+        {#if look.cover}<button type="button" class="text" onclick={() => store.setNoteLook(tab, 'cover', '')}>{tr('look.removeCover')}</button>{/if}
+      </span>
+      {#if look.cover}<span class="hint file" title={look.cover}>{look.cover}</span>{/if}
+    {/if}
+    <span class="hint" id="look-cover-hint">{tr('look.coverFieldHint')}</span>
+  </div>
+
+  <NoteLook {tab} />
+
+  <h3 data-setting="note.others">{tr('props.others')}</h3>
   <p class="hint">{tr('props.othersHint')}</p>
   {#each others as p (p.key)}
     <div class="other">
@@ -111,9 +116,10 @@
   .name { color: var(--text-2); font-size: var(--font-sm); font-weight: 600; }
   .row { display: flex; gap: var(--space-1-5); }
   .row input { flex: 1; min-width: 0; }
-  input, select { width: 100%; height: 30px; font-size: var(--font-md); }
-  select { padding: 0 var(--space-1-5); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg); color: var(--text); }
+  input { width: 100%; height: 30px; font-size: var(--font-md); }
+
   .hint { margin: 0; color: var(--text-3); font-size: var(--font-xs); line-height: 1.4; }
+  .file { overflow: hidden; font-family: var(--mono); text-overflow: ellipsis; white-space: nowrap; }
   .complex { color: var(--text-3); font-size: var(--font-sm); font-style: italic; }
   h3 { margin: var(--space-2) 0 0; color: var(--text-3); font-size: var(--font-xs); font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
   .other { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; align-items: center; gap: var(--space-1-5); }

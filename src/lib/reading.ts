@@ -1,7 +1,8 @@
 // Reading a vault or a folder top to bottom, as one document, in the same
-// order the export uses: a folder's own notes, then its subfolders.
+// order the export uses: a folder's own notes, then its subfolders, each as the
+// tree shows them (the vault's order: by name, by date or by hand).
 import type { TreeNode } from './api';
-import { byName, findFolder, hasNotes, isNote } from './export';
+import { findFolder, hasNotes, isNote } from './export';
 import { stem } from './paths';
 
 export interface ReadingNote {
@@ -19,8 +20,8 @@ export function readingOrder(tree: TreeNode[], folder: string): ReadingNote[] {
   if (!start) return [];
   const out: ReadingNote[] = [];
   const walk = (nodes: TreeNode[], here: string, depth: number) => {
-    for (const note of nodes.filter(isNote).sort(byName)) out.push({ path: note.path, title: stem(note.path), folder: here, depth });
-    for (const dir of nodes.filter((n) => n.isDir && hasNotes(n)).sort(byName)) {
+    for (const note of nodes.filter(isNote)) out.push({ path: note.path, title: stem(note.path), folder: here, depth });
+    for (const dir of nodes.filter((n) => n.isDir && hasNotes(n))) {
       walk(dir.children, here ? `${here}/${dir.name}` : dir.name, depth + 1);
     }
   };

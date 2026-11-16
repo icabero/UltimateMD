@@ -5,9 +5,10 @@ import { hasStyle, parseStyle, withColors } from './diagramStyle';
 import { explainDiagramError } from './diagramErrors';
 import { renderDiagram, toPng } from './diagrams';
 import { language, tr } from './i18n.svelte';
+import { mathFontCss } from './math';
 import { diagramFences, outline, renderMarkdown } from './markdown';
 import { baseName, extOf, kindOf, stem } from './paths';
-import previewCss from './preview.css?inline';
+import previewCss from './previewCss';
 import { store, type Tab } from './store.svelte';
 import { frontmatterValue, themeById, themeKey, themeVariables, type Theme } from './themes';
 
@@ -41,7 +42,6 @@ export interface ExportOptions {
   template: string | null;
 }
 
-export const byName = (a: TreeNode, b: TreeNode) => a.name.localeCompare(b.name, language(), { numeric: true });
 export const isNote = (n: TreeNode) => !n.isDir && kindOf(n.path) === 'md';
 export const hasNotes = (n: TreeNode): boolean => (n.isDir ? n.children.some(hasNotes) : isNote(n));
 
@@ -80,7 +80,7 @@ export function levelExamples(tab: Tab, options: ExportOptions) {
   const examples = [root.name];
   let nodes = root.children;
   for (;;) {
-    const next = [...nodes].sort(byName).find((n) => n.isDir && hasNotes(n));
+    const next = nodes.find((n) => n.isDir && hasNotes(n));
     if (!next) return examples;
     examples.push(next.name);
     nodes = next.children;
@@ -102,14 +102,14 @@ export function planSections(tab: Tab, options: ExportOptions): PlanSection[] {
   };
 
   const walk = (nodes: TreeNode[], depth: number, parent: number) => {
-    for (const note of nodes.filter(isNote).sort(byName)) {
+    for (const note of nodes.filter(isNote)) {
       if (options.noteTitles) {
         sections.push({ kind: 'heading', text: stem(note.path), style: null, level: Math.min(parent + 1, MAX_LEVEL), pageBreak: options.noteBreak && sections.length > 0 });
       }
       const pageBreak = !options.noteTitles && options.noteBreak && sections.length > 0;
       sections.push({ kind: 'note', path: note.path, shift: parent + (options.noteTitles ? 1 : 0), pageBreak });
     }
-    for (const folder of nodes.filter((n) => n.isDir && hasNotes(n)).sort(byName)) {
+    for (const folder of nodes.filter((n) => n.isDir && hasNotes(n))) {
       walk(folder.children, depth + 1, title(folder.name, depth, parent));
     }
   };
@@ -352,7 +352,7 @@ export async function exportHtml(tab: Tab, options: ExportOptions, onProgress?: 
   const page = document.implementation.createHTMLDocument(title);
   page.documentElement.lang = language();
   const style = page.createElement('style');
-  style.textContent = documentCss();
+  style.textContent = documentCss() + (await mathFontCss(root.innerHTML));
   page.head.append(style);
   page.body.append(page.importNode(root, true));
   const html = `<!doctype html>\n${page.documentElement.outerHTML}\n`;

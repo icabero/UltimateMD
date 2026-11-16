@@ -4,11 +4,12 @@
   import { dim, pop } from '../motion';
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
-  import { api, type DefaultAppInfo, type McpAccess, type McpCheck, type Vault } from '../api';
+  import { api, type DefaultAppInfo, type McpAccess, type McpCheck } from '../api';
   import { LANGUAGES, language, setLanguage, themeName, tr, type Key, type Language } from '../i18n.svelte';
   import { store } from '../store.svelte';
   import { THEMES, type Theme } from '../themes';
   import { SPELL_LANGUAGES, type SpellSetting } from '../spellcheck';
+  import { findSettings, flashSetting, type Hit } from '../settingsIndex';
 
   type Client = 'claude-code' | 'claude-desktop' | 'cursor' | 'other';
   type Section = 'general' | 'appearance' | 'vaults' | 'ai';
@@ -96,31 +97,49 @@
     { 'claude-code': tr('settings.hintCode'), 'claude-desktop': tr('settings.hintDesktop', { path: desktopConfig }), cursor: tr('settings.hintCursor'), other: tr('settings.hintOther') }[client],
   );
 
-  const lightThemes = THEMES.filter((t) => t.mode === 'light');
-  const darkThemes = THEMES.filter((t) => t.mode === 'dark');
-  const following = $derived(store.themeChoice.fixed === null);
+  // The search: it looks in these settings, in the vault of the active note (or in every open vault) and in the note's own.
+  let query = $state('');
+  let chosen = $state(0);
+  const searching = $derived(query.trim() !== '');
+  const scope = $derived({
+    vaults: (store.active ? store.openVaults.filter((v) => v.id === store.active?.vaultId) : store.openVaults).map((v) => ({ id: v.id, name: v.name })),
+    hasNote: !!store.active,
+  });
+  const hits = $derived(findSettings(query, scope, tr));
+  $effect(() => {
+    void hits;
+    chosen = 0;
+  });
 
-  async function setAccess(vault: Vault, value: McpAccess) {
-    await api.setVaultAccess(vault.id, value).catch((e) => store.fail(e));
-    await store.loadVaults();
+  function open(hit: Hit) {
+    const { entry } = hit;
+    query = '';
+    if (entry.scope === 'app') section = entry.section;
+    else if (entry.scope === 'vault' && hit.vaultId) store.openVaultSettings(hit.vaultId, entry.section);
+    else {
+      store.settings = false;
+      store.openPanel('properties');
+    }
+    flashSetting(entry.id);
   }
 
-  async function setScripts(vault: Vault, allow: boolean) {
-    await api.setVaultScripts(vault.id, allow).catch((e) => store.fail(e));
-    await store.loadVaults();
-  }
-
-  async function rename(vault: Vault) {
-    const name = await store.prompt(tr('sidebar.vaultName'), vault.name, tr('common.rename'));
-    if (name?.trim() && name.trim() !== vault.name) {
-      await api.renameVault(vault.id, name.trim()).catch((e) => store.fail(e));
-      await store.loadVaults();
+  function searchKey(e: KeyboardEvent) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (hits.length) chosen = (chosen + (e.key === 'ArrowDown' ? 1 : hits.length - 1)) % hits.length;
+    } else if (e.key === 'Enter' && hits[chosen]) {
+      e.preventDefault();
+      open(hits[chosen]);
+    } else if (e.key === 'Escape' && query) {
+      query = '';
     }
   }
 
-  async function remove(vault: Vault) {
-    if (await store.confirm(tr('settings.removeVault', { name: vault.name }), tr('common.remove'))) await store.removeVault(vault.id);
-  }
+  const hitId = (i: number) => `setting-hit-${i}`;
+
+  const lightThemes = THEMES.filter((t) => t.mode === 'light');
+  const darkThemes = THEMES.filter((t) => t.mode === 'dark');
+  const following = $derived(store.themeChoice.fixed === null);
 
   async function copy() {
     await navigator.clipboard.writeText(snippet);
@@ -146,36 +165,72 @@
 
   <div class="layout">
   <nav aria-label={tr('settings.title')}>
+    <input type="search" class="search" data-clear-on-escape role="combobox" aria-expanded={searching} aria-controls="setting-hits" aria-activedescendant={hits.length ? hitId(chosen) : undefined} aria-label={tr('find.label')} placeholder={tr('find.placeholder')} bind:value={query} onkeydown={searchKey} />
     {#each SECTIONS as s (s.id)}
-      <button class:on={section === s.id} aria-current={section === s.id ? 'page' : undefined} onclick={() => (section = s.id)}>{tr(s.label)}</button>
+      <button class:on={!searching && section === s.id} aria-current={!searching && section === s.id ? 'page' : undefined} onclick={() => { query = ''; section = s.id; }}>{tr(s.label)}</button>
     {/each}
   </nav>
   <div class="content">
-  {#if section === 'general'}
-  <section>
+  {#if searching}
+    <div id="setting-hits" class="hits" role="listbox" aria-label={tr('find.label')}>
+      {#each hits as hit, i (`${hit.vaultId ?? ''}${hit.entry.id}`)}
+        <button id={hitId(i)} class="hit" class:on={i === chosen} role="option" aria-selected={i === chosen} tabindex="-1" onmousemove={() => (chosen = i)} onclick={() => open(hit)}>
+          <span class="hname">{tr(hit.entry.label)}</span>
+          <span class="hpath">{hit.path}</span>
+        </button>
+      {:else}
+        <p class="muted" role="status">{tr('find.none', { query: query.trim() })}</p>
+      {/each}
+    </div>
+  {:else if section === 'general'}
+  <section data-setting="app.language">
     <h3>{tr('settings.language')}</h3>
-    <select aria-label={tr('settings.language')} value={language()} onchange={(e) => setLanguage(e.currentTarget.value as Language)}>
+    <select aria-label={tr('settings.language')} aria-describedby="hint-language" value={language()} onchange={(e) => setLanguage(e.currentTarget.value as Language)}>
       {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
     </select>
+    <p class="hint flush" id="hint-language">{tr('find.languageHint')}</p>
   </section>
-  <section>
+  <section data-setting="app.spell">
     <h3>{tr('spell.title')}</h3>
-    <select aria-label={tr('spell.title')} value={store.spellcheck} onchange={(e) => store.setSpellcheck(e.currentTarget.value as SpellSetting)}>
+    <select aria-label={tr('spell.title')} aria-describedby="hint-spell" value={store.spellcheck} onchange={(e) => store.setSpellcheck(e.currentTarget.value as SpellSetting)}>
       <option value="app">{tr('spell.app')}</option>
       {#each SPELL_LANGUAGES as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
       <option value="off">{tr('spell.off')}</option>
     </select>
-    <p class="hint">{tr('spell.hint')}</p>
+    <p class="hint flush" id="hint-spell">{tr('spell.hint')}</p>
   </section>
-  <section>
+  <section data-setting="app.typewriter">
+    <h3>{tr('typewriter.title')}</h3>
+    <label class="follow">
+      <input type="checkbox" aria-describedby="hint-typewriter" checked={store.typewriter} onchange={(e) => store.setTypewriter(e.currentTarget.checked)} />
+      {tr('typewriter.label')}
+    </label>
+    <p class="hint" id="hint-typewriter">{tr('typewriter.hint')}</p>
+  </section>
+  <section data-setting="app.diagramPeek">
+    <h3>{tr('peek.title')}</h3>
+    <label class="follow">
+      <input type="checkbox" aria-describedby="hint-peek" checked={store.diagramPeek} onchange={(e) => store.setDiagramPeek(e.currentTarget.checked)} />
+      {tr('peek.setting')}
+    </label>
+    <p class="hint" id="hint-peek">{tr('peek.settingHint')}</p>
+  </section>
+  <section data-setting="app.slash">
+    <label class="follow">
+      <input type="checkbox" aria-describedby="hint-slash" checked={store.slashMenu} onchange={(e) => store.setSlashMenu(e.currentTarget.checked)} />
+      {tr('slash.setting')}
+    </label>
+    <p class="hint" id="hint-slash">{tr('slash.settingHint')}</p>
+  </section>
+  <section data-setting="app.images">
     <h3>{tr('images.title')}</h3>
-    <select aria-label={tr('images.title')} value={store.imagePlace} onchange={(e) => store.setImagePlace(e.currentTarget.value as ImagePlace)}>
+    <select aria-label={tr('images.title')} aria-describedby="hint-images" value={store.imagePlace} onchange={(e) => store.setImagePlace(e.currentTarget.value as ImagePlace)}>
       <option value="vault">{tr('images.vault', { folder: IMAGE_FOLDER })}</option>
       <option value="note">{tr('images.note')}</option>
     </select>
-    <p class="hint">{tr('images.hint')}</p>
+    <p class="hint flush" id="hint-images">{tr('images.hint')}</p>
   </section>
-  <section aria-label={tr('log.title')}>
+  <section data-setting="app.log" aria-label={tr('log.title')}>
     <h3>{tr('log.title')}</h3>
     <p class="muted">{tr('log.intro')}</p>
     <div class="logbar">
@@ -187,12 +242,12 @@
       <pre class="log" aria-label={tr('log.title')}>{log || tr('log.empty')}</pre>
     {/if}
   </section>
-  <section>
+  <section data-setting="app.tutorial">
     <h3>{tr('tutorial.label')}</h3>
     <button class="plain" onclick={() => { store.settings = false; store.tutorial = true; }}>{tr('settings.tutorial')}</button>
   </section>
   {#if defaultApp}
-    <section>
+    <section data-setting="app.defaultApp">
       <h3>{tr('settings.defaultApp')}</h3>
       {#if defaultApp.platform === 'windows'}
         <!-- eslint-disable-next-line svelte/no-at-html-tags -- our own translation, with markup -->
@@ -214,15 +269,17 @@
   {:else if section === 'appearance'}
   <section>
     <h3>{tr('settings.appearance')}</h3>
-    <div class="themes">
+    <p class="hint flush">{tr('find.themeHint')}</p>
+    <div class="themes" data-setting="app.theme">
       {#each THEMES as t (t.id)}
         {@render swatch(t, store.theme.id === t.id, () => store.setThemeChoice({ fixed: t.id }))}
       {/each}
     </div>
-    <label class="follow">
-      <input type="checkbox" checked={following} onchange={(e) => store.setThemeChoice({ fixed: e.currentTarget.checked ? null : store.theme.id })} />
+    <label class="follow" data-setting="app.followSystem">
+      <input type="checkbox" aria-describedby="hint-follow" checked={following} onchange={(e) => store.setThemeChoice({ fixed: e.currentTarget.checked ? null : store.theme.id })} />
       {tr('settings.followSystem')}
     </label>
+    <p class="hint" id="hint-follow">{tr('find.followHint')}</p>
     {#if following}
       <div class="modes">
         <label>{tr('settings.lightMode')}
@@ -238,7 +295,8 @@
       </div>
     {/if}
     <h3>{tr('reading.title')}</h3>
-    <div class="reading">
+    <p class="hint flush">{tr('find.readingHint')}</p>
+    <div class="reading" data-setting="app.reading">
       <label>{tr('reading.textSize')}
         <select value={String(store.reading.textScale)} onchange={(e) => store.setReading({ textScale: Number(e.currentTarget.value) })}>
           {#each TEXT_SCALES as s}<option value={String(s)}>{tr(`reading.scale${Math.round(s * 100)}` as Key)}</option>{/each}
@@ -254,43 +312,33 @@
           {#each Object.keys(LEADINGS) as l}<option value={l}>{tr(`reading.leading.${l}` as Key)}</option>{/each}
         </select>
       </label>
-      <div class="zoom">
+      <div class="zoom" data-setting="app.zoom">
         <span>{tr('reading.zoom', { n: Math.round(store.reading.zoom * 100) })}</span>
         <button class="plain" disabled={store.reading.zoom === 1} onclick={() => store.setZoom(null, false)}>{tr('reading.zoomReset')}</button>
       </div>
       <p class="hint">{tr('reading.zoomHint')}</p>
     </div>
-    <label class="follow">
-      <input type="checkbox" checked={frame.native} onchange={(e) => frame.setNative(e.currentTarget.checked)} />
+    <label class="follow" data-setting="app.nativeFrame">
+      <input type="checkbox" aria-describedby="hint-frame" checked={frame.native} onchange={(e) => frame.setNative(e.currentTarget.checked)} />
       {tr('settings.nativeFrame')}
     </label>
-    <p class="hint">{tr('settings.nativeFrameHint')}</p>
+    <p class="hint" id="hint-frame">{tr('settings.nativeFrameHint')}</p>
   </section>
 
   {:else if section === 'vaults'}
-  <section>
+  <section data-setting="app.vaults">
     <h3>{tr('settings.sectionVaults')}</h3>
+    <p class="muted">{tr('settings.vaultsIntro')}</p>
     {#each store.vaults as vault (vault.id)}
       <div class="vault">
         <div class="info">
-          <button class="name" title={tr('common.rename')} onclick={() => rename(vault)}>{vault.name}</button>
+          <span class="name">{vault.name}</span>
           <span class="path">{vault.path}</span>
-        </div>
-        <div class="seg" role="group" aria-label={tr('settings.mcpAccessOf', { name: vault.name })}>
-          {#each ACCESS as a}
-            <button class:on={vault.mcp === a.value} onclick={() => setAccess(vault, a.value)}>{tr(a.label)}</button>
-          {/each}
+          <span class="state">{tr(vault.open ? 'settings.vaultOpen' : 'settings.vaultClosed')} · {tr('settings.vaultAi', { access: tr(ACCESS.find((a) => a.value === vault.mcp)?.label ?? 'settings.accessOff') })}</span>
         </div>
         <div class="actions">
-          <label title={tr('settings.scriptsHint')}>
-            <input type="checkbox" checked={vault.allowScripts} onchange={(e) => setScripts(vault, e.currentTarget.checked)} />
-            {tr('settings.scripts')}
-          </label>
-          <span class="spacer"></span>
-          {#if vault.open}<button onclick={() => (store.themeEditor = vault.id)}>{tr('settings.themes')}</button>{/if}
-          {#if vault.open}<button onclick={() => { store.settings = false; store.wordScreen = vault.id; }}>{tr('word.open')}</button>{/if}
           <button onclick={() => store.setVaultOpen(vault.id, !vault.open)}>{tr(vault.open ? 'common.close' : 'common.open')}</button>
-          <button onclick={() => remove(vault)}>{tr('common.remove')}</button>
+          <button class="main" onclick={() => store.openVaultSettings(vault.id)}><Icon name="settings" size={14} /> {tr('settings.vaultSettings')}</button>
         </div>
       </div>
     {:else}
@@ -299,7 +347,7 @@
   </section>
 
   {:else}
-  <section>
+  <section data-setting="app.mcp">
     <h3>{tr('settings.mcpTitle')}</h3>
     <p class="muted">{tr('settings.mcpIntro')}</p>
     <div class="clients">
@@ -317,7 +365,7 @@
     </div>
     <p class="muted">{hint}</p>
   </section>
-  <section aria-label={tr('mcpCheck.title')}>
+  <section data-setting="app.mcpCheck" aria-label={tr('mcpCheck.title')}>
     <h3>{tr('mcpCheck.title')}</h3>
     <p class="muted">{tr('mcpCheck.intro')}</p>
     <button class="plain" disabled={checking} onclick={checkMcp}>{tr(checking ? 'mcpCheck.running' : 'mcpCheck.run')}</button>
@@ -337,7 +385,7 @@
           {/if}
           {#if hidden.length}
             <p class="muted">{tr('mcpCheck.hidden', { list: hidden.map((v) => v.name).join(', ') })}</p>
-            <button class="plain" onclick={() => (section = 'vaults')}>{tr('mcpCheck.giveAccess')}</button>
+            <button class="plain" onclick={() => { if (hidden.length === 1) store.openVaultSettings(hidden[0].id, 'ai'); else section = 'vaults'; }}>{tr('mcpCheck.giveAccess')}</button>
           {/if}
           <p class="muted">{tr('mcpCheck.stillNot')}</p>
         {:else}
@@ -360,6 +408,12 @@
   nav button { padding: var(--space-2) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-md); text-align: left; }
   nav button:hover { background: var(--hover); color: var(--text); }
   nav .on { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+  .search { width: 100%; height: 30px; margin-bottom: var(--space-1); padding: 0 var(--space-2); font-size: var(--font-sm); }
+  .hits { display: flex; flex-direction: column; padding-top: var(--space-3); }
+  .hit { display: flex; flex-direction: column; gap: var(--space-0-5); padding: var(--space-2) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text); text-align: left; }
+  .hit.on { background: var(--accent-soft); }
+  .hname { font-size: var(--font-md); font-weight: 600; }
+  .hpath { color: var(--text-3); font-size: var(--font-xs); }
   .content { min-width: 0; padding: 0 var(--space-5) var(--space-5); overflow-y: auto; }
   section + section { margin-top: var(--space-6); padding-top: var(--space-0-5); border-top: 1px solid var(--line); }
   h2 { margin: var(--space-2) 0; font-size: var(--font-lg); font-weight: 650; }
@@ -375,22 +429,23 @@
   .reading .zoom { display: flex; grid-column: 1 / -1; align-items: center; gap: var(--space-3); color: var(--text-2); font-size: var(--font-sm); }
   .reading .hint { grid-column: 1 / -1; margin: 0; }
   .hint { margin: var(--space-1) 0 0 var(--space-5); color: var(--text-3); font-size: var(--font-xs); line-height: 1.4; }
+  .hint.flush { margin-left: 0; }
   .follow { display: flex; align-items: center; gap: var(--space-1-5); margin-top: var(--space-3); color: var(--text-2); font-size: var(--font-sm); }
   .modes { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-2); color: var(--text-2); font-size: var(--font-sm); }
   .modes label { display: flex; align-items: center; gap: var(--space-1-5); }
   select { min-width: 170px; padding: var(--space-1) var(--space-1-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; }
-  .vault { padding: var(--space-2-5) 0; border-top: 1px solid var(--line); }
-  .info { display: flex; align-items: baseline; gap: var(--space-2-5); min-width: 0; margin-bottom: var(--space-2); }
-  .name { flex: none; padding: 0; border: 0; background: none; color: var(--text); font-size: var(--font-md); font-weight: 600; }
+  .vault { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2-5) 0; border-top: 1px solid var(--line); }
+  .info { display: flex; flex: 1; flex-direction: column; gap: var(--space-0-5); min-width: 0; }
+  .name { color: var(--text); font-size: var(--font-md); font-weight: 600; }
   .path { overflow: hidden; color: var(--text-3); font-size: var(--font-sm); white-space: nowrap; text-overflow: ellipsis; }
-  .seg, .clients { display: inline-flex; padding: var(--space-0-5); border-radius: var(--radius-md); background: var(--hover); flex-wrap: wrap; }
-  .seg button, .clients button { padding: var(--space-1) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); }
-  .seg .on, .clients .on { background: var(--raised); color: var(--text); box-shadow: var(--shadow-sm); }
-  .actions { display: flex; align-items: center; gap: var(--space-1-5); margin-top: var(--space-2); color: var(--text-2); font-size: var(--font-sm); }
-  .actions label { display: flex; align-items: center; gap: var(--space-1-5); }
+  .state { color: var(--text-2); font-size: var(--font-xs); }
+  .clients { display: inline-flex; padding: var(--space-0-5); border-radius: var(--radius-md); background: var(--hover); flex-wrap: wrap; }
+  .clients button { padding: var(--space-1) var(--space-2-5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); }
+  .clients .on { background: var(--raised); color: var(--text); box-shadow: var(--shadow-sm); }
+  .actions { display: flex; flex: none; align-items: center; gap: var(--space-1-5); }
+  .actions .main { display: flex; align-items: center; gap: var(--space-1); color: var(--text); }
   .actions button, .code button { padding: var(--space-1) var(--space-2-5); border: 1px solid var(--line); border-radius: var(--radius-sm); background: none; color: var(--text-2); font-size: var(--font-sm); }
   .actions button:hover, .code button:hover { background: var(--hover); color: var(--text); }
-  .spacer { flex: 1; }
   .code { position: relative; margin: var(--space-2-5) 0 var(--space-1-5); }
   pre { margin: 0; padding: var(--space-3) 76px var(--space-3) var(--space-3); overflow-x: auto; border-radius: var(--radius-md); background: var(--panel); font: var(--font-sm)/1.5 var(--mono); }
   .code button { position: absolute; top: 8px; right: 8px; background: var(--raised); }

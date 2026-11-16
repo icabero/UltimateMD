@@ -3,13 +3,16 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { anchorLabel, findAnchor, parseAnchor } from './anchors';
-import { api, type GitStatus, type ReplaceOptions, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
+import { api, type FolderLook, type GitStatus, type ReplaceOptions, type SortMode, type TreeNode, type Vault, type VaultThemes, type WatchProblem } from './api';
 import { fold } from './fold';
+import { addDays, dailyPath, dailyTitle } from './daily';
 import { fillTemplate } from './noteTemplates';
 import { withColors, type DiagramStyle } from './diagramStyle';
 import { language, tr } from './i18n.svelte';
 import { sampleVault } from './sampleVault';
 import { baseName, dirName, join, kindOf, linkFrom, resolveLink, stem, type FileKind } from './paths';
+import { lookKey, noteLook } from './look';
+import { setProperty } from './frontmatter';
 import { checksAtStart, isNewer, latestVersion } from './updates';
 import { newsFor, unseenNews } from './news';
 import { changedLines } from './diff';
@@ -65,6 +68,8 @@ export interface Reveal {
 }
 
 export type PanelTab = 'outline' | 'links' | 'properties' | 'history';
+/** The parts of a vault's settings screen. */
+export type VaultSection = 'general' | 'look' | 'diagrams' | 'word' | 'daily' | 'ai';
 
 /** Which side bars someone wants. A narrow window hides them anyway. */
 interface Layout {
@@ -105,6 +110,17 @@ const TOAST_TIME = 4500;
 const TOAST_TIME_ACTIONS = 9000;
 const TOAST_SHORT = 140;
 
+/** A small chooser: a colour and emoji for a folder, or an emoji for a note. */
+export interface Picker {
+  kind: 'look' | 'emoji' | 'image';
+  title: string;
+  color: string | null;
+  emoji: string | null;
+  vaultId: string;
+  /** Null when closed without choosing; a null colour or emoji is one taken away. */
+  resolve: (value: { color: string | null; emoji: string | null; image: string | null } | null) => void;
+}
+
 export interface Dialog {
   title: string;
   /** Text field value. Null for a yes/no question. */
@@ -121,7 +137,10 @@ const TUTORIAL_KEY = 'ultimatemd.tutorial';
 const VIEW_KEY = 'ultimatemd.view';
 const LAYOUT_KEY = 'ultimatemd.layout';
 const READING_KEY = 'ultimatemd.reading';
+const TYPEWRITER_KEY = 'ultimatemd.typewriter';
 const IMAGES_KEY = 'ultimatemd.images';
+const PEEK_KEY = 'ultimatemd.diagramPeek';
+const SLASH_KEY = 'ultimatemd.slashMenu';
 const RECENT_KEY = 'ultimatemd.recent';
 const FAVORITES_KEY = 'ultimatemd.favorites';
 const RECENT_MAX = 30;
@@ -196,11 +215,35 @@ function loadReading(): Reading {
   }
 }
 
+function loadTypewriter(): boolean {
+  try {
+    return localStorage.getItem(TYPEWRITER_KEY) === 'on';
+  } catch {
+    return false;
+  }
+}
+
+function loadSlashMenu() {
+  try {
+    return localStorage.getItem(SLASH_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
 function loadImagePlace(): ImagePlace {
   try {
     return localStorage.getItem(IMAGES_KEY) === 'note' ? 'note' : 'vault';
   } catch {
     return 'vault';
+  }
+}
+
+function loadDiagramPeek() {
+  try {
+    return localStorage.getItem(PEEK_KEY) !== 'off';
+  } catch {
+    return true;
   }
 }
 
@@ -255,6 +298,8 @@ function imageName(file: File) {
 class Store {
   vaults = $state<Vault[]>([]);
   trees = $state<Record<string, TreeNode[]>>({});
+  /** How each vault's tree is ordered. */
+  orders = $state<Record<string, SortMode>>({});
   /** Each vault's Git status, or null when it is not in a repository. */
   git = $state<Record<string, GitStatus | null>>({});
   /** The vault whose Git changes are on screen. */
@@ -283,12 +328,16 @@ class Store {
   merging = $state(false);
   /** The context menu on screen, and where. */
   menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  /** A note or folder the side bar is being asked to show, for a moment. */
+  treeReveal = $state<{ vaultId: string; path: string } | null>(null);
   /** The tab shown beside the one being edited, for reference. */
   sideKey = $state<string | null>(null);
   /** Showing what changed outside the app in the note on screen. */
   outsideDiff = $state(false);
   /** Whether and in which language spelling is checked while writing. */
   spellcheck = $state<SpellSetting>(loadSpellSetting());
+  /** Whether a diagram is drawn next to its code while it is typed. */
+  diagramPeek = $state(loadDiagramPeek());
   /** The version whose news show, as `0.7`. */
   news = $state<string | null>(null);
   /** A newer published version, once known. */
@@ -296,16 +345,18 @@ class Store {
   /** The view new tabs open in: the last one the user chose. */
   preferredView = $state(loadView());
   dialog = $state<Dialog | null>(null);
+  picker = $state<Picker | null>(null);
+  /** Each vault's folders with a colour or emoji, by path. */
+  looks = $state<Record<string, Record<string, FolderLook>>>({});
+  /** The emoji each vault's notes declare, by path. */
+  noteIcons = $state<Record<string, Record<string, string>>>({});
   vaultThemes = $state<Record<string, VaultThemes>>({});
-  themeEditor = $state<string | null>(null);
+  /** The vault whose settings are open, and at which part. */
+  vaultSettings = $state<{ vaultId: string; section: VaultSection } | null>(null);
   /** The vault whose broken links are listed. */
   brokenLinks = $state<string | null>(null);
   /** The vault whose log of what the AI did is open. */
   aiLog = $state<string | null>(null);
-  /** The vault whose Word settings are open. */
-  wordScreen = $state<string | null>(null);
-  /** The vault whose diagram guide for the AI is being edited. */
-  guideScreen = $state<string | null>(null);
   /** A vault or folder being read top to bottom, in place of the editor. */
   reader = $state<{ vaultId: string; folder: string } | null>(null);
   /** Where a note from a template goes, while choosing the template. */
@@ -314,7 +365,13 @@ class Store {
   reveal = $state<Reveal | null>(null);
   layout = $state(loadLayout());
   reading = $state(loadReading());
+  /** Keeps the line being typed in the middle of the editor. Remembered. */
+  typewriter = $state(loadTypewriter());
+  /** Concentration mode: only the note shows. It hides bars without touching `layout`, so leaving restores them. Never remembered: the app always opens whole. */
+  focus = $state(false);
   imagePlace = $state<ImagePlace>(loadImagePlace());
+  /** The menu of blocks that `/` opens at the start of a line. */
+  slashMenu = $state(loadSlashMenu());
   windowWidth = $state(innerWidth);
   /** A bar shown by hand while the window is too narrow for it. It folds again once the width changes enough. */
   peek = $state({ left: false, right: false });
@@ -322,6 +379,8 @@ class Store {
   editDiagram = $state<{ key: string; index: number } | null>(null);
   /** The line with the cursor, or the top of the preview when it shows alone. */
   position = $state<{ key: string; line: number } | null>(null);
+  /** The words and characters the editor has selected; null when nothing is. */
+  selection = $state<{ key: string; words: number; chars: number } | null>(null);
   /** Tags of each vault, the most used first. Dropped when the vault changes, read again when needed. */
   tags = $state<Record<string, { tag: string; notes: number }[]>>({});
   /** Vaults whose changes made outside the app are not followed, with why. */
@@ -523,6 +582,14 @@ class Store {
     void this.copyText(`[[${unique ? short : path.slice(0, path.lastIndexOf('.'))}]]`, tr('menu.linkCopied'));
   }
 
+  /** Shows a note or folder in the side bar: opens the bar and the folders above it, and puts the focus on it. */
+  showInTree(vaultId: string, path: string) {
+    this.toggleBar('left', true);
+    this.treeReveal = { vaultId, path };
+    // Rows that appear later, when the user opens folders again, must not react.
+    setTimeout(() => (this.treeReveal = null), 800);
+  }
+
   revealInFolder(vaultId: string, path: string) {
     void api.revealPath(vaultId, path).catch((e) => this.fail(e));
   }
@@ -579,13 +646,22 @@ class Store {
 
   /** Closes every tab but this one and the pinned ones. */
   async closeOthers(keep: Tab) {
-    for (const tab of this.tabs.filter((t) => t.key !== keep.key && !t.pinned)) await this.close(tab);
-    this.activeKey = keep.key;
-    this.persist();
+    await this.closeMany(this.tabs.filter((t) => t.key !== keep.key && !t.pinned), keep);
   }
 
   async closeAll() {
-    for (const tab of this.tabs.filter((t) => !t.pinned)) await this.close(tab);
+    await this.closeMany(this.tabs.filter((t) => !t.pinned));
+  }
+
+  /** The tabs after (or before) this one that a "close to the right/left" would close: pinned ones never. */
+  tabsBeside(anchor: Tab, side: 'right' | 'left') {
+    const i = this.tabs.findIndex((t) => t.key === anchor.key);
+    if (i < 0) return [];
+    return (side === 'right' ? this.tabs.slice(i + 1) : this.tabs.slice(0, i)).filter((t) => !t.pinned);
+  }
+
+  async closeBeside(anchor: Tab, side: 'right' | 'left') {
+    await this.closeMany(this.tabsBeside(anchor, side), anchor);
   }
 
   get active() {
@@ -653,9 +729,17 @@ class Store {
     try {
       const found = await api.aliases(vaultId, paths);
       const next = paths ? { ...(this.aliases[vaultId] ?? {}) } : {};
-      for (const path of paths ?? []) delete next[path];
-      for (const note of found) next[note.path] = note.aliases;
+      const icons = paths ? { ...(this.noteIcons[vaultId] ?? {}) } : {};
+      for (const path of paths ?? []) {
+        delete next[path];
+        delete icons[path];
+      }
+      for (const note of found) {
+        if (note.aliases.length) next[note.path] = note.aliases;
+        if (note.icon) icons[note.path] = note.icon;
+      }
       this.aliases[vaultId] = next;
+      this.noteIcons[vaultId] = icons;
     } catch {
       // Links by alias stay unresolved until the next change.
     }
@@ -717,6 +801,54 @@ class Store {
         },
       };
     });
+  }
+
+  #pick(request: Omit<Picker, 'resolve'>) {
+    return new Promise<Parameters<Picker['resolve']>[0]>((resolve) => {
+      this.picker = {
+        ...request,
+        resolve: (result) => {
+          this.picker = null;
+          resolve(result);
+        },
+      };
+    });
+  }
+
+  /** The emoji of a note: from its text if it is open, else as the vault's notes declare it. */
+  noteIcon(vaultId: string, path: string) {
+    const tab = this.tabs.find((t) => t.vaultId === vaultId && t.path === path && t.kind === 'md');
+    return tab ? noteLook(tab.content).icon : (this.noteIcons[vaultId]?.[path] ?? null);
+  }
+
+  /** Asks for the colour and emoji of a folder and keeps them in the vault. */
+  async chooseFolderLook(vaultId: string, folder: string) {
+    const now = this.looks[vaultId]?.[folder];
+    const result = await this.#pick({ kind: 'look', title: tr('look.folderTitle', { name: baseName(folder) }), color: now?.color ?? null, emoji: now?.emoji ?? null, vaultId });
+    if (!result) return;
+    try {
+      await api.setFolderLook(vaultId, folder, result.color || result.emoji ? { color: result.color, emoji: result.emoji } : null);
+      this.looks[vaultId] = await api.folderLooks(vaultId);
+    } catch (e) {
+      this.fail(e);
+    }
+  }
+
+  /** Sets or removes a note's icon or cover in its frontmatter. */
+  setNoteLook(tab: Tab, which: 'icon' | 'cover', value: string) {
+    this.edit(tab, setProperty(tab.content, lookKey(tab.content, which), value));
+  }
+
+  async chooseNoteIcon(tab: Tab) {
+    const result = await this.#pick({ kind: 'emoji', title: tr('look.iconTitle'), color: null, emoji: noteLook(tab.content).icon, vaultId: tab.vaultId });
+    if (result) this.setNoteLook(tab, 'icon', result.emoji ?? '');
+  }
+
+  async chooseNoteCover(tab: Tab) {
+    const result = await this.#pick({ kind: 'image', title: tr('look.coverTitle'), color: null, emoji: null, vaultId: tab.vaultId });
+    if (!result?.image) return;
+    // As images are written in notes: by name when it is beside the note, else from the vault's root.
+    this.setNoteLook(tab, 'cover', dirName(result.image) === dirName(tab.path) ? baseName(result.image) : result.image);
   }
 
   prompt(title: string, value = '', action = tr('common.accept')) {
@@ -852,11 +984,60 @@ class Store {
 
   async refreshTree(id: string) {
     try {
-      this.trees[id] = await api.tree(id);
+      const [tree, order, looks] = await Promise.all([api.tree(id), api.treeOrder(id), api.folderLooks(id).catch(() => ({}))]);
+      this.trees[id] = tree;
+      this.orders[id] = order;
+      this.looks[id] = looks;
     } catch (e) {
       this.trees[id] = [];
       this.fail(e);
     }
+  }
+
+  /** How the vault's tree is ordered. */
+  order(id: string): SortMode {
+    return this.orders[id] ?? 'nameAsc';
+  }
+
+  async setOrder(id: string, mode: SortMode) {
+    if (mode === this.order(id)) return;
+    try {
+      await api.setTreeOrder(id, mode);
+    } catch (e) {
+      return this.fail(e);
+    }
+    await this.refreshTree(id);
+  }
+
+  /** The entries beside `path`, in the order the tree shows them. */
+  #siblings(id: string, path: string) {
+    const dir = dirName(path);
+    let level = this.trees[id] ?? [];
+    for (const part of dir ? dir.split('/') : []) level = level.find((n) => n.isDir && baseName(n.path) === part)?.children ?? [];
+    return level;
+  }
+
+  /** Puts `path` before or after `target`, a note or folder of the same kind in the same folder. Manual order only. */
+  async place(id: string, path: string, target: string, after: boolean) {
+    try {
+      await api.placeInTree(id, path, target, after);
+    } catch (e) {
+      return this.fail(e);
+    }
+    await this.refreshTree(id);
+  }
+
+  /** The neighbour of `path` of the same kind, above (-1) or below (1), if any. */
+  neighbour(id: string, path: string, step: -1 | 1) {
+    const list = this.#siblings(id, path);
+    const at = list.findIndex((n) => n.path === path);
+    const next = list[at + step];
+    return at >= 0 && next && next.isDir === list[at].isDir ? next : undefined;
+  }
+
+  async nudge(id: string, path: string, step: -1 | 1) {
+    const next = this.neighbour(id, path, step);
+    if (next) await this.place(id, path, next.path, step === 1);
   }
 
   /** Asks where and how to call a new vault, then creates it. */
@@ -899,6 +1080,12 @@ class Store {
     } catch (e) {
       this.fail(e);
     }
+  }
+
+  /** Everything a vault can set, in one screen; it takes the place of the app settings. */
+  openVaultSettings(vaultId: string, section: VaultSection = 'general') {
+    this.settings = false;
+    this.vaultSettings = { vaultId, section };
   }
 
   async setVaultOpen(id: string, open: boolean) {
@@ -979,15 +1166,22 @@ class Store {
   }
 
   get showLeft() {
+    if (this.focus) return false;
     return this.windowWidth >= LEFT_MIN ? this.layout.left : this.peek.left;
   }
 
   get showRight() {
+    if (this.focus) return false;
     return this.windowWidth >= RIGHT_MIN ? this.layout.right : this.peek.right;
   }
 
   /** Shows or hides a side bar. In a narrow window the change lasts until it widens. */
   toggleBar(side: 'left' | 'right', show?: boolean) {
+    // Asking for a bar leaves concentration; a plain toggle then has nothing more to do.
+    if (this.focus) {
+      this.focus = false;
+      if (show === undefined) return;
+    }
     const min = side === 'left' ? LEFT_MIN : RIGHT_MIN;
     const next = show ?? !(side === 'left' ? this.showLeft : this.showRight);
     if (this.windowWidth >= min) {
@@ -995,6 +1189,15 @@ class Store {
       this.saveLayout();
     } else {
       this.peek[side] = next;
+    }
+  }
+
+  setTypewriter(on: boolean) {
+    this.typewriter = on;
+    try {
+      localStorage.setItem(TYPEWRITER_KEY, on ? 'on' : 'off');
+    } catch {
+      // Lasts for this session only.
     }
   }
 
@@ -1030,6 +1233,24 @@ class Store {
   setSpellcheck(setting: SpellSetting) {
     this.spellcheck = setting;
     saveSpellSetting(setting);
+  }
+
+  setDiagramPeek(on: boolean) {
+    this.diagramPeek = on;
+    try {
+      localStorage.setItem(PEEK_KEY, on ? 'on' : 'off');
+    } catch {
+      // Not saved; it lasts until the app closes.
+    }
+  }
+
+  setSlashMenu(on: boolean) {
+    this.slashMenu = on;
+    try {
+      localStorage.setItem(SLASH_KEY, on ? 'on' : 'off');
+    } catch {
+      // Lasts for this session only.
+    }
   }
 
   setImagePlace(place: ImagePlace) {
@@ -1113,6 +1334,41 @@ class Store {
       }
     }
     await this.createNote(vaultId, dir, name, content);
+  }
+
+  /**
+   * Opens the note of a day (today by default, `offset` days away otherwise) in the
+   * vault of the note open or the first one, making it first if it isn't there. It
+   * never replaces a note that exists.
+   */
+  async openDaily(offset = 0, vaultId?: string) {
+    const tab = this.active;
+    const id = vaultId ?? (tab && !tab.loose ? tab.vaultId : this.openVaults[0]?.id);
+    if (!id) return this.notify(tr('app.openVaultFirst'));
+    const date = addDays(new Date(), offset);
+    try {
+      const settings = await api.dailyNotes(id);
+      const path = dailyPath(date, settings);
+      if (!this.files(id).includes(path)) {
+        const title = dailyTitle(date);
+        let content = `# ${title}\n\n`;
+        if (settings.template) {
+          try {
+            content = fillTemplate(await api.noteTemplate(id, settings.template), { titulo: title, vault: this.vault(id)?.name ?? '' }, date);
+          } catch {
+            this.notify(tr('daily.noTemplate', { name: settings.template }));
+          }
+        }
+        // Creating fails if the note is already there, even if the tree didn't show it yet.
+        await api.create(id, path, content).catch(async (e) => {
+          if (!(await api.read(id, path).then(() => true, () => false))) throw e;
+        });
+        await this.refreshTree(id);
+      }
+      await this.openFile(id, path);
+    } catch (e) {
+      this.fail(e);
+    }
   }
 
   /** Keeps the note open as a template of its vault. */
@@ -1215,17 +1471,31 @@ class Store {
   }
 
   async close(tab: Tab) {
-    await this.save(tab);
+    await this.closeMany([tab]);
+  }
+
+  /**
+   * Closes several tabs at once. Everything is saved first; the only edits that can still be lost are those
+   * of tabs in conflict with the disk, and those are asked about once for the whole batch. If the user says
+   * no, nothing is closed. `keep` is the tab to leave active when the active one is among those closed.
+   */
+  async closeMany(tabs: Tab[], keep?: Tab) {
+    await Promise.all(tabs.map((tab) => this.save(tab)));
     // What was written in this sitting stays as a version.
-    if (tab.touched && !tab.loose && isText(tab.kind) && !tab.conflict && !tab.missing) void api.historyKeep(tab.vaultId, tab.path, false).catch(() => false);
-    const name = baseName(tab.path);
-    if (tab.conflict && !(await this.confirm(tr('store.closeConflict', { name }), tr('common.close'), true))) return;
-    const i = this.tabs.findIndex((t) => t.key === tab.key);
-    if (i < 0) return;
-    this.tabs.splice(i, 1);
-    if (tab.loose) await api.closeLoose(tab.vaultId);
-    if (this.sideKey === tab.key) this.sideKey = null;
-    if (this.activeKey === tab.key) this.activeKey = this.tabs[Math.min(i, this.tabs.length - 1)]?.key ?? null;
+    for (const tab of tabs) if (tab.touched && !tab.loose && isText(tab.kind) && !tab.conflict && !tab.missing) void api.historyKeep(tab.vaultId, tab.path, false).catch(() => false);
+    const risky = tabs.filter((t) => t.conflict).map((t) => baseName(t.path));
+    if (risky.length) {
+      const text = risky.length === 1 ? tr('store.closeConflict', { name: risky[0] }) : tr('store.closeConflicts', { count: risky.length, names: risky.join(', ') });
+      if (!(await this.confirm(text, tr('common.close'), true))) return;
+    }
+    for (const tab of tabs) {
+      const i = this.tabs.findIndex((t) => t.key === tab.key);
+      if (i < 0) continue;
+      this.tabs.splice(i, 1);
+      if (tab.loose) await api.closeLoose(tab.vaultId);
+      if (this.sideKey === tab.key) this.sideKey = null;
+      if (this.activeKey === tab.key) this.activeKey = keep && this.tabs.some((t) => t.key === keep.key) ? keep.key : (this.tabs[Math.min(i, this.tabs.length - 1)]?.key ?? null);
+    }
     this.persist();
   }
 

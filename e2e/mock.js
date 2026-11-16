@@ -74,7 +74,40 @@
         level = node.children;
       });
     }
+    const order = orders[id];
+    if (order && order.mode !== 'nameAsc') arrange(id, root, '', order);
     return root;
+  }
+
+  // The order of each vault's tree, as the backend keeps it: a mode, and for the
+  // manual one a list of names per folder.
+  const orders = {};
+  // The colour or emoji of folders, kept per vault like `.ultimatemd/carpetas.json`.
+  const looks = {};
+  const moveLooks = (id, from, to) => {
+    const own = (looks[id] ??= {});
+    for (const key of Object.keys(own)) {
+      if (key !== from && !key.startsWith(`${from}/`)) continue;
+      const look = own[key];
+      delete own[key];
+      if (to !== null) own[to + key.slice(from.length)] = look;
+    }
+  };
+  const orderOf = (id) => (orders[id] ??= { mode: 'nameAsc', manual: {} });
+  const natural = (a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' });
+  function arrange(id, nodes, dir, order) {
+    const stamp = (n) => (n.isDir ? Math.max(0, ...n.children.map(stamp)) : changedAt(id, n.path));
+    const list = order.manual[dir] ?? [];
+    const rank = (n) => (list.includes(n.name) ? list.indexOf(n.name) : Infinity);
+    nodes.sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      if (order.mode === 'nameDesc') return natural(b.name, a.name);
+      if (order.mode === 'modifiedNew') return stamp(b) - stamp(a) || natural(a.name, b.name);
+      if (order.mode === 'modifiedOld') return stamp(a) - stamp(b) || natural(a.name, b.name);
+      if (order.mode === 'manual') return (rank(a) === rank(b) ? 0 : rank(a) < rank(b) ? -1 : 1) || natural(a.name, b.name);
+      return natural(a.name, b.name);
+    });
+    for (const n of nodes) if (n.isDir) arrange(id, n.children, n.path, order);
   }
 
   const past = { log: [], blobs: {}, versions: {} };
@@ -99,6 +132,29 @@
   const commands = {
     list_vaults: () => vaults,
     vault_tree: ({ id }) => tree(id),
+    daily_notes: ({ id }) => window.__daily?.[id] ?? { folder: 'Diario', format: 'iso', template: null },
+    save_daily_notes: ({ id, settings }) => {
+      (window.__daily ??= {})[id] = settings;
+    },
+    tree_order: ({ id }) => orderOf(id).mode,
+    folder_looks: ({ id }) => structuredClone(looks[id] ?? {}),
+    set_folder_look: ({ id, folder, look }) => {
+      const own = (looks[id] ??= {});
+      if (look && (look.color || look.emoji)) own[folder] = look;
+      else delete own[folder];
+    },
+    set_tree_order: ({ id, mode }) => {
+      orderOf(id).mode = mode;
+    },
+    place_in_tree: ({ id, path, target, after }) => {
+      const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+      const base = (p) => p.split('/').pop();
+      const level = (dir ? dir.split('/').reduce((nodes, _, i, all) => nodes.find((n) => n.path === all.slice(0, i + 1).join('/')).children, tree(id)) : tree(id));
+      const names = level.map((n) => n.name).filter((n) => n !== base(path));
+      const at = names.indexOf(base(target)) + (after ? 1 : 0);
+      names.splice(at, 0, base(path));
+      orderOf(id).manual[dir] = names;
+    },
     read_note: ({ id, path }) => ({ path, content: files[id][path], version: versionOf(id, path) }),
     write_note: ({ id, path, content, expected }) => {
       if (expected && expected !== versionOf(id, path)) throw 'the file changed since it was read: ' + path;
@@ -112,6 +168,10 @@
     // Moves a note or folder and, like the backend, rewrites [[name]] links to a renamed note.
     rename_path: ({ id, from, to }) => {
       const notes = files[id];
+      moveLooks(id, from, to);
+      const [dir, name] = [from.slice(0, Math.max(0, from.lastIndexOf('/'))), from.split('/').pop()];
+      const list = orderOf(id).manual[dir];
+      if (list && dir === to.slice(0, Math.max(0, to.lastIndexOf('/')))) list[list.indexOf(name)] = to.split('/').pop();
       for (const path of Object.keys(notes)) {
         if (path !== from && !path.startsWith(`${from}/`)) continue;
         notes[to + path.slice(from.length)] = notes[path];
@@ -132,6 +192,15 @@
     },
     set_vault_access: ({ id, mcp }) => {
       vaults.find((v) => v.id === id).mcp = mcp;
+    },
+    set_vault_scripts: ({ id, allow }) => {
+      vaults.find((v) => v.id === id).allowScripts = allow;
+    },
+    set_vault_open: ({ id, open }) => {
+      vaults.find((v) => v.id === id).open = open;
+    },
+    rename_vault: ({ id, name }) => {
+      vaults.find((v) => v.id === id).name = name;
     },
     mcp_info: () => ({ binary: 'C:\\Program Files\\UltimateMD\\ultimatemd-mcp.exe', available: true }),
     home_info: () => {
@@ -154,6 +223,7 @@
     },
     // Deletions wait aside until undone or finished, like the backend.
     trash_path: ({ id, path }) => {
+      moveLooks(id, path, null);
       const token = `t${Object.keys(staged).length}`;
       const moved = {};
       for (const p of Object.keys(files[id])) {
@@ -429,9 +499,10 @@
         .map((path) => {
           const meta = /^---\n([\s\S]*?)\n---/.exec(files[id][path])?.[1] ?? '';
           const list = /^aliases:\s*\[(.*)\]/m.exec(meta)?.[1] ?? '';
-          return { path, aliases: list.split(',').map((a) => a.trim()).filter(Boolean) };
+          const icon = /^icon[o]?:\s*(\S{1,16})\s*$/m.exec(meta)?.[1]?.replace(/^["']|["']$/g, '') ?? null;
+          return { path, aliases: list.split(',').map((a) => a.trim()).filter(Boolean), icon };
         })
-        .filter((n) => n.aliases.length),
+        .filter((n) => n.aliases.length || n.icon),
     export_site: ({ name, pages, assets }) => {
       window.__site = { name, pages, assets };
       return `/exportado/${name}/index.html`;
@@ -487,6 +558,7 @@
 
   window.__test = {
     files,
+    looks,
     vaults,
     vaultThemes,
     guides,

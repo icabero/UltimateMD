@@ -6,12 +6,19 @@
   import { tr } from '../i18n.svelte';
   import { baseName, dirName, join, kindOf } from '../paths';
   import { store, type MenuItem } from '../store.svelte';
+  import { ORDERS } from '../treeOrder';
   import { vaultColor } from '../vaultColor';
 
   const colorOf = vaultColor;
 
   let collapsed = $state<Record<string, boolean>>({});
   let dropVault = $state<string | null>(null);
+
+  // A vault folded away opens when something in it is to be shown.
+  $effect(() => {
+    const asked = store.treeReveal;
+    if (asked) collapsed[asked.vaultId] = false;
+  });
 
   const newNote = async (id: string, dir: string) => {
     const name = await store.prompt(tr('sidebar.noteName'), '', tr('common.create'));
@@ -29,15 +36,26 @@
       { label: tr('cmd.fromTemplate'), icon: 'tasks', run: () => store.newNoteFromTemplate(id, dir) },
       { label: tr('sidebar.newFolder'), icon: 'folderPlus', run: () => void newFolder(id, dir) },
     ];
-    if (node.isDir) items.push({ label: tr('reader.readFolder'), icon: 'eye', separator: true, run: () => (store.reader = { vaultId: id, folder: node.path }) });
+    if (node.isDir) {
+      items.push(
+        { label: tr('reader.readFolder'), icon: 'eye', separator: true, run: () => (store.reader = { vaultId: id, folder: node.path }) },
+        { label: tr('look.menu'), icon: 'palette', run: () => void store.chooseFolderLook(id, node.path) },
+      );
+    }
     if (!node.isDir) {
       const favorite = store.isFavorite(id, node.path);
       if (kindOf(node.path) !== 'other') items.push({ label: tr('menu.openBeside'), icon: 'split', separator: true, run: () => void store.openBeside(id, node.path) });
       items.push({ label: tr(favorite ? 'sidebar.removeFavorite' : 'sidebar.addFavorite'), icon: 'star', separator: kindOf(node.path) === 'other', run: () => store.toggleFavorite(id, node.path) });
       if (kindOf(node.path) === 'md') items.push({ label: tr('menu.copyLink'), icon: 'link', run: () => store.copyLink(id, node.path) });
     }
+    if (store.order(id) === 'manual') {
+      items.push(
+        { label: tr('sort.moveUp'), icon: 'sort', separator: true, disabled: !store.neighbour(id, node.path, -1), run: () => void store.nudge(id, node.path, -1) },
+        { label: tr('sort.moveDown'), icon: 'sort', disabled: !store.neighbour(id, node.path, 1), run: () => void store.nudge(id, node.path, 1) },
+      );
+    }
     items.push(
-      { label: tr('menu.copyPath'), icon: 'copy', separator: node.isDir, run: () => void store.copyText(store.absolutePath({ vaultId: id, path: node.path }), tr('menu.pathCopied')) },
+      { label: tr('menu.copyPath'), icon: 'copy', separator: node.isDir || store.order(id) === 'manual', run: () => void store.copyText(store.absolutePath({ vaultId: id, path: node.path }), tr('menu.pathCopied')) },
       { label: tr('menu.reveal'), icon: 'folder', run: () => store.revealInFolder(id, node.path) },
       { label: tr('common.rename'), icon: 'edit', keys: ['F2'], separator: true, run: () => void store.renamePrompt(id, node.path) },
       { label: tr('sidebar.trash'), icon: 'trash', keys: ['Del'], danger: true, run: () => void store.trash(id, node.path) },
@@ -45,18 +63,46 @@
     store.openMenu(e, items);
   }
 
+  /** The ways to order a vault's notes, the current one ticked. */
+  function sortItems(id: string): MenuItem[] {
+    return ORDERS.map((o) => ({
+      label: tr(o.label),
+      icon: store.order(id) === o.value ? 'check' : undefined,
+      run: () => void store.setOrder(id, o.value),
+    }));
+  }
+
   function vaultMenu(e: MouseEvent, vault: Vault) {
+    // The sort menu opens where this one did, also when it came from the keyboard.
+    let [x, y] = [e.clientX, e.clientY];
+    if (!x && !y && e.target instanceof Element) {
+      const box = e.target.getBoundingClientRect();
+      [x, y] = [box.left + 12, box.bottom - 4];
+    }
     store.openMenu(e, [
+      { label: tr('sort.open'), icon: 'sort', run: () => setTimeout(() => (store.menu = { x, y, items: sortItems(vault.id) })) },
       { label: tr('sidebar.newNote'), icon: 'plus', run: () => void newNote(vault.id, '') },
       { label: tr('cmd.fromTemplate'), icon: 'tasks', run: () => store.newNoteFromTemplate(vault.id, '') },
+      { label: tr('daily.open'), icon: 'calendar', run: () => void store.openDaily(0, vault.id) },
       { label: tr('sidebar.newFolder'), icon: 'folderPlus', run: () => void newFolder(vault.id, '') },
       { label: tr('reader.readVault'), icon: 'eye', separator: true, run: () => (store.reader = { vaultId: vault.id, folder: '' }) },
       { label: tr('broken.open'), icon: 'link', run: () => (store.brokenLinks = vault.id) },
-      { label: tr('word.openSettings'), icon: 'word', run: () => (store.wordScreen = vault.id) },
-      { label: tr('guide.open'), icon: 'diagram', run: () => (store.guideScreen = vault.id) },
       { label: tr('aiLog.open'), icon: 'list', run: () => (store.aiLog = vault.id) },
       { label: tr('menu.reveal'), icon: 'folder', separator: true, run: () => store.revealInFolder(vault.id, '') },
+      { label: tr('vaultSettings.open'), icon: 'settings', run: () => store.openVaultSettings(vault.id) },
       { label: tr('sidebar.closeVault'), icon: 'close', run: () => void store.setVaultOpen(vault.id, false) },
+    ]);
+  }
+
+  /** What the app offers that is not about one vault: help, news and the list of actions. */
+  function appMenu(e: MouseEvent) {
+    store.openMenu(e, [
+      { label: tr('shortcuts.actions'), icon: 'list', keys: ['Ctrl', 'Shift', 'P'], run: () => (store.palette = '>') },
+      { label: tr('cmd.shortcuts'), icon: 'keyboard', keys: ['Ctrl', '/'], run: () => (store.shortcuts = true) },
+      { label: tr('cmd.tutorial'), icon: 'info', separator: true, run: () => (store.tutorial = true) },
+      { label: tr('news.open'), icon: 'file', run: () => void store.showNews() },
+      { label: tr('sample.create'), icon: 'plus', run: () => void store.createSampleVault() },
+      { label: tr('cmd.about'), icon: 'info', separator: true, run: () => (store.about = true) },
     ]);
   }
 
@@ -122,8 +168,8 @@
   <header data-tauri-drag-region>
     <span class="brand" data-tauri-drag-region>Ultimate<b>MD</b></span>
     <button class="icon" title={tr('sidebar.searchTitle')} class:on={store.searching} onclick={() => (store.searching = !store.searching)}><Icon name="search" /></button>
-    <button class="icon" title={tr('sidebar.settingsTitle')} onclick={() => (store.settings = true)}><Icon name="settings" /></button>
-    <button class="icon" title={tr('about.title')} onclick={() => (store.about = true)}><Icon name="info" /></button>
+    <button class="icon" title={tr('cmd.settings')} onclick={() => (store.settings = true)}><Icon name="gear" /></button>
+    <button class="icon" title={tr('more.title')} aria-label={tr('more.title')} aria-haspopup="menu" onclick={appMenu}><Icon name="more" /></button>
     <button class="icon" title={tr('sidebar.hide')} onclick={() => store.toggleBar('left', false)}><Icon name="panelLeft" /></button>
   </header>
 
@@ -170,9 +216,8 @@
               <button class="icon small warn" title={tr('watch.badge')} onclick={() => store.reread(vault.id)}><Icon name="refresh" size={14} /></button>
             {/if}
             <button class="icon small" title={tr('sidebar.newNote')} onclick={() => newNote(vault.id, '')}><Icon name="plus" size={14} /></button>
-            <button class="icon small" title={tr('sidebar.newFolder')} onclick={() => newFolder(vault.id, '')}><Icon name="folderPlus" size={14} /></button>
-            <button class="icon small" title={tr('reader.readVault')} onclick={() => (store.reader = { vaultId: vault.id, folder: '' })}><Icon name="eye" size={14} /></button>
-            <button class="icon small" title={tr('word.openSettings')} onclick={() => (store.wordScreen = vault.id)}><Icon name="word" size={14} /></button>
+            <button class="icon small" title={tr('daily.open')} aria-label={tr('daily.open')} onclick={() => void store.openDaily(0, vault.id)}><Icon name="calendar" size={14} /></button>
+            <button class="icon small" title={tr('vaultSettings.open')} onclick={() => store.openVaultSettings(vault.id)}><Icon name="settings" size={14} /></button>
             {#if store.git[vault.id]}
               {@const git = store.git[vault.id]!}
               {@const label = tr('git.open', { branch: git.branch ?? tr('git.detached'), n: git.changes.length })}
@@ -180,6 +225,7 @@
                 <Icon name="branch" size={14} />{#if git.changes.length}<span class="count">{git.changes.length}</span>{/if}
               </button>
             {/if}
+            <button class="icon small" title={tr('more.title')} aria-label={tr('more.title')} aria-haspopup="menu" onclick={(e) => vaultMenu(e, vault)}><Icon name="more" size={14} /></button>
           </div>
           {#if !collapsed[vault.id]}
             {#each store.trees[vault.id] ?? [] as node (node.path)}
@@ -211,7 +257,6 @@
   .vault { margin-bottom: var(--space-2); border-radius: var(--radius-md); }
   .vault.drop { background: var(--accent-soft); }
   .vhead { display: flex; align-items: center; height: 30px; }
-  .vhead .small { opacity: 0; }
   .vhead:hover .small, .vhead .small:focus-visible, .vhead .warn { opacity: 1; }
   .vhead .warn { color: var(--danger); }
   .vname { display: flex; flex: 1; align-items: center; gap: var(--space-1-5); min-width: 0; padding: 0 var(--space-1); border: 0; background: none; color: var(--text); font-size: var(--font-sm); font-weight: 600; text-align: left; }
